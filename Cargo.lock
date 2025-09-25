@@ -319,40 +319,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hydebar"
-version = "0.5.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "flexi_logger",
- "freedesktop-icons",
- "hex_color",
- "hyprland",
- "iced",
- "inotify",
- "itertools 0.14.0",
- "libpulse-binding",
- "linicon-theme",
- "log",
- "pipewire",
- "regex",
- "serde",
- "serde_json",
- "serde_with",
- "shellexpand",
- "sysinfo",
- "tokio",
- "tokio-stream",
- "toml 0.9.5",
- "udev",
- "uuid",
- "wayland-client",
- "wayland-protocols",
- "zbus 5.9.0",
-]
-
-[[package]]
 name = "async-broadcast"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2215,6 +2181,40 @@ name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+
+[[package]]
+name = "hydebar"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "flexi_logger",
+ "freedesktop-icons",
+ "hex_color",
+ "hyprland",
+ "iced",
+ "inotify",
+ "itertools 0.14.0",
+ "libpulse-binding",
+ "linicon-theme",
+ "log",
+ "pipewire",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "shellexpand",
+ "sysinfo",
+ "tokio",
+ "tokio-stream",
+ "toml 0.9.5",
+ "udev",
+ "uuid",
+ "wayland-client",
+ "wayland-protocols",
+ "zbus 5.9.0",
+]
 
 [[package]]
 name = "hyprland"

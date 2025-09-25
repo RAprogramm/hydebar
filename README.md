@@ -2,6 +2,13 @@
 
 A ready to go Wayland status bar for Hyprland.
 
+## Development prompts and goals
+
+The project vision, high-level goals, and ready-to-use task prompts for
+HyDEbar evolution live in [docs/celi.md](docs/celi.md). The document contains
+scoped tasks, explicit definitions of done, and command checklists tailored for
+HyDE Project contributors who continue the modernization of this Hyprland panel.
+
 Feel free to fork this project and customize it for your needs or just open an
 issue to request a particular feature.
 
