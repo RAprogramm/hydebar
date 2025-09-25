@@ -5,21 +5,26 @@ use crate::{
     outputs::Outputs,
     style::workspace_button_style,
 };
+
 use hyprland::{
-    dispatch::MonitorIdentifier,
+    data::{Monitors as HlMonitors, Workspace as HlWorkspace, Workspaces as HlWorkspaces},
+    dispatch::{Dispatch, DispatchType, MonitorIdentifier, WorkspaceIdentifierWithSpecial},
     event_listener::AsyncEventListener,
     shared::{HyprData, HyprDataActive, HyprDataVec},
 };
+
 use iced::{
-    Element, Length, Subscription, alignment,
+    alignment, Element, Length, Subscription,
     stream::channel,
-    widget::{Row, button, container, text},
+    widget::{button, container, text, Row},
     window::Id,
 };
+
 use itertools::Itertools;
 use log::{debug, error};
 use std::{
     any::TypeId,
+    convert::TryFrom,
     sync::{Arc, RwLock},
 };
 
@@ -27,51 +32,48 @@ use std::{
 pub struct Workspace {
     pub id: i32,
     pub name: String,
-    pub monitor_id: Option<usize>,
-    pub monitor: String,
+    pub monitor_id: Option<usize>, // index for color lookup; may be None
+    pub monitor: String,            // monitor name for fallback
     pub active: bool,
     pub windows: u16,
 }
 
 fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
-    let active = hyprland::data::Workspace::get_active().ok();
-    let monitors = hyprland::data::Monitors::get()
-        .map(|m| m.to_vec())
-        .unwrap_or_default();
-    let workspaces = hyprland::data::Workspaces::get()
-        .map(|w| w.to_vec())
-        .unwrap_or_default();
+    let active = HlWorkspace::get_active().ok();
+    let monitors = HlMonitors::get().map(|m| m.to_vec()).unwrap_or_default();
+    let workspaces = HlWorkspaces::get().map(|w| w.to_vec()).unwrap_or_default();
 
-    // in some cases we can get duplicate workspaces, so we need to deduplicate them
+    // Deduplicate by ID to avoid duplicates from Hyprland.
     let workspaces: Vec<_> = workspaces.into_iter().unique_by(|w| w.id).collect();
 
-    // We need capacity for at least all the existing entries.
+    // Preallocate result vector.
     let mut result: Vec<Workspace> = Vec::with_capacity(workspaces.len());
 
     let (special, normal): (Vec<_>, Vec<_>) = workspaces.into_iter().partition(|w| w.id < 0);
 
-    // map special workspaces
+    // Map special workspaces.
     for w in special.iter() {
         result.push(Workspace {
             id: w.id,
             name: w
                 .name
-                .split(":")
+                .split(':')
                 .last()
-                .map_or_else(|| "".to_string(), |s| s.to_owned()),
-            monitor_id: Some(w.monitor_id as usize),
+                .map_or_else(|| String::new(), ToOwned::to_owned),
+            // Option<i128> -> Option<usize> with bounds check.
+            monitor_id: w.monitor_id.and_then(|mid| usize::try_from(mid).ok()),
             monitor: w.monitor.clone(),
             active: monitors.iter().any(|m| m.special_workspace.id == w.id),
             windows: w.windows,
         });
     }
 
-    // map normal workspaces
+    // Map normal workspaces.
     for w in normal.iter() {
         result.push(Workspace {
             id: w.id,
             name: w.name.clone(),
-            monitor_id: Some(w.monitor_id as usize),
+            monitor_id: w.monitor_id.and_then(|mid| usize::try_from(mid).ok()),
             monitor: w.monitor.clone(),
             active: Some(w.id) == active.as_ref().map(|a| a.id),
             windows: w.windows,
@@ -79,24 +81,23 @@ fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
     }
 
     if !config.enable_workspace_filling || normal.is_empty() {
-        // nothing more to do, early return
         result.sort_by_key(|w| w.id);
         return result;
-    };
+    }
 
-    // To show workspaces that don't exist in Hyprland we need to create fake ones
-    let existing_ids = normal.iter().map(|w| w.id).collect_vec();
+    // Synthesize "missing" workspaces [1..=max_id] for filling UI.
+    let existing_ids = normal.iter().map(|w| w.id).collect::<Vec<_>>();
     let mut max_id = *existing_ids.iter().max().unwrap_or(&0);
     if let Some(max_workspaces) = config.max_workspaces {
         if max_workspaces > max_id as u32 {
             max_id = max_workspaces as i32;
         }
     }
+
     let missing_ids: Vec<i32> = (1..=max_id)
         .filter(|id| !existing_ids.contains(id))
         .collect();
 
-    // Rust could do reallocs for us, but here we know how many more space we need, so can do better
     result.reserve(missing_ids.len());
 
     for id in missing_ids {
@@ -104,14 +105,13 @@ fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
             id,
             name: id.to_string(),
             monitor_id: None,
-            monitor: "".to_string(),
+            monitor: String::new(),
             active: false,
             windows: 0,
         });
     }
 
     result.sort_by_key(|w| w.id);
-
     result
 }
 
@@ -143,15 +143,11 @@ impl Workspaces {
             Message::ChangeWorkspace(id) => {
                 if id > 0 {
                     let already_active = self.workspaces.iter().any(|w| w.active && w.id == id);
-
                     if !already_active {
                         debug!("changing workspace to: {id}");
-                        let res = hyprland::dispatch::Dispatch::call(
-                            hyprland::dispatch::DispatchType::Workspace(
-                                hyprland::dispatch::WorkspaceIdentifierWithSpecial::Id(id),
-                            ),
-                        );
-
+                        let res = Dispatch::call(DispatchType::Workspace(
+                            WorkspaceIdentifierWithSpecial::Id(id),
+                        ));
                         if let Err(e) = res {
                             error!("failed to dispatch workspace change: {e:?}");
                         }
@@ -161,18 +157,19 @@ impl Workspaces {
             Message::ToggleSpecialWorkspace(id) => {
                 if let Some(special) = self.workspaces.iter().find(|w| w.id == id && w.id < 0) {
                     debug!("toggle special workspace: {id}");
-                    let res = hyprland::dispatch::Dispatch::call(
-                        hyprland::dispatch::DispatchType::FocusMonitor(MonitorIdentifier::Id(
-                            special.monitor_id.unwrap_or_default() as i128,
-                        )),
-                    )
-                    .and_then(|_| {
-                        hyprland::dispatch::Dispatch::call(
-                            hyprland::dispatch::DispatchType::ToggleSpecialWorkspace(Some(
+
+                    // Prefer focusing by monitor index if present; otherwise, fall back to monitor name.
+                    let monitor_ident = match special.monitor_id {
+                        Some(idx) => MonitorIdentifier::Id(idx as i128),
+                        None => MonitorIdentifier::Name(&special.monitor.clone()),
+                    };
+
+                    let res = Dispatch::call(DispatchType::FocusMonitor(monitor_ident))
+                        .and_then(|_| {
+                            Dispatch::call(DispatchType::ToggleSpecialWorkspace(Some(
                                 special.name.clone(),
-                            )),
-                        )
-                    });
+                            )))
+                        });
 
                     if let Err(e) = res {
                         error!("failed to dispatch special workspace toggle: {e:?}");
@@ -194,9 +191,9 @@ impl Module for Workspaces {
     type SubscriptionData<'a> = &'a WorkspacesModuleConfig;
 
     fn view(
-        &self,
+        &'_ self,
         (outputs, id, config, workspace_colors, special_workspace_colors): Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'_, app::Message>, Option<OnModulePress>)> {
         let monitor_name = outputs.get_monitor_name(id);
 
         Some((
@@ -212,6 +209,7 @@ impl Module for Workspaces {
                                 let empty = w.windows == 0;
                                 let monitor = w.monitor_id;
 
+                                // Safe color lookup by monitor index; None means "no color".
                                 let color = monitor.map(|m| {
                                     if w.id > 0 {
                                         workspace_colors.get(m).copied()
@@ -283,21 +281,30 @@ impl Module for Workspaces {
                 format!("{id:?}-{enable_workspace_filling}"),
                 channel(10, async move |output| {
                     let output = Arc::new(RwLock::new(output));
+
+                    // We keep the listener in a loop and restart on error.
                     loop {
                         let mut event_listener = AsyncEventListener::new();
+
+                        // Helper to DRY send with logging.
+                        let send = |output: &Arc<RwLock<_>>| {
+                            let out: Arc<RwLock<iced::futures::channel::mpsc::Sender<Message>>> = output.clone();
+                            Box::pin(async move {
+                                if let Ok(mut guard) = out.write() {
+                                    if let Err(e) = guard.try_send(Message::WorkspacesChanged) {
+                                        error!("failed to enqueue WorkspacesChanged: {e:?}");
+                                    }
+                                } else {
+                                    error!("failed to acquire output lock for WorkspacesChanged");
+                                }
+                            })
+                        };
 
                         event_listener.add_workspace_added_handler({
                             let output = output.clone();
                             move |e| {
                                 debug!("workspace added: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output.try_send(Message::WorkspacesChanged).expect(
-                                            "error getting workspaces: workspace added event",
-                                        );
-                                    }
-                                })
+                                send(&output)
                             }
                         });
 
@@ -305,14 +312,7 @@ impl Module for Workspaces {
                             let output = output.clone();
                             move |e| {
                                 debug!("workspace changed: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output.try_send(Message::WorkspacesChanged).expect(
-                                            "error getting workspaces: workspace change event",
-                                        );
-                                    }
-                                })
+                                send(&output)
                             }
                         });
 
@@ -320,14 +320,7 @@ impl Module for Workspaces {
                             let output = output.clone();
                             move |e| {
                                 debug!("workspace deleted: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output.try_send(Message::WorkspacesChanged).expect(
-                                            "error getting workspaces: workspace destroy event",
-                                        );
-                                    }
-                                })
+                                send(&output)
                             }
                         });
 
@@ -335,14 +328,7 @@ impl Module for Workspaces {
                             let output = output.clone();
                             move |e| {
                                 debug!("workspace moved: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output.try_send(Message::WorkspacesChanged).expect(
-                                            "error getting workspaces: workspace moved event",
-                                        );
-                                    }
-                                })
+                                send(&output)
                             }
                         });
 
@@ -350,16 +336,7 @@ impl Module for Workspaces {
                             let output = output.clone();
                             move |e| {
                                 debug!("special workspace changed: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                    .try_send(Message::WorkspacesChanged)
-                                    .expect(
-                                        "error getting workspaces: special workspace change event",
-                                    );
-                                    }
-                                })
+                                send(&output)
                             }
                         });
 
@@ -367,78 +344,31 @@ impl Module for Workspaces {
                             let output = output.clone();
                             move |e| {
                                 debug!("special workspace removed: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                    .try_send(Message::WorkspacesChanged)
-                                    .expect(
-                                        "error getting workspaces: special workspace removed event",
-                                    );
-                                    }
-                                })
+                                send(&output)
                             }
                         });
 
                         event_listener.add_window_closed_handler({
                             let output = output.clone();
-                            move |_| {
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                            .try_send(Message::WorkspacesChanged)
-                                            .expect("error getting workspaces: window close event");
-                                    }
-                                })
-                            }
+                            move |_| send(&output)
                         });
 
                         event_listener.add_window_opened_handler({
                             let output = output.clone();
-                            move |_| {
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                            .try_send(Message::WorkspacesChanged)
-                                            .expect("error getting workspaces: window open event");
-                                    }
-                                })
-                            }
+                            move |_| send(&output)
                         });
 
                         event_listener.add_window_moved_handler({
                             let output = output.clone();
-                            move |_| {
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                            .try_send(Message::WorkspacesChanged)
-                                            .expect("error getting workspaces: window moved event");
-                                    }
-                                })
-                            }
+                            move |_| send(&output)
                         });
 
                         event_listener.add_active_monitor_changed_handler({
                             let output = output.clone();
-                            move |_| {
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output.try_send(Message::WorkspacesChanged).expect(
-                                            "error getting workspaces: active monitor change event",
-                                        );
-                                    }
-                                })
-                            }
+                            move |_| send(&output)
                         });
 
-                        let res = event_listener.start_listener_async().await;
-
-                        if let Err(e) = res {
+                        if let Err(e) = event_listener.start_listener_async().await {
                             error!("restarting workspaces listener due to error: {e:?}");
                         }
                     }
@@ -448,3 +378,4 @@ impl Module for Workspaces {
         )
     }
 }
+
