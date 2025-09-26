@@ -215,7 +215,9 @@ impl<'a> NetworkDbus<'a> {
 
         Ok(Self(nm))
     }
+}
 
+impl<'a> NetworkDbus<'a> {
     pub async fn subscribe_events(
         &'a self,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<super::NetworkEvent>> + 'a> {

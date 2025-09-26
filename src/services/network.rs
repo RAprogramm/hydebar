@@ -661,8 +661,8 @@ impl Service for NetworkService {
 mod tests {
     use super::*;
     use anyhow::anyhow;
-    use futures::stream;
-    use iced::futures::{StreamExt, channel::mpsc};
+    use iced::futures::{StreamExt, channel::mpsc, stream};
+    use tokio::time::timeout;
 
     #[tokio::test]
     async fn consume_network_events_stops_on_error() {
@@ -693,11 +693,16 @@ mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn state_error_transitions_to_init_after_delay() {
         let (mut sender, _receiver) = mpsc::channel(1);
 
-        let state = NetworkService::start_listening(State::Error, &mut sender).await;
+        let state = timeout(
+            Duration::from_secs(2),
+            NetworkService::start_listening(State::Error, &mut sender),
+        )
+        .await
+        .expect("network listener should complete after delay");
         assert!(matches!(state, State::Init));
     }
 }

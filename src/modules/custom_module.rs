@@ -6,7 +6,7 @@ use crate::{
     config::CustomModuleDef,
     services::ServiceEvent,
 };
-use iced::futures::channel::mpsc::{Sender, TrySendError};
+use iced::futures::channel::mpsc::Sender;
 use iced::widget::canvas;
 use iced::{
     Element, Length, Subscription, Theme,
@@ -21,8 +21,8 @@ use iced::{
     },
 };
 use log::{error, info, warn};
+use masterror::Error;
 use serde::Deserialize;
-use thiserror::Error;
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines},
     process::Command,
@@ -85,12 +85,8 @@ pub enum CustomCommandError {
     MissingStdout,
     #[error("failed to read line from custom module output: {0}")]
     Read(Arc<std::io::Error>),
-    #[error("failed to parse custom module output: {snippet} ({error})")]
-    Parse {
-        snippet: String,
-        #[source]
-        error: Arc<serde_json::Error>,
-    },
+    #[error("failed to parse custom module output: {0} ({1})")]
+    Parse(String, #[source] Arc<serde_json::Error>),
     #[error("failed to wait for custom module process: {0}")]
     Wait(Arc<std::io::Error>),
     #[error("custom module process exited unsuccessfully ({status:?})")]
@@ -102,7 +98,7 @@ pub enum CustomCommandError {
 impl CustomCommandError {
     fn to_display_message(&self) -> String {
         match self {
-            CustomCommandError::Parse { snippet, .. } => {
+            CustomCommandError::Parse(snippet, ..) => {
                 format!("Invalid output: {snippet}")
             }
             CustomCommandError::NonZeroExit { status } => match status {
@@ -136,13 +132,26 @@ fn truncate_snippet(line: &str) -> String {
     truncated
 }
 
+#[derive(Debug)]
+enum SendQueueError {
+    Full(Box<app::Message>),
+    Closed,
+}
+
 trait CustomUpdateSender {
-    fn try_send(&mut self, message: app::Message) -> Result<(), TrySendError<app::Message>>;
+    fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError>;
 }
 
 impl CustomUpdateSender for Sender<app::Message> {
-    fn try_send(&mut self, message: app::Message) -> Result<(), TrySendError<app::Message>> {
-        Sender::try_send(self, message)
+    fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError> {
+        Sender::try_send(self, message).map_err(|error| {
+            if error.is_full() {
+                SendQueueError::Full(Box::new(error.into_inner()))
+            } else {
+                let _ = error.into_inner();
+                SendQueueError::Closed
+            }
+        })
     }
 }
 
@@ -156,14 +165,13 @@ async fn send_event<S: CustomUpdateSender + Send>(
     loop {
         match sender.try_send(message) {
             Ok(()) => return Ok(()),
-            Err(err) => {
-                if err.is_full() {
-                    warn!("Custom module output channel full; yielding before retrying");
-                    message = err.into_inner();
-                    yield_now().await;
-                } else {
-                    return Err(CustomCommandError::ChannelClosed);
-                }
+            Err(SendQueueError::Full(pending_message)) => {
+                warn!("Custom module output channel full; yielding before retrying");
+                message = *pending_message;
+                yield_now().await;
+            }
+            Err(SendQueueError::Closed) => {
+                return Err(CustomCommandError::ChannelClosed);
             }
         }
     }
@@ -188,10 +196,7 @@ where
                 send_event(sender, module_name, ServiceEvent::Update(event)).await?;
             }
             Err(err) => {
-                let parse_error = CustomCommandError::Parse {
-                    snippet: truncate_snippet(&line),
-                    error: Arc::new(err),
-                };
+                let parse_error = CustomCommandError::Parse(truncate_snippet(&line), Arc::new(err));
                 error!(
                     "Custom module '{module_name}' failed to parse JSON output: {parse_error:?}"
                 );
@@ -398,7 +403,7 @@ mod tests {
     }
 
     impl CustomUpdateSender for RecordingSender {
-        fn try_send(&mut self, message: app::Message) -> Result<(), TrySendError<app::Message>> {
+        fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError> {
             self.messages.push(message);
             Ok(())
         }
@@ -423,8 +428,15 @@ mod tests {
     }
 
     impl CustomUpdateSender for ClosedSender {
-        fn try_send(&mut self, message: app::Message) -> Result<(), TrySendError<app::Message>> {
-            self.sender.try_send(message)
+        fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError> {
+            Sender::try_send(&mut self.sender, message).map_err(|error| {
+                if error.is_full() {
+                    SendQueueError::Full(Box::new(error.into_inner()))
+                } else {
+                    let _ = error.into_inner();
+                    SendQueueError::Closed
+                }
+            })
         }
     }
 

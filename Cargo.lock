@@ -2288,7 +2288,6 @@ dependencies = [
  "serde_with",
  "shellexpand",
  "sysinfo",
- "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "toml 0.9.7",

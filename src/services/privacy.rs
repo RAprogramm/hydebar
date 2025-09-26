@@ -115,7 +115,7 @@ impl PrivacyService {
                             .connect_rc(None)
                             .map_err(|err| PrivacyError::pipewire_core(err.to_string()))?;
                         let registry = core
-                            .get_registry()
+                            .get_registry_rc()
                             .map_err(|err| PrivacyError::pipewire_registry(err.to_string()))?;
                         let remove_tx = tx.clone();
                         let listener = registry
