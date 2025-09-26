@@ -206,6 +206,42 @@ impl Default for SystemModuleConfig {
     }
 }
 
+/// Configuration for the battery module.
+#[derive(Deserialize, Clone, Debug)]
+pub struct BatteryModuleConfig {
+    #[serde(default = "default_show_percentage")]
+    pub show_percentage: bool,
+    #[serde(default = "default_show_power_profile")]
+    pub show_power_profile: bool,
+    #[serde(default = "default_open_settings_on_click")]
+    pub open_settings_on_click: bool,
+    #[serde(default)]
+    pub show_when_unavailable: bool,
+}
+
+impl Default for BatteryModuleConfig {
+    fn default() -> Self {
+        Self {
+            show_percentage: default_show_percentage(),
+            show_power_profile: default_show_power_profile(),
+            open_settings_on_click: default_open_settings_on_click(),
+            show_when_unavailable: false,
+        }
+    }
+}
+
+fn default_show_percentage() -> bool {
+    true
+}
+
+fn default_show_power_profile() -> bool {
+    true
+}
+
+fn default_open_settings_on_click() -> bool {
+    true
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct ClockModuleConfig {
     pub format: String,
@@ -529,6 +565,7 @@ pub enum ModuleName {
     KeyboardSubmap,
     Tray,
     Clock,
+    Battery,
     Privacy,
     Settings,
     MediaPlayer,
@@ -561,6 +598,7 @@ impl<'de> Deserialize<'de> for ModuleName {
                     "KeyboardSubmap" => ModuleName::KeyboardSubmap,
                     "Tray" => ModuleName::Tray,
                     "Clock" => ModuleName::Clock,
+                    "Battery" => ModuleName::Battery,
                     "Privacy" => ModuleName::Privacy,
                     "Settings" => ModuleName::Settings,
                     "MediaPlayer" => ModuleName::MediaPlayer,
@@ -597,6 +635,7 @@ impl Default for Modules {
             right: vec![ModuleDef::Group(vec![
                 ModuleName::Clock,
                 ModuleName::Privacy,
+                ModuleName::Battery,
                 ModuleName::Settings,
             ])],
         }
@@ -695,6 +734,8 @@ pub struct Config {
     #[serde(default)]
     pub system: SystemModuleConfig,
     #[serde(default)]
+    pub battery: BatteryModuleConfig,
+    #[serde(default)]
     pub clock: ClockModuleConfig,
     #[serde(default)]
     pub settings: SettingsModuleConfig,
@@ -733,6 +774,7 @@ impl Default for Config {
             workspaces: WorkspacesModuleConfig::default(),
             window_title: WindowTitleConfig::default(),
             system: SystemModuleConfig::default(),
+            battery: BatteryModuleConfig::default(),
             clock: ClockModuleConfig::default(),
             settings: SettingsModuleConfig::default(),
             appearance: Appearance::default(),

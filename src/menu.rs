@@ -46,7 +46,10 @@ impl Menu {
         let mut tasks = vec![set_layer(self.id, Layer::Overlay)];
 
         if config.menu_keyboard_focus {
-            tasks.push(set_keyboard_interactivity(self.id, KeyboardInteractivity::OnDemand));
+            tasks.push(set_keyboard_interactivity(
+                self.id,
+                KeyboardInteractivity::OnDemand,
+            ));
         }
 
         Task::batch(tasks)
@@ -57,13 +60,15 @@ impl Menu {
             self.menu_info.take();
 
             let mut tasks = vec![set_layer(self.id, Layer::Background)];
-            
+
             if config.menu_keyboard_focus {
-                tasks.push(set_keyboard_interactivity(self.id, KeyboardInteractivity::None));
+                tasks.push(set_keyboard_interactivity(
+                    self.id,
+                    KeyboardInteractivity::None,
+                ));
             }
 
             Task::batch(tasks)
-
         } else {
             Task::none()
         }
@@ -86,7 +91,11 @@ impl Menu {
         }
     }
 
-    pub fn close_if<Message: 'static>(&mut self, menu_type: MenuType, config: &crate::config::Config) -> Task<Message> {
+    pub fn close_if<Message: 'static>(
+        &mut self,
+        menu_type: MenuType,
+        config: &crate::config::Config,
+    ) -> Task<Message> {
         if let Some((current_type, _)) = self.menu_info.as_ref() {
             if *current_type == menu_type {
                 self.close(config)

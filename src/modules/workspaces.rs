@@ -14,9 +14,9 @@ use hyprland::{
 };
 
 use iced::{
-    alignment, Element, Length, Subscription,
+    Element, Length, Subscription, alignment,
     stream::channel,
-    widget::{button, container, text, Row},
+    widget::{Row, button, container, text},
     window::Id,
 };
 
@@ -33,7 +33,7 @@ pub struct Workspace {
     pub id: i32,
     pub name: String,
     pub monitor_id: Option<usize>, // index for color lookup; may be None
-    pub monitor: String,            // monitor name for fallback
+    pub monitor: String,           // monitor name for fallback
     pub active: bool,
     pub windows: u16,
 }
@@ -164,8 +164,8 @@ impl Workspaces {
                         None => MonitorIdentifier::Name(&special.monitor.clone()),
                     };
 
-                    let res = Dispatch::call(DispatchType::FocusMonitor(monitor_ident))
-                        .and_then(|_| {
+                    let res =
+                        Dispatch::call(DispatchType::FocusMonitor(monitor_ident)).and_then(|_| {
                             Dispatch::call(DispatchType::ToggleSpecialWorkspace(Some(
                                 special.name.clone(),
                             )))
@@ -288,7 +288,8 @@ impl Module for Workspaces {
 
                         // Helper to DRY send with logging.
                         let send = |output: &Arc<RwLock<_>>| {
-                            let out: Arc<RwLock<iced::futures::channel::mpsc::Sender<Message>>> = output.clone();
+                            let out: Arc<RwLock<iced::futures::channel::mpsc::Sender<Message>>> =
+                                output.clone();
                             Box::pin(async move {
                                 if let Ok(mut guard) = out.write() {
                                     if let Err(e) = guard.try_send(Message::WorkspacesChanged) {
@@ -378,4 +379,3 @@ impl Module for Workspaces {
         )
     }
 }
-

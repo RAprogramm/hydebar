@@ -436,7 +436,10 @@ impl Settings {
                             }
                             _ => Task::none(),
                         };
-                        Task::batch(vec![network_command, outputs.release_keyboard(id, main_config.menu_keyboard_focus)])
+                        Task::batch(vec![
+                            network_command,
+                            outputs.release_keyboard(id, main_config.menu_keyboard_focus),
+                        ])
                     } else {
                         outputs.release_keyboard(id, main_config.menu_keyboard_focus)
                     }

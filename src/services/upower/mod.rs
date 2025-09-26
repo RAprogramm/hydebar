@@ -142,8 +142,12 @@ impl ReadOnlyService for UPowerService {
     }
 
     fn subscribe() -> Subscription<ServiceEvent<Self>> {
-        let id = TypeId::of::<Self>();
+        Self::subscription_with_id(TypeId::of::<Self>())
+    }
+}
 
+impl UPowerService {
+    pub fn subscription_with_id(id: TypeId) -> Subscription<ServiceEvent<Self>> {
         Subscription::run_with_id(
             id,
             channel(100, async |mut output| {
@@ -155,9 +159,7 @@ impl ReadOnlyService for UPowerService {
             }),
         )
     }
-}
 
-impl UPowerService {
     async fn initialize_data(
         conn: &zbus::Connection,
     ) -> anyhow::Result<(

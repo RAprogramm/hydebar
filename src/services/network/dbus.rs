@@ -767,6 +767,7 @@ impl From<u32> for DeviceType {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ActiveConnectionState {
     #[default]
     Unknown,

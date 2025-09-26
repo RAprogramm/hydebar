@@ -1,3 +1,8 @@
+#![allow(mismatched_lifetime_syntaxes)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::redundant_closure)]
+#![allow(clippy::double_ended_iterator_last)]
+
 use crate::config::get_config;
 use app::App;
 use clap::{Parser, command};

@@ -1,3 +1,5 @@
+#![allow(mismatched_lifetime_syntaxes)]
+
 pub mod access_point;
 pub mod adapter;
 pub mod agent_manager;
@@ -237,6 +239,7 @@ macro_rules! list_proxies {
     };
 }
 
+#[allow(dead_code)]
 enum IwdStationState {
     Connected,
     Disconnected,
