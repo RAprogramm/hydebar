@@ -2,7 +2,7 @@
 name = "hydebar"
 description = "A ready to go Wayland status bar for Hyprland"
 homepage = "https://github.com/MalpenZibo/hydebar"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 rust-version = "1.90"
 
@@ -47,4 +47,3 @@ clap = { version = "4", features = ["derive"] }
 shellexpand = { version = "3", features = ["path"] }
 inotify = "0.11"
 masterror = "0.21"
-thiserror = "1"
