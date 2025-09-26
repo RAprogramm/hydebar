@@ -2,7 +2,7 @@ use std::any::TypeId;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 

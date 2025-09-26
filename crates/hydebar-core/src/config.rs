@@ -12,15 +12,10 @@ pub use manager::{
 };
 pub use watch::{ConfigEvent, subscription};
 
-use hydebar_proto::config::{Config, ConfigValidationError, DEFAULT_CONFIG_FILE_PATH};
+use hydebar_proto::config::{Config, DEFAULT_CONFIG_FILE_PATH};
 use log::{info, warn};
 use shellexpand::full;
 use thiserror::Error;
-
-#[derive(Debug, Clone)]
-pub enum ConfigEvent {
-    Updated(Box<Config>),
-}
 
 #[derive(Debug, Error)]
 pub enum ConfigLoadError {

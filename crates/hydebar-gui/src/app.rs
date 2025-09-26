@@ -1,9 +1,16 @@
-use std::{collections::HashMap, f32::consts::PI, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    f32::consts::PI,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use flexi_logger::LoggerHandle;
 use hydebar_core::{
     HEIGHT,
     config::{self, ConfigApplied, ConfigDegradation, ConfigEvent, ConfigImpact, ConfigManager},
+    event_bus::{BusEvent, EventReceiver, ModuleEvent},
     menu::{MenuSize, MenuType, menu_wrapper},
     modules::{
         self,
@@ -39,7 +46,7 @@ use iced::{
         wayland::{Event as WaylandEvent, OutputEvent},
     },
     gradient::Linear,
-    keyboard,
+    keyboard, time,
     widget::{Row, container},
     window::Id,
 };
@@ -53,6 +60,8 @@ pub struct App {
     logger: LoggerHandle,
     hyprland: Arc<dyn HyprlandPort>,
     config_manager: Arc<ConfigManager>,
+    bus_receiver: Arc<Mutex<EventReceiver>>,
+    micro_ticker: MicroTicker,
     pub config: Config,
     pub outputs: Outputs,
     pub app_launcher: AppLauncher,
@@ -75,6 +84,8 @@ pub struct App {
 #[derive(Debug, Clone)]
 pub enum Message {
     None,
+    MicroTick,
+    BusFlushed(BusFlushOutcome),
     ConfigChanged(ConfigApplied),
     ConfigDegraded(ConfigDegradation),
     ToggleMenu(MenuType, Id, ButtonUIRef),
@@ -99,13 +110,90 @@ pub enum Message {
     CustomUpdate(String, modules::custom_module::Message),
 }
 
+#[derive(Debug, Clone)]
+struct BusFlushOutcome {
+    events: Vec<BusEvent>,
+    had_error: bool,
+}
+
+impl BusFlushOutcome {
+    fn empty() -> Self {
+        Self {
+            events: Vec::new(),
+            had_error: false,
+        }
+    }
+
+    fn with_events(events: Vec<BusEvent>, had_error: bool) -> Self {
+        Self { events, had_error }
+    }
+
+    fn had_error(&self) -> bool {
+        self.had_error
+    }
+
+    fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
+    fn into_events(self) -> Vec<BusEvent> {
+        self.events
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MicroTicker {
+    fast_interval: Duration,
+    slow_interval: Duration,
+    idle_threshold: u8,
+    idle_ticks: u8,
+    current_interval: Duration,
+}
+
+impl MicroTicker {
+    fn new(fast_interval: Duration, slow_interval: Duration, idle_threshold: u8) -> Self {
+        Self {
+            fast_interval,
+            slow_interval,
+            idle_threshold,
+            idle_ticks: 0,
+            current_interval: fast_interval,
+        }
+    }
+
+    fn interval(&self) -> Duration {
+        self.current_interval
+    }
+
+    fn record_activity(&mut self) {
+        self.idle_ticks = 0;
+        self.current_interval = self.fast_interval;
+    }
+
+    fn record_idle(&mut self) {
+        if self.idle_ticks < self.idle_threshold {
+            self.idle_ticks += 1;
+        }
+
+        if self.idle_ticks >= self.idle_threshold {
+            self.current_interval = self.slow_interval;
+        }
+    }
+}
+
+impl Default for MicroTicker {
+    fn default() -> Self {
+        Self::new(Duration::from_millis(16), Duration::from_millis(33), 3)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use flexi_logger::LoggerHandle;
-    use hydebar_core::test_utils::MockHyprlandPort;
+    use hydebar_core::{config::ConfigManager, event_bus::EventBus, test_utils::MockHyprlandPort};
     use hydebar_proto::ports::hyprland::HyprlandPort;
-    use std::sync::OnceLock;
+    use std::{num::NonZeroUsize, sync::OnceLock};
 
     fn test_logger() -> LoggerHandle {
         static LOGGER: OnceLock<LoggerHandle> = OnceLock::new();
@@ -127,7 +215,18 @@ mod tests {
         let mock = Arc::new(MockHyprlandPort::default());
         let mock_port: Arc<dyn HyprlandPort> = mock.clone();
 
-        let (app, _) = App::new((logger, config, path, Arc::clone(&mock_port)))();
+        let config_manager = Arc::new(ConfigManager::new(config.clone()));
+        let capacity = NonZeroUsize::new(16).expect("non-zero");
+        let bus = EventBus::new(capacity);
+
+        let (app, _) = App::new((
+            logger,
+            config,
+            Arc::clone(&config_manager),
+            path,
+            Arc::clone(&mock_port),
+            bus.receiver(),
+        ))();
 
         assert!(Arc::ptr_eq(&app.hyprland, &mock_port));
     }
@@ -140,7 +239,18 @@ mod tests {
         let mock = Arc::new(MockHyprlandPort::default());
         let mock_port: Arc<dyn HyprlandPort> = mock.clone();
 
-        let (mut app, _) = App::new((logger, config, path, mock_port))();
+        let config_manager = Arc::new(ConfigManager::new(config.clone()));
+        let capacity = NonZeroUsize::new(16).expect("non-zero");
+        let bus = EventBus::new(capacity);
+
+        let (mut app, _) = App::new((
+            logger,
+            config,
+            Arc::clone(&config_manager),
+            path,
+            mock_port,
+            bus.receiver(),
+        ))();
 
         let _ = app.update(Message::KeyboardLayout(
             hydebar_core::modules::keyboard_layout::Message::ChangeLayout,
@@ -152,12 +262,13 @@ mod tests {
 
 impl App {
     pub fn new(
-        (logger, config, config_manager, config_path, hyprland): (
+        (logger, config, config_manager, config_path, hyprland, bus_receiver): (
             LoggerHandle,
             Config,
             Arc<ConfigManager>,
             PathBuf,
             Arc<dyn HyprlandPort>,
+            EventReceiver,
         ),
     ) -> impl FnOnce() -> (Self, Task<Message>) {
         move || {
@@ -175,6 +286,8 @@ impl App {
                     logger,
                     hyprland,
                     config_manager,
+                    bus_receiver: Arc::new(Mutex::new(bus_receiver)),
+                    micro_ticker: MicroTicker::default(),
                     outputs,
                     app_launcher: AppLauncher,
                     custom,
@@ -223,6 +336,36 @@ impl App {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::MicroTick => Task::perform(
+                drain_bus(Arc::clone(&self.bus_receiver)),
+                Message::BusFlushed,
+            ),
+            Message::BusFlushed(outcome) => {
+                if outcome.had_error() {
+                    error!("failed to drain event bus, keeping fast cadence");
+                    self.micro_ticker.record_activity();
+                }
+
+                if outcome.is_empty() {
+                    if !outcome.had_error() {
+                        self.micro_ticker.record_idle();
+                    }
+                    Task::none()
+                } else {
+                    if !outcome.had_error() {
+                        self.micro_ticker.record_activity();
+                    }
+
+                    let tasks: Vec<_> = outcome
+                        .into_events()
+                        .into_iter()
+                        .filter_map(App::message_from_bus_event)
+                        .map(|msg| self.update(msg))
+                        .collect();
+
+                    Task::batch(tasks)
+                }
+            }
             Message::None => Task::none(),
             Message::ConfigChanged(update) => {
                 let ConfigApplied { config, impact } = update;
@@ -448,6 +591,34 @@ impl App {
         self.custom = state;
     }
 
+    fn message_from_bus_event(event: BusEvent) -> Option<Message> {
+        match event {
+            BusEvent::Redraw => Some(Message::None),
+            BusEvent::PopupToggle => Some(Message::CloseAllMenus),
+            BusEvent::Module(module) => App::message_from_module_event(module),
+        }
+    }
+
+    fn message_from_module_event(event: ModuleEvent) -> Option<Message> {
+        match event {
+            ModuleEvent::Updates(message) => Some(Message::Updates(message)),
+            ModuleEvent::Workspaces(message) => Some(Message::Workspaces(message)),
+            ModuleEvent::WindowTitle(message) => Some(Message::WindowTitle(message)),
+            ModuleEvent::SystemInfo(message) => Some(Message::SystemInfo(message)),
+            ModuleEvent::KeyboardLayout(message) => Some(Message::KeyboardLayout(message)),
+            ModuleEvent::KeyboardSubmap(message) => Some(Message::KeyboardSubmap(message)),
+            ModuleEvent::Tray(message) => Some(Message::Tray(message)),
+            ModuleEvent::Clock(message) => Some(Message::Clock(message)),
+            ModuleEvent::Battery(message) => Some(Message::Battery(message)),
+            ModuleEvent::Privacy(message) => Some(Message::Privacy(message)),
+            ModuleEvent::Settings(message) => Some(Message::Settings(message)),
+            ModuleEvent::MediaPlayer(message) => Some(Message::MediaPlayer(message)),
+            ModuleEvent::Custom { name, message } => {
+                Some(Message::CustomUpdate(name.as_ref().to_owned(), message))
+            }
+        }
+    }
+
     pub fn view(&self, id: Id) -> Element<Message> {
         match self.outputs.has(id) {
             Some(HasOutput::Main) => {
@@ -626,10 +797,10 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
+        let timer = time::every(self.micro_ticker.interval()).map(|_| Message::MicroTick);
+
         Subscription::batch(vec![
-            Subscription::batch(self.modules_subscriptions(&self.config.modules.left)),
-            Subscription::batch(self.modules_subscriptions(&self.config.modules.center)),
-            Subscription::batch(self.modules_subscriptions(&self.config.modules.right)),
+            timer,
             config::subscription(&self.config_path, Arc::clone(&self.config_manager)).map(
                 |event| match event {
                     ConfigEvent::Applied(config) => Message::ConfigChanged(config),
@@ -656,4 +827,31 @@ impl App {
             }),
         ])
     }
+}
+
+async fn drain_bus(receiver: Arc<Mutex<EventReceiver>>) -> BusFlushOutcome {
+    let mut guard = match receiver.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            error!("event bus receiver poisoned: {err}");
+            return BusFlushOutcome::with_events(Vec::new(), true);
+        }
+    };
+
+    let mut events = Vec::new();
+    let mut had_error = false;
+
+    loop {
+        match guard.try_recv() {
+            Ok(Some(event)) => events.push(event),
+            Ok(None) => break,
+            Err(err) => {
+                error!("failed to read event bus payload: {err}");
+                had_error = true;
+                break;
+            }
+        }
+    }
+
+    BusFlushOutcome::with_events(events, had_error)
 }

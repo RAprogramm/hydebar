@@ -10,6 +10,7 @@ use flexi_logger::{
 use hydebar_core::{
     adapters::hyprland_client::HyprlandClient,
     config::{ConfigLoadError, ConfigManager, get_config},
+    event_bus::EventBus,
 };
 use hydebar_gui::{App, get_log_spec};
 use hydebar_proto::ports::hyprland::HyprlandPort;
@@ -17,7 +18,7 @@ use iced::Font;
 use log::{debug, error};
 use std::panic;
 use std::path::PathBuf;
-use std::{backtrace::Backtrace, borrow::Cow, sync::Arc};
+use std::{backtrace::Backtrace, borrow::Cow, num::NonZeroUsize, sync::Arc};
 use thiserror::Error;
 
 const ICON_FONT: &[u8] = include_bytes!("../../assets/SymbolsNerdFont-Regular.ttf");
@@ -37,6 +38,8 @@ enum MainError {
     Config(#[from] ConfigLoadError),
     #[error("iced runtime error: {0}")]
     Iced(#[from] iced::Error),
+    #[error("invalid event bus capacity")]
+    BusCapacity,
 }
 
 #[tokio::main]
@@ -83,6 +86,10 @@ async fn run() -> Result<(), MainError> {
 
     let hyprland: Arc<dyn HyprlandPort> = Arc::new(HyprlandClient::new());
 
+    let bus_capacity = NonZeroUsize::new(256).ok_or(MainError::BusCapacity)?;
+    let event_bus = EventBus::new(bus_capacity);
+    let bus_receiver = event_bus.receiver();
+
     iced::daemon(App::title, App::update, App::view)
         .subscription(App::subscription)
         .theme(App::theme)
@@ -96,6 +103,7 @@ async fn run() -> Result<(), MainError> {
             config_manager,
             config_path,
             hyprland,
+            bus_receiver,
         )))
         .map_err(MainError::from)
 }
