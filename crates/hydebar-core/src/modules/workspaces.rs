@@ -6,11 +6,9 @@ use crate::{
     style::workspace_button_style,
 };
 
-use hyprland::{
-    data::{Monitors as HlMonitors, Workspace as HlWorkspace, Workspaces as HlWorkspaces},
-    dispatch::{Dispatch, DispatchType, MonitorIdentifier, WorkspaceIdentifierWithSpecial},
-    event_listener::AsyncEventListener,
-    shared::{HyprData, HyprDataActive, HyprDataVec},
+use hydebar_proto::ports::hyprland::{
+    HyprlandMonitorSelector, HyprlandPort, HyprlandWorkspaceEvent, HyprlandWorkspaceSelector,
+    HyprlandWorkspaceSnapshot,
 };
 
 use iced::{
@@ -24,9 +22,13 @@ use itertools::Itertools;
 use log::{debug, error};
 use std::{
     any::TypeId,
-    convert::TryFrom,
     sync::{Arc, RwLock},
+    time::Duration,
 };
+use tokio::time::sleep;
+use tokio_stream::StreamExt;
+
+const WORKSPACE_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
 pub struct Workspace {
@@ -38,13 +40,27 @@ pub struct Workspace {
     pub windows: u16,
 }
 
-fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
-    let active = HlWorkspace::get_active().ok();
-    let monitors = HlMonitors::get().map(|m| m.to_vec()).unwrap_or_default();
-    let workspaces = HlWorkspaces::get().map(|w| w.to_vec()).unwrap_or_default();
+fn get_workspaces(port: &dyn HyprlandPort, config: &WorkspacesModuleConfig) -> Vec<Workspace> {
+    let snapshot = match port.workspace_snapshot() {
+        Ok(snapshot) => snapshot,
+        Err(err) => {
+            error!("failed to retrieve workspace snapshot: {err}");
+            return Vec::new();
+        }
+    };
+
+    map_snapshot_to_workspaces(&snapshot, config)
+}
+
+fn map_snapshot_to_workspaces(
+    snapshot: &HyprlandWorkspaceSnapshot,
+    config: &WorkspacesModuleConfig,
+) -> Vec<Workspace> {
+    let active = snapshot.active_workspace_id;
+    let monitors = &snapshot.monitors;
 
     // Deduplicate by ID to avoid duplicates from Hyprland.
-    let workspaces: Vec<_> = workspaces.into_iter().unique_by(|w| w.id).collect();
+    let workspaces: Vec<_> = snapshot.workspaces.iter().unique_by(|w| w.id).collect();
 
     // Preallocate result vector.
     let mut result: Vec<Workspace> = Vec::with_capacity(workspaces.len());
@@ -57,14 +73,17 @@ fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
             id: w.id,
             name: w
                 .name
+                .as_str()
                 .split(':')
                 .last()
                 .map_or_else(|| String::new(), ToOwned::to_owned),
             // Option<i128> -> Option<usize> with bounds check.
-            monitor_id: w.monitor_id.and_then(|mid| usize::try_from(mid).ok()),
-            monitor: w.monitor.clone(),
-            active: monitors.iter().any(|m| m.special_workspace.id == w.id),
-            windows: w.windows,
+            monitor_id: w.monitor_id,
+            monitor: w.monitor_name.clone(),
+            active: monitors
+                .iter()
+                .any(|m| m.special_workspace_id == Some(w.id)),
+            windows: w.window_count,
         });
     }
 
@@ -73,10 +92,10 @@ fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
         result.push(Workspace {
             id: w.id,
             name: w.name.clone(),
-            monitor_id: w.monitor_id.and_then(|mid| usize::try_from(mid).ok()),
-            monitor: w.monitor.clone(),
-            active: Some(w.id) == active.as_ref().map(|a| a.id),
-            windows: w.windows,
+            monitor_id: w.monitor_id,
+            monitor: w.monitor_name.clone(),
+            active: Some(w.id) == active,
+            windows: w.window_count,
         });
     }
 
@@ -116,14 +135,23 @@ fn get_workspaces(config: &WorkspacesModuleConfig) -> Vec<Workspace> {
 }
 
 pub struct Workspaces {
+    hyprland: Arc<dyn HyprlandPort>,
     workspaces: Vec<Workspace>,
 }
 
 impl Workspaces {
-    pub fn new(config: &WorkspacesModuleConfig) -> Self {
+    pub fn new(hyprland: Arc<dyn HyprlandPort>, config: &WorkspacesModuleConfig) -> Self {
+        let workspaces = get_workspaces(hyprland.as_ref(), config);
+
         Self {
-            workspaces: get_workspaces(config),
+            hyprland,
+            workspaces,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn items(&self) -> &[Workspace] {
+        &self.workspaces
     }
 }
 
@@ -138,18 +166,18 @@ impl Workspaces {
     pub fn update(&mut self, message: Message, config: &WorkspacesModuleConfig) {
         match message {
             Message::WorkspacesChanged => {
-                self.workspaces = get_workspaces(config);
+                self.workspaces = get_workspaces(self.hyprland.as_ref(), config);
             }
             Message::ChangeWorkspace(id) => {
                 if id > 0 {
                     let already_active = self.workspaces.iter().any(|w| w.active && w.id == id);
                     if !already_active {
                         debug!("changing workspace to: {id}");
-                        let res = Dispatch::call(DispatchType::Workspace(
-                            WorkspaceIdentifierWithSpecial::Id(id),
-                        ));
+                        let res = self
+                            .hyprland
+                            .change_workspace(HyprlandWorkspaceSelector::Id(id));
                         if let Err(e) = res {
-                            error!("failed to dispatch workspace change: {e:?}");
+                            error!("failed to dispatch workspace change: {e}");
                         }
                     }
                 }
@@ -160,19 +188,16 @@ impl Workspaces {
 
                     // Prefer focusing by monitor index if present; otherwise, fall back to monitor name.
                     let monitor_ident = match special.monitor_id {
-                        Some(idx) => MonitorIdentifier::Id(idx as i128),
-                        None => MonitorIdentifier::Name(&special.monitor.clone()),
+                        Some(idx) => HyprlandMonitorSelector::Id(idx),
+                        None => HyprlandMonitorSelector::Name(special.monitor.clone()),
                     };
 
-                    let res =
-                        Dispatch::call(DispatchType::FocusMonitor(monitor_ident)).and_then(|_| {
-                            Dispatch::call(DispatchType::ToggleSpecialWorkspace(Some(
-                                special.name.clone(),
-                            )))
-                        });
+                    let res = self
+                        .hyprland
+                        .focus_and_toggle_special_workspace(monitor_ident, &special.name);
 
                     if let Err(e) = res {
-                        error!("failed to dispatch special workspace toggle: {e:?}");
+                        error!("failed to dispatch special workspace toggle: {e}");
                     }
                 }
             }
@@ -276,106 +301,99 @@ impl Module for Workspaces {
         let id = TypeId::of::<Self>();
         let enable_workspace_filling = config.enable_workspace_filling;
 
+        let hyprland = Arc::clone(&self.hyprland);
+
         Some(
             Subscription::run_with_id(
                 format!("{id:?}-{enable_workspace_filling}"),
-                channel(10, async move |output| {
+                channel(10, move |output| {
+                    let hyprland = Arc::clone(&hyprland);
                     let output = Arc::new(RwLock::new(output));
 
-                    // We keep the listener in a loop and restart on error.
-                    loop {
-                        let mut event_listener = AsyncEventListener::new();
-
-                        // Helper to DRY send with logging.
-                        let send = |output: &Arc<RwLock<_>>| {
-                            let out: Arc<RwLock<iced::futures::channel::mpsc::Sender<Message>>> =
-                                output.clone();
-                            Box::pin(async move {
-                                if let Ok(mut guard) = out.write() {
-                                    if let Err(e) = guard.try_send(Message::WorkspacesChanged) {
-                                        error!("failed to enqueue WorkspacesChanged: {e:?}");
+                    async move {
+                        loop {
+                            match hyprland.workspace_events() {
+                                Ok(mut stream) => {
+                                    while let Some(event) = stream.next().await {
+                                        match event {
+                                            Ok(
+                                                HyprlandWorkspaceEvent::Added
+                                                | HyprlandWorkspaceEvent::Changed
+                                                | HyprlandWorkspaceEvent::Removed
+                                                | HyprlandWorkspaceEvent::Moved
+                                                | HyprlandWorkspaceEvent::SpecialChanged
+                                                | HyprlandWorkspaceEvent::SpecialRemoved
+                                                | HyprlandWorkspaceEvent::WindowClosed
+                                                | HyprlandWorkspaceEvent::WindowOpened
+                                                | HyprlandWorkspaceEvent::WindowMoved
+                                                | HyprlandWorkspaceEvent::ActiveMonitorChanged,
+                                            ) => {
+                                                if let Ok(mut guard) = output.write() {
+                                                    if let Err(err) =
+                                                        guard.try_send(Message::WorkspacesChanged)
+                                                    {
+                                                        error!(
+                                                            "failed to enqueue WorkspacesChanged: {err}"
+                                                        );
+                                                    }
+                                                } else {
+                                                    error!(
+                                                        "failed to acquire output lock for WorkspacesChanged"
+                                                    );
+                                                }
+                                            }
+                                            Err(err) => {
+                                                error!(
+                                                    "workspace event stream error, restarting listener: {err}"
+                                                );
+                                                break;
+                                            }
+                                        }
                                     }
-                                } else {
-                                    error!("failed to acquire output lock for WorkspacesChanged");
                                 }
-                            })
-                        };
-
-                        event_listener.add_workspace_added_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("workspace added: {e:?}");
-                                send(&output)
+                                Err(err) => {
+                                    error!(
+                                        "failed to start workspace event stream, retrying: {err}"
+                                    );
+                                }
                             }
-                        });
 
-                        event_listener.add_workspace_changed_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("workspace changed: {e:?}");
-                                send(&output)
-                            }
-                        });
-
-                        event_listener.add_workspace_deleted_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("workspace deleted: {e:?}");
-                                send(&output)
-                            }
-                        });
-
-                        event_listener.add_workspace_moved_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("workspace moved: {e:?}");
-                                send(&output)
-                            }
-                        });
-
-                        event_listener.add_changed_special_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("special workspace changed: {e:?}");
-                                send(&output)
-                            }
-                        });
-
-                        event_listener.add_special_removed_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("special workspace removed: {e:?}");
-                                send(&output)
-                            }
-                        });
-
-                        event_listener.add_window_closed_handler({
-                            let output = output.clone();
-                            move |_| send(&output)
-                        });
-
-                        event_listener.add_window_opened_handler({
-                            let output = output.clone();
-                            move |_| send(&output)
-                        });
-
-                        event_listener.add_window_moved_handler({
-                            let output = output.clone();
-                            move |_| send(&output)
-                        });
-
-                        event_listener.add_active_monitor_changed_handler({
-                            let output = output.clone();
-                            move |_| send(&output)
-                        });
-
-                        if let Err(e) = event_listener.start_listener_async().await {
-                            error!("restarting workspaces listener due to error: {e:?}");
+                            sleep(WORKSPACE_EVENT_RETRY_DELAY).await;
                         }
                     }
                 }),
             )
             .map(app::Message::Workspaces),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::MockHyprlandPort;
+    use hydebar_proto::config::WorkspacesModuleConfig;
+
+    #[test]
+    fn initializes_from_port_snapshot() {
+        let port = Arc::new(MockHyprlandPort::default());
+        let port_trait: Arc<dyn HyprlandPort> = port.clone();
+        let config = WorkspacesModuleConfig::default();
+
+        let module = Workspaces::new(port_trait, &config);
+
+        assert!(!module.items().is_empty());
+    }
+
+    #[test]
+    fn change_workspace_dispatches_via_port() {
+        let port = Arc::new(MockHyprlandPort::default());
+        let port_trait: Arc<dyn HyprlandPort> = port.clone();
+        let config = WorkspacesModuleConfig::default();
+
+        let mut module = Workspaces::new(port_trait, &config);
+        module.update(Message::ChangeWorkspace(2), &config);
+
+        assert_eq!(port.workspace_calls(), 1);
     }
 }

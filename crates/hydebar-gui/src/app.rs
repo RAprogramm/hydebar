@@ -1,4 +1,4 @@
-use std::{collections::HashMap, f32::consts::PI, path::PathBuf};
+use std::{collections::HashMap, f32::consts::PI, path::PathBuf, sync::Arc};
 
 use flexi_logger::LoggerHandle;
 use hydebar_core::{
@@ -30,6 +30,7 @@ use hydebar_core::{
     utils,
 };
 use hydebar_proto::config::{AppearanceStyle, Config, Position};
+use hydebar_proto::ports::hyprland::HyprlandPort;
 use iced::{
     Alignment, Color, Element, Gradient, Length, Radians, Subscription, Task, Theme,
     daemon::Appearance,
@@ -50,6 +51,7 @@ use crate::{centerbox, get_log_spec};
 pub struct App {
     config_path: PathBuf,
     logger: LoggerHandle,
+    hyprland: Arc<dyn HyprlandPort>,
     pub config: Config,
     pub outputs: Outputs,
     pub app_launcher: AppLauncher,
@@ -95,11 +97,67 @@ pub enum Message {
     CustomUpdate(String, modules::custom_module::Message),
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flexi_logger::LoggerHandle;
+    use hydebar_core::test_utils::MockHyprlandPort;
+    use hydebar_proto::ports::hyprland::HyprlandPort;
+    use std::sync::OnceLock;
+
+    fn test_logger() -> LoggerHandle {
+        static LOGGER: OnceLock<LoggerHandle> = OnceLock::new();
+        LOGGER
+            .get_or_init(|| {
+                flexi_logger::Logger::try_with_env_or_str("off")
+                    .expect("failed to configure test logger")
+                    .start()
+                    .expect("failed to start test logger")
+            })
+            .clone()
+    }
+
+    #[test]
+    fn app_stores_injected_hyprland_port() {
+        let logger = test_logger();
+        let config = Config::default();
+        let path = PathBuf::new();
+        let mock = Arc::new(MockHyprlandPort::default());
+        let mock_port: Arc<dyn HyprlandPort> = mock.clone();
+
+        let (app, _) = App::new((logger, config, path, Arc::clone(&mock_port)))();
+
+        assert!(Arc::ptr_eq(&app.hyprland, &mock_port));
+    }
+
+    #[test]
+    fn keyboard_layout_change_triggers_port_call() {
+        let logger = test_logger();
+        let config = Config::default();
+        let path = PathBuf::new();
+        let mock = Arc::new(MockHyprlandPort::default());
+        let mock_port: Arc<dyn HyprlandPort> = mock.clone();
+
+        let (mut app, _) = App::new((logger, config, path, mock_port))();
+
+        let _ = app.update(Message::KeyboardLayout(
+            hydebar_core::modules::keyboard_layout::Message::ChangeLayout,
+        ));
+
+        assert_eq!(mock.switch_layout_calls(), 1);
+    }
+}
+
 impl App {
     pub fn new(
-        (logger, config, config_path): (LoggerHandle, Config, PathBuf),
+        (logger, config, config_path, hyprland): (
+            LoggerHandle,
+            Config,
+            PathBuf,
+            Arc<dyn HyprlandPort>,
+        ),
     ) -> impl FnOnce() -> (Self, Task<Message>) {
-        || {
+        move || {
             let (outputs, task) = Outputs::new(config.appearance.style, config.position, &config);
 
             let custom = config
@@ -107,20 +165,25 @@ impl App {
                 .iter()
                 .map(|o| (o.name.clone(), Custom::default()))
                 .collect();
+            let hyprland_clone = Arc::clone(&hyprland);
             (
                 App {
                     config_path,
                     logger,
+                    hyprland,
                     outputs,
                     app_launcher: AppLauncher,
                     custom,
                     updates: Updates::default(),
                     clipboard: Clipboard,
-                    workspaces: Workspaces::new(&config.workspaces),
-                    window_title: WindowTitle::new(&config.window_title),
+                    workspaces: Workspaces::new(Arc::clone(&hyprland_clone), &config.workspaces),
+                    window_title: WindowTitle::new(
+                        Arc::clone(&hyprland_clone),
+                        &config.window_title,
+                    ),
                     system_info: SystemInfo::default(),
-                    keyboard_layout: KeyboardLayout::default(),
-                    keyboard_submap: KeyboardSubmap::default(),
+                    keyboard_layout: KeyboardLayout::new(Arc::clone(&hyprland_clone)),
+                    keyboard_submap: KeyboardSubmap::new(hyprland_clone),
                     tray: TrayModule::default(),
                     clock: Clock::default(),
                     battery: Battery::default(),

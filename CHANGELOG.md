@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.3.1] - 2025-09-26
+
+### Added
+
+- Introduced a Hyprland port abstraction with structured event types, keyboard state snapshots, and typed errors for adapters.
+- Added a `HyprlandClient` adapter built on `hyprland-rs` with timeouts, retries, and mockable tests.
+
+### Changed
+
+- Core modules now obtain Hyprland access through injected ports, and the GUI wires the new client implementation for runtime use.
+
 ## [0.3.0] - 2025-02-15
 
 ### Changed

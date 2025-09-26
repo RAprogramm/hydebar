@@ -1,51 +1,25 @@
-use hyprland::{
-    ctl::switch_xkb_layout::SwitchXKBLayoutCmdTypes, event_listener::AsyncEventListener,
-    shared::HyprData,
-};
+use hydebar_proto::ports::hyprland::{HyprlandKeyboardEvent, HyprlandKeyboardState, HyprlandPort};
 use iced::{Element, Subscription, stream::channel, widget::text};
-use log::{debug, error};
+use log::error;
 use std::{
     any::TypeId,
     sync::{Arc, RwLock},
+    time::Duration,
 };
+use tokio::time::sleep;
+use tokio_stream::StreamExt;
 
 use crate::{app, config::KeyboardLayoutModuleConfig};
 
 use super::{Module, OnModulePress};
 
-fn get_multiple_layout_flag() -> bool {
-    match hyprland::keyword::Keyword::get("input:kb_layout") {
-        Ok(layouts) => layouts.value.to_string().split(",").count() > 1,
-        Err(_) => false,
-    }
-}
-
-fn get_active_layout() -> String {
-    hyprland::data::Devices::get()
-        .ok()
-        .and_then(|devices| {
-            devices
-                .keyboards
-                .iter()
-                .find(|k| k.main)
-                .map(|keyboard| keyboard.active_keymap.to_string())
-        })
-        .unwrap_or_else(|| "unknown".to_string())
-}
+const KEYBOARD_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
 pub struct KeyboardLayout {
+    hyprland: Arc<dyn HyprlandPort>,
     multiple_layout: bool,
     active: String,
-}
-
-impl Default for KeyboardLayout {
-    fn default() -> Self {
-        Self {
-            multiple_layout: get_multiple_layout_flag(),
-            active: get_active_layout(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +30,24 @@ pub enum Message {
 }
 
 impl KeyboardLayout {
+    pub fn new(hyprland: Arc<dyn HyprlandPort>) -> Self {
+        let HyprlandKeyboardState {
+            active_layout,
+            has_multiple_layouts,
+            ..
+        } = hyprland.keyboard_state().unwrap_or(HyprlandKeyboardState {
+            active_layout: "unknown".to_string(),
+            has_multiple_layouts: false,
+            active_submap: None,
+        });
+
+        Self {
+            hyprland,
+            multiple_layout: has_multiple_layouts,
+            active: active_layout,
+        }
+    }
+
     pub fn update(&mut self, message: Message) {
         match message {
             Message::ActiveLayoutChanged(layout) => {
@@ -63,14 +55,21 @@ impl KeyboardLayout {
             }
             Message::LayoutConfigChanged(layout_flag) => self.multiple_layout = layout_flag,
             Message::ChangeLayout => {
-                let res =
-                    hyprland::ctl::switch_xkb_layout::call("all", SwitchXKBLayoutCmdTypes::Next);
-
-                if let Err(e) = res {
-                    error!("failed to keymap change: {e:?}");
+                if let Err(err) = self.hyprland.switch_keyboard_layout() {
+                    error!("failed to switch keyboard layout: {err}");
                 }
             }
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn active_layout(&self) -> &str {
+        &self.active
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_multiple_layouts(&self) -> bool {
+        self.multiple_layout
     }
 }
 
@@ -101,58 +100,116 @@ impl Module for KeyboardLayout {
     fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
         let id = TypeId::of::<Self>();
 
+        let hyprland = Arc::clone(&self.hyprland);
+
         Some(
             Subscription::run_with_id(
                 id,
-                channel(10, async |output| {
+                channel(10, move |output| {
+                    let hyprland = Arc::clone(&hyprland);
                     let output = Arc::new(RwLock::new(output));
-                    loop {
-                        let mut event_listener = AsyncEventListener::new();
 
-                        event_listener.add_layout_changed_handler({
-                            let output = output.clone();
-                            move |e| {
-                                debug!("keymap changed: {e:?}");
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                            .try_send(Message::ActiveLayoutChanged(
-                                                get_active_layout(),
-                                            ))
-                                            .expect("error getting keymap: layout changed event");
+                    async move {
+                        loop {
+                            match hyprland.keyboard_events() {
+                                Ok(mut stream) => {
+                                    while let Some(event) = stream.next().await {
+                                        match event {
+                                            Ok(HyprlandKeyboardEvent::LayoutChanged(layout)) => {
+                                                match output.write() {
+                                                    Ok(mut guard) => {
+                                                        if let Err(err) = guard
+                                                            .try_send(Message::ActiveLayoutChanged(
+                                                                layout,
+                                                            ))
+                                                        {
+                                                            error!(
+                                                                "failed to enqueue active layout update: {err}"
+                                                            );
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        error!(
+                                                            "failed to acquire lock for active layout update"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Ok(HyprlandKeyboardEvent::LayoutConfigurationChanged(
+                                                multiple,
+                                            )) => {
+                                                match output.write() {
+                                                    Ok(mut guard) => {
+                                                        if let Err(err) = guard
+                                                            .try_send(Message::LayoutConfigChanged(
+                                                                multiple,
+                                                            ))
+                                                        {
+                                                            error!(
+                                                                "failed to enqueue keyboard layout flag update: {err}"
+                                                            );
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        error!(
+                                                            "failed to acquire lock for keyboard layout flag update"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Ok(HyprlandKeyboardEvent::SubmapChanged(_)) => {
+                                                // Submap events are handled by the KeyboardSubmap module.
+                                            }
+                                            Err(err) => {
+                                                error!(
+                                                    "keyboard event stream error, restarting listener: {err}"
+                                                );
+                                                break;
+                                            }
+                                        }
                                     }
-                                })
+                                }
+                                Err(err) => {
+                                    error!(
+                                        "failed to start keyboard event stream, retrying: {err}"
+                                    );
+                                }
                             }
-                        });
 
-                        event_listener.add_config_reloaded_handler({
-                            let output = output.clone();
-                            move || {
-                                let output = output.clone();
-                                Box::pin(async move {
-                                    if let Ok(mut output) = output.write() {
-                                        output
-                                        .try_send(Message::LayoutConfigChanged(
-                                            get_multiple_layout_flag(),
-                                        ))
-                                        .expect(
-                                            "error sending message: layout config changed event",
-                                        );
-                                    }
-                                })
-                            }
-                        });
-
-                        let res = event_listener.start_listener_async().await;
-
-                        if let Err(e) = res {
-                            error!("restarting keymap listener due to error: {e:?}");
+                            sleep(KEYBOARD_EVENT_RETRY_DELAY).await;
                         }
                     }
                 }),
             )
             .map(app::Message::KeyboardLayout),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::MockHyprlandPort;
+
+    #[test]
+    fn initializes_from_keyboard_state() {
+        let port = Arc::new(MockHyprlandPort::default());
+        let port_trait: Arc<dyn HyprlandPort> = port.clone();
+
+        let module = KeyboardLayout::new(port_trait);
+
+        assert_eq!(module.active_layout(), "us");
+        assert!(module.has_multiple_layouts());
+    }
+
+    #[test]
+    fn change_layout_invokes_port_command() {
+        let port = Arc::new(MockHyprlandPort::default());
+        let port_trait: Arc<dyn HyprlandPort> = port.clone();
+        let mut module = KeyboardLayout::new(port_trait);
+
+        module.update(Message::ChangeLayout);
+
+        assert_eq!(port.switch_layout_calls(), 1);
     }
 }
