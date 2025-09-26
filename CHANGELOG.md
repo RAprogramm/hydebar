@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bluetooth: use alias instead of name for device name
 - Airplane button fail when the `rfkill` returns an error or is not present
 
+## [0.2.2] - 2025-09-27
+
+### Changed
+
+- Launcher commands now execute via Tokio, logging failures instead of panicking and exposing a reusable async API for command status and output retrieval.
+
+### Fixed
+
+- Fire-and-forget power actions no longer abort the process on spawn failures or non-zero exit codes.
+
 ## [0.2.1] - 2025-09-26
 
 ### Changed
