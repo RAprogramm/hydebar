@@ -17,23 +17,15 @@ use tokio::process::Command;
 /// ```no_run
 /// use std::sync::Arc;
 ///
-/// use hydebar::utils::launcher::{
-///     run_shell_command,
-///     CommandCapture,
-///     CommandOutcome,
-/// };
+/// use hydebar::utils::launcher::{run_shell_command_with_output, LauncherError};
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let runtime = tokio::runtime::Runtime::new()?;
 /// let command = Arc::from("true");
 /// runtime.block_on(async move {
-///     match run_shell_command(&command, CommandCapture::Status).await? {
-///         CommandOutcome::Status(status) => {
-///             assert!(status.success());
-///         }
-///         CommandOutcome::Output(_) => unreachable!(),
-///     }
-///     Ok::<(), hydebar::utils::launcher::LauncherError>(())
+///     let output = run_shell_command_with_output(&command).await?;
+///     assert!(output.status.success());
+///     Ok::<(), LauncherError>(())
 /// })?;
 /// Ok(())
 /// # }
@@ -71,74 +63,43 @@ impl LauncherError {
     }
 }
 
-/// Determines whether the launcher should observe only the exit status or capture full
-/// output of the executed command.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandCapture {
-    /// Await only the process exit status.
-    Status,
-    /// Capture stdout and stderr alongside the exit status.
-    Output,
-}
-
-/// Outcome of a launched command depending on the capture mode requested.
-#[derive(Debug)]
-pub enum CommandOutcome {
-    /// Process exit status when [`CommandCapture::Status`] was requested.
-    Status(ExitStatus),
-    /// Full process output when [`CommandCapture::Output`] was requested.
-    Output(Output),
-}
-
-/// Launch `bash -c <command>` asynchronously using Tokio and return the observed result.
-///
-/// The function reuses a shared command string across errors to avoid unnecessary
-/// allocations and reports non-zero exit codes as [`LauncherError::NonZeroExit`].
+/// Execute the given command and return its stdout/stderr output.
 ///
 /// # Errors
 ///
 /// Returns [`LauncherError::Spawn`] if the process cannot be created or
 /// [`LauncherError::NonZeroExit`] when the command finishes unsuccessfully.
-pub async fn run_shell_command(
-    command: &Arc<str>,
-    capture: CommandCapture,
-) -> Result<CommandOutcome, LauncherError> {
+pub async fn run_shell_command_with_output(command: &Arc<str>) -> Result<Output, LauncherError> {
     let mut process = Command::new("bash");
     process.arg("-c").arg(command.as_ref());
 
-    match capture {
-        CommandCapture::Status => {
-            let status = process
-                .status()
-                .await
-                .map_err(|error| LauncherError::spawn_error(command.clone(), error))?;
+    let output = process
+        .output()
+        .await
+        .map_err(|error| LauncherError::spawn_error(command.clone(), error))?;
 
-            if status.success() {
-                Ok(CommandOutcome::Status(status))
-            } else {
-                Err(LauncherError::exit_error(command.clone(), status))
-            }
-        }
-        CommandCapture::Output => {
-            let output = process
-                .output()
-                .await
-                .map_err(|error| LauncherError::spawn_error(command.clone(), error))?;
-
-            if output.status.success() {
-                Ok(CommandOutcome::Output(output))
-            } else {
-                Err(LauncherError::exit_error(command.clone(), output.status))
-            }
-        }
+    if output.status.success() {
+        Ok(output)
+    } else {
+        Err(LauncherError::exit_error(command.clone(), output.status))
     }
 }
 
 fn spawn_and_log(command: String, context: &'static str) {
     tokio::spawn(async move {
         let command_arc: Arc<str> = Arc::from(command);
-        if let Err(error) = run_shell_command(&command_arc, CommandCapture::Status).await {
-            error!("{context} command failed: {error}");
+        match run_shell_command_with_output(&command_arc).await {
+            Ok(output) => {
+                if !output.stderr.is_empty() {
+                    error!(
+                        "{context} command produced stderr: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+            }
+            Err(error) => {
+                error!("{context} command failed: {error}");
+            }
         }
     });
 }
@@ -183,26 +144,19 @@ pub fn logout(command: String) {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use super::{CommandCapture, CommandOutcome, LauncherError, run_shell_command};
+    use super::{LauncherError, run_shell_command_with_output};
 
     #[tokio::test]
     async fn reports_successful_status() -> Result<(), Box<dyn std::error::Error>> {
         let command = Arc::from("true");
 
-        let outcome = tokio::time::timeout(
+        let output = tokio::time::timeout(
             Duration::from_secs(5),
-            run_shell_command(&command, CommandCapture::Status),
+            run_shell_command_with_output(&command),
         )
-        .await?;
+        .await??;
 
-        let status = match outcome? {
-            CommandOutcome::Status(status) => status,
-            CommandOutcome::Output(_) => {
-                return Err("status capture expected".into());
-            }
-        };
-
-        assert!(status.success());
+        assert!(output.status.success());
 
         Ok(())
     }
@@ -213,7 +167,7 @@ mod tests {
 
         let outcome = tokio::time::timeout(
             Duration::from_secs(5),
-            run_shell_command(&command, CommandCapture::Status),
+            run_shell_command_with_output(&command),
         )
         .await?;
 
@@ -225,6 +179,23 @@ mod tests {
                 return Err(format!("unexpected outcome: {other:?}").into());
             }
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn captures_command_output() -> Result<(), Box<dyn std::error::Error>> {
+        let command = Arc::from("printf foo");
+
+        let output = tokio::time::timeout(
+            Duration::from_secs(5),
+            run_shell_command_with_output(&command),
+        )
+        .await??;
+
+        assert_eq!(output.stdout, b"foo");
+        assert!(output.stderr.is_empty());
+        assert!(output.status.success());
 
         Ok(())
     }

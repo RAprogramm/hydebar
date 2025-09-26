@@ -18,6 +18,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.2.4] - 2025-09-28
+
+### Changed
+
+- Replace `mod.rs` hierarchies with flat module files and adjust public module
+  exports to match the new structure.
+- Migrate error handling from `thiserror` to `masterror`, updating existing
+  error types and removing the dependency.
+- Refine the custom module listener channel handling to use a lightweight
+  `SendQueueError` helper and propagate parse errors with structured context.
+- Update the launcher utilities to expose an async command runner returning
+  captured output and reuse it for power actions.
+
+### Added
+
+- Expand unit tests for the launcher helper and the custom module listener to
+  cover channel-closure and command-result scenarios.
+
 ## [0.2.3] - 2025-09-26
 
 ### Changed

@@ -215,9 +215,11 @@ impl NetworkDbus<'_> {
 
         Ok(Self(nm))
     }
+}
 
+impl<'a> NetworkDbus<'a> {
     pub async fn subscribe_events(
-        &self,
+        &'a self,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<super::NetworkEvent>> + 'a> {
         type EventStream<'a> = BoxStream<'a, anyhow::Result<NetworkEvent>>;
 
@@ -228,7 +230,7 @@ impl NetworkDbus<'_> {
         let wireless_enabled = self
             .clone()
             .receive_wireless_enabled_changed()
-            .await?
+            .await
             .then(|signal| async move {
                 let value = signal.get().await?;
 
@@ -241,7 +243,7 @@ impl NetworkDbus<'_> {
         let connectivity_changed = self
             .clone()
             .receive_connectivity_changed()
-            .await?
+            .await
             .then(|signal| async move {
                 let value = ConnectivityState::from(signal.get().await?);
 
@@ -254,7 +256,7 @@ impl NetworkDbus<'_> {
         let active_connections_changes = self
             .clone()
             .receive_active_connections_changed()
-            .await?
+            .await
             .then({
                 let backend = self.clone();
                 move |_| {
@@ -275,7 +277,7 @@ impl NetworkDbus<'_> {
         let wireless_devices_changed = self
             .clone()
             .receive_devices_changed()
-            .await?
+            .await
             .then({
                 let backend = self.clone();
                 let devices = devices.clone();
@@ -319,7 +321,7 @@ impl NetworkDbus<'_> {
             device_state_changes.push(
                 device_proxy
                     .receive_state_changed()
-                    .await?
+                    .await
                     .then({
                         let ssid = ssid.clone();
                         move |state| {
@@ -355,7 +357,7 @@ impl NetworkDbus<'_> {
             access_point_changes.push(
                 proxy
                     .receive_access_points_changed()
-                    .await?
+                    .await
                     .then({
                         let backend = self.clone();
                         move |_| {
@@ -384,7 +386,7 @@ impl NetworkDbus<'_> {
             strength_changes_streams.push(
                 proxy
                     .receive_strength_changed()
-                    .await?
+                    .await
                     .then({
                         let ssid = ssid.clone();
                         move |signal| {
@@ -409,7 +411,7 @@ impl NetworkDbus<'_> {
         let known_connections = settings
             .clone()
             .receive_connections_changed()
-            .await?
+            .await
             .then({
                 let backend = self.clone();
                 move |_| {
