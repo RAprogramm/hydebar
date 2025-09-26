@@ -11,7 +11,7 @@ use iced::{
 };
 use inotify::{EventMask, Inotify, WatchMask};
 use log::{debug, error, info, warn};
-use pipewire::{context::Context, core::Core, main_loop::MainLoop};
+use pipewire::{context::ContextRc, core::CoreRc, main_loop::MainLoopRc};
 use std::{any::TypeId, fs, future::Future, ops::Deref, path::Path, pin::Pin, thread};
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
@@ -99,20 +99,20 @@ impl PrivacyService {
         builder
             .spawn(move || {
                 struct PipewireRuntime {
-                    mainloop: MainLoop,
-                    _context: Context,
-                    _core: Core,
+                    mainloop: MainLoopRc,
+                    _context: ContextRc,
+                    _core: CoreRc,
                     _listener: pipewire::registry::Listener,
                 }
 
                 impl PipewireRuntime {
                     fn new(tx: UnboundedSender<PrivacyEvent>) -> Result<Self, PrivacyError> {
-                        let mainloop = MainLoop::new(None)
+                        let mainloop = MainLoopRc::new(None)
                             .map_err(|err| PrivacyError::pipewire_mainloop(err.to_string()))?;
-                        let context = Context::new(&mainloop)
+                        let context = ContextRc::new(&mainloop, None)
                             .map_err(|err| PrivacyError::pipewire_context(err.to_string()))?;
                         let core = context
-                            .connect(None)
+                            .connect_rc(None)
                             .map_err(|err| PrivacyError::pipewire_core(err.to_string()))?;
                         let registry = core
                             .get_registry()
