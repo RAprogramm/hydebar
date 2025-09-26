@@ -110,13 +110,18 @@ mod tests {
 
     #[test]
     fn connection_error_converts() {
-        let err = IdleInhibitorError::from(wayland_client::ConnectError::NoCompositorListening);
+        let err = IdleInhibitorError::from(wayland_client::ConnectError::NoCompositor);
         assert!(matches!(err, IdleInhibitorError::Connection { .. }));
     }
 
     #[test]
     fn dispatch_error_converts() {
-        let err = IdleInhibitorError::from(wayland_client::DispatchError::MissingData);
+        let err = IdleInhibitorError::from(wayland_client::DispatchError::Backend(
+            wayland_client::backend::WaylandError::from(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "dispatch",
+            )),
+        ));
         assert!(matches!(err, IdleInhibitorError::Dispatch { .. }));
     }
 
