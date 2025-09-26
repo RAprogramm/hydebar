@@ -27,6 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bluetooth: use alias instead of name for device name
 - Airplane button fail when the `rfkill` returns an error or is not present
 
+## [0.2.0] - 2025-09-26
+
+### Added
+
+- Introduced a dedicated `IdleInhibitorError` type for the idle inhibitor service.
+
+### Changed
+
+- `IdleInhibitorManager::new` now returns `Result<Self, IdleInhibitorError>` and surfaces initialization failures explicitly.
+- Idle inhibitor initialization tests cover both missing and complete Wayland global scenarios.
+
 ## [0.1.3] - 2025-09-26
 
 ### Fixed

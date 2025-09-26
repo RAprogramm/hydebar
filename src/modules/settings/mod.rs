@@ -31,7 +31,7 @@ use iced::{
     widget::{Column, Row, Space, button, column, container, horizontal_space, row, text},
     window::Id,
 };
-use log::info;
+use log::{info, warn};
 use upower::UPowerMessage;
 
 pub mod audio;
@@ -54,12 +54,20 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
+        let idle_inhibitor = match IdleInhibitorManager::new() {
+            Ok(manager) => Some(manager),
+            Err(err) => {
+                warn!("Failed to initialize idle inhibitor: {err}");
+                None
+            }
+        };
+
         Settings {
             audio: None,
             brightness: None,
             network: None,
             bluetooth: None,
-            idle_inhibitor: IdleInhibitorManager::new(),
+            idle_inhibitor,
             sub_menu: None,
             upower: None,
             password_dialog: None,
