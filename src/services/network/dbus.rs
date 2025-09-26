@@ -209,7 +209,7 @@ impl<'a> Deref for NetworkDbus<'a> {
     }
 }
 
-impl NetworkDbus<'_> {
+impl<'a> NetworkDbus<'a> {
     pub async fn new(conn: &zbus::Connection) -> anyhow::Result<Self> {
         let nm = NetworkManagerProxy::new(conn).await?;
 
@@ -221,7 +221,7 @@ impl<'a> NetworkDbus<'a> {
     pub async fn subscribe_events(
         &'a self,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<super::NetworkEvent>> + 'a> {
-        type EventStream<'a> = BoxStream<'a, anyhow::Result<NetworkEvent>>;
+        type EventStream<'s> = BoxStream<'s, anyhow::Result<NetworkEvent>>;
 
         let conn = self.0.inner().connection();
         let settings = NetworkSettingsDbus::new(conn).await?;

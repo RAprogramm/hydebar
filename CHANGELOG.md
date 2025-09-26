@@ -18,7 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
-## [0.2.4] - 2025-09-28
+## [0.2.4] - 2025-09-26
+
+### Fixed
+
+- Restore the NetworkManager event subscription lifetime bounds and stream setup so
+  the project builds on recent compilers and `zbus` versions.
+- Update the PipeWire integration to the `pipewire` 0.9 runtime API, keeping the
+  privacy service compatible with the latest dependencies.
 
 ### Changed
 
