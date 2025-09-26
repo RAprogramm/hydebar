@@ -7,6 +7,7 @@ use crate::{
     menu::{MenuSize, MenuType, menu_wrapper},
     modules::{
         self,
+        battery::Battery,
         app_launcher::AppLauncher,
         clipboard::Clipboard,
         clock::Clock,
@@ -60,6 +61,7 @@ pub struct App {
     pub keyboard_submap: KeyboardSubmap,
     pub tray: TrayModule,
     pub clock: Clock,
+    pub battery: Battery,
     pub privacy: Privacy,
     pub settings: Settings,
     pub media_player: MediaPlayer,
@@ -82,6 +84,7 @@ pub enum Message {
     KeyboardSubmap(modules::keyboard_submap::Message),
     Tray(modules::tray::TrayMessage),
     Clock(modules::clock::Message),
+    Battery(modules::battery::Message),
     Privacy(modules::privacy::PrivacyMessage),
     Settings(modules::settings::Message),
     MediaPlayer(modules::media_player::Message),
@@ -118,6 +121,7 @@ impl App {
                     keyboard_submap: KeyboardSubmap::default(),
                     tray: TrayModule::default(),
                     clock: Clock::default(),
+                    battery: Battery::default(),
                     privacy: Privacy::default(),
                     settings: Settings::default(),
                     media_player: MediaPlayer::default(),
@@ -215,7 +219,10 @@ impl App {
                     }
                     _ => {}
                 };
-                cmd.push(self.outputs.toggle_menu(id, menu_type, button_ui_ref, &self.config));
+                cmd.push(
+                    self.outputs
+                        .toggle_menu(id, menu_type, button_ui_ref, &self.config),
+                );
 
                 Task::batch(cmd)
             }
@@ -281,7 +288,8 @@ impl App {
                     TrayMessage::Event(event) => {
                         if let ServiceEvent::Update(TrayEvent::Unregistered(name)) = event.as_ref()
                         {
-                            self.outputs.close_all_menu_if(MenuType::Tray(name.clone()), &self.config)
+                            self.outputs
+                                .close_all_menu_if(MenuType::Tray(name.clone()), &self.config)
                         } else {
                             Task::none()
                         }
@@ -295,11 +303,17 @@ impl App {
                 self.clock.update(message);
                 Task::none()
             }
-            Message::Privacy(msg) => self.privacy.update(msg),
-            Message::Settings(message) => {
-                self.settings
-                    .update(message, &self.config.settings, &mut self.outputs, &self.config)
+            Message::Battery(message) => {
+                self.battery.update(message);
+                Task::none()
             }
+            Message::Privacy(msg) => self.privacy.update(msg),
+            Message::Settings(message) => self.settings.update(
+                message,
+                &self.config.settings,
+                &mut self.outputs,
+                &self.config,
+            ),
             Message::OutputEvent((event, wl_output)) => match event {
                 iced::event::wayland::OutputEvent::Created(info) => {
                     info!("Output created: {info:?}");

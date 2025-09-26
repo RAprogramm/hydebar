@@ -106,6 +106,7 @@ from nixpkgs which is cached.
 - Hyprland Keyboard Submap
 - Tray
 - Date time
+- Battery indicator
 - Privacy (check microphone, camera and screenshare usage)
 - Media Player
 - Settings panel

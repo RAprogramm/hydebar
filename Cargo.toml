@@ -2,7 +2,7 @@
 name = "hydebar"
 description = "A ready to go Wayland status bar for Hyprland"
 homepage = "https://github.com/MalpenZibo/hydebar"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.90"
 

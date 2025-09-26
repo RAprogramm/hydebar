@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use zbus::{Result, proxy, zvariant::OwnedValue};
 
+#[allow(dead_code)]
 pub struct MprisPlayerDbus<'a>(MprisPlayerProxy<'a>);
 
 impl<'a> Deref for MprisPlayerDbus<'a> {
