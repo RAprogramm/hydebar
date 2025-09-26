@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.3.4] - 2025-09-27
+
+### Added
+
+- Introduced a bounded UI event bus with redraw/popup coalescing to reduce redundant work per frame.
+
 ## [0.3.3] - 2025-09-26
 
 ### Changed
