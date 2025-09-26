@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bluetooth: use alias instead of name for device name
 - Airplane button fail when the `rfkill` returns an error or is not present
 
+## [0.2.1] - 2025-09-26
+
+### Changed
+
+- Privacy service now exposes structured `PrivacyError` values and gracefully falls back when the webcam device is absent.
+
+### Fixed
+
+- Report PipeWire and inotify listener initialisation failures without panicking, allowing the UI to react to privacy service errors.
+
 ## [0.2.0] - 2025-09-26
 
 ### Added

@@ -2,24 +2,31 @@ use super::{Module, OnModulePress};
 use crate::{
     app,
     components::icons::{Icons, icon},
-    services::{ReadOnlyService, ServiceEvent, privacy::PrivacyService},
+    services::{
+        ReadOnlyService, ServiceEvent,
+        privacy::{PrivacyService, error::PrivacyError},
+    },
 };
 use iced::{
     Alignment, Element, Subscription, Task,
     widget::{Row, container},
 };
+use log::{error, warn};
 
+/// Message emitted by the privacy module subscription.
 #[derive(Debug, Clone)]
 pub enum PrivacyMessage {
     Event(ServiceEvent<PrivacyService>),
 }
 
+/// UI module exposing privacy information icons.
 #[derive(Debug, Default, Clone)]
 pub struct Privacy {
     pub service: Option<PrivacyService>,
 }
 
 impl Privacy {
+    /// Update the module state based on new privacy events.
     pub fn update(&mut self, message: PrivacyMessage) -> Task<crate::app::Message> {
         match message {
             PrivacyMessage::Event(event) => match event {
@@ -33,7 +40,17 @@ impl Privacy {
                     }
                     Task::none()
                 }
-                ServiceEvent::Error(_) => Task::none(),
+                ServiceEvent::Error(error) => {
+                    match error {
+                        PrivacyError::WebcamUnavailable => {
+                            warn!(
+                                "Webcam device unavailable; continuing with PipeWire-only privacy data"
+                            );
+                        }
+                        _ => error!("Privacy service error: {error}"),
+                    }
+                    Task::none()
+                }
             },
         }
     }
@@ -43,6 +60,7 @@ impl Module for Privacy {
     type ViewData<'a> = ();
     type SubscriptionData<'a> = ();
 
+    /// Render the privacy indicator when data is available.
     fn view(
         &self,
         _: Self::ViewData<'_>,
@@ -77,6 +95,7 @@ impl Module for Privacy {
         }
     }
 
+    /// Subscribe to the privacy service updates.
     fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
         Some(PrivacyService::subscribe().map(|e| app::Message::Privacy(PrivacyMessage::Event(e))))
     }

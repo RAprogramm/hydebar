@@ -107,8 +107,8 @@ impl BrightnessService {
 
     pub async fn backlight_monitor_listener()
     -> Result<AsyncFd<udev::MonitorSocket>, BrightnessError> {
-        let mut builder = udev::MonitorBuilder::new().map_err(BrightnessError::from)?;
-        builder
+        let builder = udev::MonitorBuilder::new().map_err(BrightnessError::from)?;
+        let builder = builder
             .match_subsystem("backlight")
             .map_err(BrightnessError::from)?;
         let socket = builder.listen().map_err(BrightnessError::from)?;
@@ -146,7 +146,7 @@ impl BrightnessService {
 
                 Ok(State::Active(device_path))
             }
-            State::Active(mut device_path) => {
+            State::Active(device_path) => {
                 info!("Listening for brightness events");
                 let mut current_value = Self::get_actual_brightness(&device_path).await?;
                 let mut socket = Self::backlight_monitor_listener().await?;
@@ -251,7 +251,7 @@ impl ReadOnlyService for BrightnessService {
                             state = next_state;
                         }
                         Err(err) => {
-                            error!(?err, "Brightness service failure");
+                            error!("Brightness service failure: {err:?}");
                             let _ = output.send(ServiceEvent::Error(err.clone())).await;
                             state = State::Error;
                         }
@@ -278,7 +278,7 @@ impl Service for BrightnessService {
                 let device_path = self.device_path.clone();
 
                 async move {
-                    let result = match command {
+                    match command {
                         BrightnessCommand::Set(value) => {
                             debug!("Setting brightness to {value}");
                             BrightnessService::set_brightness(&conn, &device_path, value).await?;
@@ -288,9 +288,7 @@ impl Service for BrightnessService {
                             debug!("Refreshing brightness data");
                             BrightnessService::get_actual_brightness(&device_path).await
                         }
-                    };
-
-                    result
+                    }
                 }
             },
             |result| match result {
