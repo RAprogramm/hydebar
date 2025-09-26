@@ -120,7 +120,7 @@ impl Default for SystemInfoDisk {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SystemIndicator {
     Cpu,
     Memory,
@@ -817,7 +817,7 @@ impl Config {
             }
         }
 
-        let mut ensure_custom_module_exists = |name: &str| {
+        let ensure_custom_module_exists = |name: &str| {
             if !seen_custom_modules.contains(name) {
                 return Err(ConfigValidationError::MissingCustomModule {
                     name: name.to_owned(),

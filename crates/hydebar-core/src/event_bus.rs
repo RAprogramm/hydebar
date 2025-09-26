@@ -2,6 +2,8 @@ use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
+use crate::modules;
+
 use thiserror::Error;
 
 /// High-level events emitted by the core to drive UI updates.
@@ -16,14 +18,14 @@ use thiserror::Error;
 /// let event = BusEvent::Redraw;
 /// assert!(matches!(event, BusEvent::Redraw));
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum BusEvent {
     /// Request a redraw of the main surface.
     Redraw,
-    /// Toggle the visibility of the popup menu for the active output.
+    /// Toggle the visibility of popup menus.
     PopupToggle,
-    /// Module-level events that do not fall into the built-in categories.
+    /// Module-level events that carry payloads for the GUI bridge.
     Module(ModuleEvent),
 }
 
@@ -37,19 +39,38 @@ impl BusEvent {
 }
 
 /// Events originating from individual modules.
-///
-/// # Examples
-///
-/// ```
-/// # use hydebar_core::event_bus::ModuleEvent;
-/// let event = ModuleEvent::Refresh;
-/// assert!(matches!(event, ModuleEvent::Refresh));
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ModuleEvent {
-    /// Indicates that a module requires a fresh data fetch.
-    Refresh,
+    /// Updates module state or view logic.
+    Updates(modules::updates::Message),
+    /// Workspace module activity.
+    Workspaces(modules::workspaces::Message),
+    /// Window title state changes.
+    WindowTitle(modules::window_title::Message),
+    /// System information updates.
+    SystemInfo(modules::system_info::Message),
+    /// Keyboard layout refreshes.
+    KeyboardLayout(modules::keyboard_layout::Message),
+    /// Keyboard submap notifications.
+    KeyboardSubmap(modules::keyboard_submap::Message),
+    /// Tray module interactions.
+    Tray(modules::tray::TrayMessage),
+    /// Clock module updates.
+    Clock(modules::clock::Message),
+    /// Battery module updates.
+    Battery(modules::battery::Message),
+    /// Privacy module updates.
+    Privacy(modules::privacy::PrivacyMessage),
+    /// Settings module events.
+    Settings(modules::settings::Message),
+    /// Media player module events.
+    MediaPlayer(modules::media_player::Message),
+    /// Custom module events keyed by module name.
+    Custom {
+        name: Arc<str>,
+        message: modules::custom_module::Message,
+    },
 }
 
 #[derive(Debug)]
@@ -293,10 +314,10 @@ mod tests {
         sender.try_send(BusEvent::Redraw).expect("first send");
         sender.try_send(BusEvent::Redraw).expect("coalesced send");
 
-        assert_eq!(
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
             Some(BusEvent::Redraw)
-        );
+        ));
         assert_eq!(receiver.try_recv().expect("empty"), None);
     }
 
@@ -311,10 +332,10 @@ mod tests {
             .try_send(BusEvent::PopupToggle)
             .expect("coalesced send");
 
-        assert_eq!(
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
             Some(BusEvent::PopupToggle)
-        );
+        ));
         assert_eq!(receiver.try_recv().expect("empty"), None);
     }
 
@@ -326,7 +347,9 @@ mod tests {
 
         sender.try_send(BusEvent::Redraw).expect("send redraw");
         sender
-            .try_send(BusEvent::Module(ModuleEvent::Refresh))
+            .try_send(BusEvent::Module(ModuleEvent::Updates(
+                modules::updates::Message::CheckNow,
+            )))
             .expect("send module");
         sender.try_send(BusEvent::Redraw).expect("send redraw");
         sender.try_send(BusEvent::PopupToggle).expect("send popup");
@@ -334,22 +357,24 @@ mod tests {
             .try_send(BusEvent::PopupToggle)
             .expect("coalesced popup");
 
-        assert_eq!(
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
             Some(BusEvent::Redraw)
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
-            Some(BusEvent::Module(ModuleEvent::Refresh))
-        );
-        assert_eq!(
+            Some(BusEvent::Module(ModuleEvent::Updates(
+                modules::updates::Message::CheckNow
+            )))
+        ));
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
             Some(BusEvent::Redraw)
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
             Some(BusEvent::PopupToggle)
-        );
+        ));
         assert_eq!(receiver.try_recv().expect("empty"), None);
     }
 
@@ -361,7 +386,9 @@ mod tests {
 
         sender.try_send(BusEvent::Redraw).expect("first event");
         sender
-            .try_send(BusEvent::Module(ModuleEvent::Refresh))
+            .try_send(BusEvent::Module(ModuleEvent::Updates(
+                modules::updates::Message::CheckNow,
+            )))
             .expect("second event");
 
         let overflow = sender.try_send(BusEvent::PopupToggle);
@@ -370,14 +397,16 @@ mod tests {
             Err(EventBusError::QueueFull { capacity: 2 })
         ));
 
-        assert_eq!(
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
             Some(BusEvent::Redraw)
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             receiver.try_recv().expect("receive"),
-            Some(BusEvent::Module(ModuleEvent::Refresh))
-        );
+            Some(BusEvent::Module(ModuleEvent::Updates(
+                modules::updates::Message::CheckNow
+            )))
+        ));
         assert_eq!(receiver.try_recv().expect("empty"), None);
     }
 }

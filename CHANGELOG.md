@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.3.5] - 2025-09-28
+
+### Changed
+
+- Replaced per-module iced subscriptions with a micro-ticker that drains the
+  shared event bus, batching redraws and popup toggles into 16–33 ms frames.
+- Wired the GUI entrypoint to provision the bounded event bus so future module
+  senders can publish without bespoke iced channels.
+
 ## [0.3.4] - 2025-09-27
 
 ### Added
