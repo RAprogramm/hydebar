@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.3.0] - 2025-02-15
+
+### Changed
+
+- Reorganized the project into a Cargo workspace with dedicated proto, core, GUI, and application crates while updating configuration watching to operate through the shared APIs.
+
 ## [0.2.4] - 2025-09-26
 
 ### Fixed
