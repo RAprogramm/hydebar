@@ -776,5 +776,3 @@ impl Default for Config {
         }
     }
 }
-
-pub const DEFAULT_CONFIG_FILE_PATH: &str = "~/.config/hydebar/config.toml";
