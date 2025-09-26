@@ -1,6 +1,10 @@
+pub mod error;
+
+pub use error::IdleInhibitorError;
+
 use log::{debug, info, warn};
 use wayland_client::{
-    Connection, Dispatch, DispatchError, EventQueue, Proxy, QueueHandle,
+    Connection, Dispatch, EventQueue, Proxy, QueueHandle,
     protocol::{
         wl_compositor::WlCompositor,
         wl_display::WlDisplay,
@@ -22,8 +26,14 @@ pub struct IdleInhibitorManager {
 }
 
 impl IdleInhibitorManager {
-    pub fn new() -> Option<Self> {
-        let init = || -> anyhow::Result<Self> {
+    /// Create a new idle inhibitor manager connected to the Wayland compositor.
+    ///
+    /// # Errors
+    /// Returns [`IdleInhibitorError`] when the Wayland connection cannot be
+    /// established, when required globals are missing, or when dispatching the
+    /// initial event roundtrip fails.
+    pub fn new() -> Result<Self, IdleInhibitorError> {
+        let init = || -> Result<Self, IdleInhibitorError> {
             let connection = Connection::connect_to_env()?;
             let display = connection.display();
             let event_queue = connection.new_event_queue();
@@ -40,21 +50,18 @@ impl IdleInhibitorManager {
             };
 
             obj.roundtrip()?;
+            obj.ensure_required_globals()?;
 
             Ok(obj)
         };
 
-        match init() {
-            Ok(obj) => Some(obj),
-            Err(err) => {
-                warn!("Failed to initialize idle inhibitor: {err}");
-                None
-            }
-        }
+        init()
     }
 
-    fn roundtrip(&mut self) -> anyhow::Result<usize, DispatchError> {
-        self.event_queue.roundtrip(&mut self.data)
+    fn roundtrip(&mut self) -> Result<usize, IdleInhibitorError> {
+        self.event_queue
+            .roundtrip(&mut self.data)
+            .map_err(IdleInhibitorError::from)
     }
 
     pub fn is_inhibited(&self) -> bool {
@@ -73,19 +80,19 @@ impl IdleInhibitorManager {
         }
     }
 
-    fn set_inhibit_idle(&mut self, inhibit_idle: bool) -> anyhow::Result<()> {
+    fn set_inhibit_idle(&mut self, inhibit_idle: bool) -> Result<(), IdleInhibitorError> {
         let data = &self.data;
-        let Some((idle_manager, _)) = &data.idle_manager else {
-            warn!(target: "IdleInhibitor::set_inhibit_idle", "Tried to change idle inhibitor status without loaded idle inhibitor manager!");
-            return Ok(());
-        };
+        let (idle_manager, _) = data
+            .idle_manager
+            .as_ref()
+            .ok_or_else(IdleInhibitorError::missing_idle_inhibit_manager)?;
 
         if inhibit_idle {
             if data.idle_inhibitor_state.is_none() {
-                let Some(surface) = &data.surface else {
-                    warn!(target: "IdleInhibitor::set_inhibit_idle", "Tried to change idle inhibitor status without loaded WlSurface!");
-                    return Ok(());
-                };
+                let surface = data
+                    .surface
+                    .as_ref()
+                    .ok_or_else(IdleInhibitorError::missing_surface)?;
                 self.data.idle_inhibitor_state =
                     Some(idle_manager.create_inhibitor(surface, &self.handle, ()));
 
@@ -102,6 +109,39 @@ impl IdleInhibitorManager {
 
         Ok(())
     }
+
+    fn ensure_required_globals(&self) -> Result<(), IdleInhibitorError> {
+        let state = IdleInhibitorInitState {
+            has_compositor: self.data.compositor.is_some(),
+            has_surface: self.data.surface.is_some(),
+            has_idle_manager: self.data.idle_manager.is_some(),
+        };
+
+        Self::validate_init_state(state)
+    }
+
+    fn validate_init_state(state: IdleInhibitorInitState) -> Result<(), IdleInhibitorError> {
+        if !state.has_compositor {
+            return Err(IdleInhibitorError::missing_compositor());
+        }
+
+        if !state.has_surface {
+            return Err(IdleInhibitorError::missing_surface());
+        }
+
+        if !state.has_idle_manager {
+            return Err(IdleInhibitorError::missing_idle_inhibit_manager());
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct IdleInhibitorInitState {
+    has_compositor: bool,
+    has_surface: bool,
+    has_idle_manager: bool,
 }
 
 #[derive(Default)]
@@ -210,4 +250,32 @@ impl Dispatch<ZwpIdleInhibitorV1, ()> for IdleInhibitorManagerData {
         _qhandle: &QueueHandle<Self>,
     ) {
     } // This interface has no events.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IdleInhibitorError, IdleInhibitorInitState, IdleInhibitorManager};
+
+    #[test]
+    fn validate_init_state_succeeds_with_all_globals() {
+        let state = IdleInhibitorInitState {
+            has_compositor: true,
+            has_surface: true,
+            has_idle_manager: true,
+        };
+
+        IdleInhibitorManager::validate_init_state(state).expect("state should be valid");
+    }
+
+    #[test]
+    fn validate_init_state_fails_without_idle_manager() {
+        let state = IdleInhibitorInitState {
+            has_compositor: true,
+            has_surface: true,
+            has_idle_manager: false,
+        };
+
+        let err = IdleInhibitorManager::validate_init_state(state).unwrap_err();
+        assert!(matches!(err, IdleInhibitorError::MissingGlobal { .. }));
+    }
 }
