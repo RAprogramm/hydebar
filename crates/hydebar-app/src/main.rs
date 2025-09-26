@@ -9,7 +9,7 @@ use flexi_logger::{
 };
 use hydebar_core::{
     adapters::hyprland_client::HyprlandClient,
-    config::{ConfigLoadError, get_config},
+    config::{ConfigLoadError, ConfigManager, get_config},
 };
 use hydebar_gui::{App, get_log_spec};
 use hydebar_proto::ports::hyprland::HyprlandPort;
@@ -72,6 +72,7 @@ async fn run() -> Result<(), MainError> {
     }));
 
     let (config, config_path) = get_config(args.config_path)?;
+    let config_manager = Arc::new(ConfigManager::new(config.clone()));
 
     logger.set_new_spec(get_log_spec(&config.log_level))?;
 
@@ -89,6 +90,12 @@ async fn run() -> Result<(), MainError> {
         .scale_factor(App::scale_factor)
         .font(Cow::from(ICON_FONT))
         .default_font(font)
-        .run_with(App::new((logger, config, config_path, hyprland)))
+        .run_with(App::new((
+            logger,
+            config,
+            config_manager,
+            config_path,
+            hyprland,
+        )))
         .map_err(MainError::from)
 }

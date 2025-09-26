@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.3.3] - 2025-09-26
+
+### Changed
+
+- Guard configuration reloads behind a stateful manager that keeps the last valid settings and computes module-level impact before updates.
+- Emit degradation events to the GUI instead of reverting to defaults when config files are removed or invalid.
+
+### Added
+
+- Added validation for custom module definitions and layout references during config reloads.
+- Delivered partial reload support that refreshes outputs and custom modules only when their config changes.
+- Extended configuration watcher tests to cover valid reloads, invalid TOML, and file removal without panics.
+
 ## [0.3.2] - 2025-09-26
 
 ### Changed

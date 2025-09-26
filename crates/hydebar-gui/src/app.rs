@@ -3,7 +3,7 @@ use std::{collections::HashMap, f32::consts::PI, path::PathBuf, sync::Arc};
 use flexi_logger::LoggerHandle;
 use hydebar_core::{
     HEIGHT,
-    config::{self, ConfigEvent},
+    config::{self, ConfigApplied, ConfigDegradation, ConfigEvent, ConfigImpact, ConfigManager},
     menu::{MenuSize, MenuType, menu_wrapper},
     modules::{
         self,
@@ -29,7 +29,7 @@ use hydebar_core::{
     style::{backdrop_color, darken_color, hydebar_theme},
     utils,
 };
-use hydebar_proto::config::{AppearanceStyle, Config, Position};
+use hydebar_proto::config::{AppearanceStyle, Config, ModuleName, Position};
 use hydebar_proto::ports::hyprland::HyprlandPort;
 use iced::{
     Alignment, Color, Element, Gradient, Length, Radians, Subscription, Task, Theme,
@@ -52,6 +52,7 @@ pub struct App {
     config_path: PathBuf,
     logger: LoggerHandle,
     hyprland: Arc<dyn HyprlandPort>,
+    config_manager: Arc<ConfigManager>,
     pub config: Config,
     pub outputs: Outputs,
     pub app_launcher: AppLauncher,
@@ -74,7 +75,8 @@ pub struct App {
 #[derive(Debug, Clone)]
 pub enum Message {
     None,
-    ConfigChanged(Box<Config>),
+    ConfigChanged(ConfigApplied),
+    ConfigDegraded(ConfigDegradation),
     ToggleMenu(MenuType, Id, ButtonUIRef),
     CloseMenu(Id),
     CloseAllMenus,
@@ -150,9 +152,10 @@ mod tests {
 
 impl App {
     pub fn new(
-        (logger, config, config_path, hyprland): (
+        (logger, config, config_manager, config_path, hyprland): (
             LoggerHandle,
             Config,
+            Arc<ConfigManager>,
             PathBuf,
             Arc<dyn HyprlandPort>,
         ),
@@ -171,6 +174,7 @@ impl App {
                     config_path,
                     logger,
                     hyprland,
+                    config_manager,
                     outputs,
                     app_launcher: AppLauncher,
                     custom,
@@ -220,38 +224,50 @@ impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::None => Task::none(),
-            Message::ConfigChanged(config) => {
-                info!("New config: {config:?}");
+            Message::ConfigChanged(update) => {
+                let ConfigApplied { config, impact } = update;
+                let mut new_config = *config;
+
+                info!("New config applied: {new_config:?}");
+                debug!("Config impact: {impact:?}");
+
                 let mut tasks = Vec::new();
-                info!(
-                    "Current outputs: {:?}, new outputs: {:?}",
-                    self.config.outputs, config.outputs
-                );
-                if self.config.outputs != config.outputs
-                    || self.config.position != config.position
-                    || self.config.appearance.style != config.appearance.style
-                    || self.config.appearance.scale_factor != config.appearance.scale_factor
-                {
-                    warn!("Outputs changed, syncing");
+
+                let outputs_need_sync = impact.outputs_changed
+                    || impact.position_changed
+                    || self.config.appearance.style != new_config.appearance.style
+                    || self.config.appearance.scale_factor != new_config.appearance.scale_factor;
+
+                if outputs_need_sync {
+                    warn!("Outputs or layout changed, syncing");
                     tasks.push(self.outputs.sync(
-                        config.appearance.style,
-                        &config.outputs,
-                        config.position,
-                        &config,
+                        new_config.appearance.style,
+                        &new_config.outputs,
+                        new_config.position,
+                        &new_config,
                     ));
                 }
-                let custom = config
-                    .custom_modules
-                    .iter()
-                    .map(|o| (o.name.clone(), Custom::default()))
-                    .collect();
 
-                self.config = *config;
-                self.custom = custom;
-                self.logger
-                    .set_new_spec(get_log_spec(&self.config.log_level));
+                if impact.custom_modules_changed {
+                    self.update_custom_modules(&new_config, &impact);
+                }
+
+                self.config = new_config;
+
+                if impact.log_level_changed {
+                    if let Err(err) = self
+                        .logger
+                        .set_new_spec(get_log_spec(&self.config.log_level))
+                    {
+                        error!("failed to update log level: {err}");
+                    }
+                }
 
                 Task::batch(tasks)
+            }
+            Message::ConfigDegraded(degradation) => {
+                warn!("Configuration degradation reported: {}", degradation.reason);
+                Task::none()
             }
             Message::ToggleMenu(menu_type, id, button_ui_ref) => {
                 let mut cmd = vec![];
@@ -409,6 +425,27 @@ impl App {
             },
             Message::MediaPlayer(msg) => self.media_player.update(msg),
         }
+    }
+
+    fn update_custom_modules(&mut self, config: &Config, impact: &ConfigImpact) {
+        let mut state = HashMap::with_capacity(config.custom_modules.len());
+
+        for module in &config.custom_modules {
+            let module_name = module.name.clone();
+            let module_key = ModuleName::Custom(module_name.clone());
+
+            let entry = if impact.affects_module(&module_key) {
+                Custom::default()
+            } else if let Some(existing) = self.custom.remove(module_name.as_str()) {
+                existing
+            } else {
+                Custom::default()
+            };
+
+            state.insert(module_name, entry);
+        }
+
+        self.custom = state;
     }
 
     pub fn view(&self, id: Id) -> Element<Message> {
@@ -593,9 +630,12 @@ impl App {
             Subscription::batch(self.modules_subscriptions(&self.config.modules.left)),
             Subscription::batch(self.modules_subscriptions(&self.config.modules.center)),
             Subscription::batch(self.modules_subscriptions(&self.config.modules.right)),
-            config::subscription(&self.config_path).map(|event| match event {
-                ConfigEvent::Updated(config) => Message::ConfigChanged(config),
-            }),
+            config::subscription(&self.config_path, Arc::clone(&self.config_manager)).map(
+                |event| match event {
+                    ConfigEvent::Applied(config) => Message::ConfigChanged(config),
+                    ConfigEvent::Degraded(degradation) => Message::ConfigDegraded(degradation),
+                },
+            ),
             listen_with(move |evt, _, _| match evt {
                 iced::Event::PlatformSpecific(iced::event::PlatformSpecific::Wayland(
                     WaylandEvent::Output(event, wl_output),

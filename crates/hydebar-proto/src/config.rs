@@ -3,12 +3,13 @@ use iced::{Color, theme::palette};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, de::Visitor};
 use serde_with::{DisplayFromStr, serde_as};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
+use thiserror::Error;
 
 pub const DEFAULT_CONFIG_FILE_PATH: &str = "~/.config/hydebar/config.toml";
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdatesModuleConfig {
     pub check_cmd: String,
     pub update_cmd: String,
@@ -21,7 +22,7 @@ pub enum WorkspaceVisibilityMode {
     MonitorSpecific,
 }
 
-#[derive(Deserialize, Clone, Default, Debug)]
+#[derive(Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct WorkspacesModuleConfig {
     #[serde(default)]
     pub visibility_mode: WorkspaceVisibilityMode,
@@ -37,7 +38,7 @@ pub enum WindowTitleMode {
     Class,
 }
 
-#[derive(Deserialize, Clone, Default, Debug)]
+#[derive(Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct WindowTitleConfig {
     #[serde(default)]
     pub mode: WindowTitleMode,
@@ -45,13 +46,13 @@ pub struct WindowTitleConfig {
     pub truncate_title_after_length: u32,
 }
 
-#[derive(Deserialize, Clone, Default, Debug)]
+#[derive(Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct KeyboardLayoutModuleConfig {
     #[serde(default)]
     pub labels: HashMap<String, String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SystemInfoCpu {
     #[serde(default = "default_cpu_warn_threshold")]
     pub warn_threshold: u32,
@@ -68,7 +69,7 @@ impl Default for SystemInfoCpu {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SystemInfoMemory {
     #[serde(default = "default_mem_warn_threshold")]
     pub warn_threshold: u32,
@@ -85,7 +86,7 @@ impl Default for SystemInfoMemory {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SystemInfoTemperature {
     #[serde(default = "default_temp_warn_threshold")]
     pub warn_threshold: i32,
@@ -102,7 +103,7 @@ impl Default for SystemInfoTemperature {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SystemInfoDisk {
     #[serde(default = "default_disk_warn_threshold")]
     pub warn_threshold: u32,
@@ -131,7 +132,7 @@ pub enum SystemIndicator {
     UploadSpeed,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SystemModuleConfig {
     #[serde(default = "default_system_indicators")]
     pub indicators: Vec<SystemIndicator>,
@@ -198,7 +199,7 @@ impl Default for SystemModuleConfig {
 }
 
 /// Configuration for the battery module.
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BatteryModuleConfig {
     #[serde(default = "default_show_percentage")]
     pub show_percentage: bool,
@@ -233,7 +234,7 @@ fn default_open_settings_on_click() -> bool {
     true
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ClockModuleConfig {
     pub format: String,
 }
@@ -262,7 +263,7 @@ fn default_logout_cmd() -> String {
     "loginctl kill-user $(whoami)".to_string()
 }
 
-#[derive(Deserialize, Default, Clone, Debug)]
+#[derive(Deserialize, Default, Clone, Debug, PartialEq, Eq)]
 pub struct SettingsModuleConfig {
     pub lock_cmd: Option<String>,
     #[serde(default = "default_shutdown_cmd")]
@@ -284,7 +285,7 @@ pub struct SettingsModuleConfig {
     pub remove_idle_btn: bool,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct MediaPlayerModuleConfig {
     #[serde(default = "default_media_player_max_title_length")]
     pub max_title_length: u32,
@@ -302,7 +303,7 @@ fn default_media_player_max_title_length() -> u32 {
     100
 }
 
-#[derive(Deserialize, Clone, Copy, Debug)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum AppearanceColor {
     Simple(HexColor),
@@ -366,7 +367,7 @@ pub enum AppearanceStyle {
     Gradient,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct MenuAppearance {
     #[serde(deserialize_with = "opacity_deserializer", default = "default_opacity")]
     pub opacity: f32,
@@ -383,7 +384,7 @@ impl Default for MenuAppearance {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct Appearance {
     #[serde(default)]
     pub font_name: Option<String>,
@@ -544,7 +545,7 @@ pub enum Position {
     Bottom,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ModuleName {
     AppLauncher,
     Updates,
@@ -601,14 +602,14 @@ impl<'de> Deserialize<'de> for ModuleName {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ModuleDef {
     Single(ModuleName),
     Group(Vec<ModuleName>),
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Modules {
     #[serde(default)]
     pub left: Vec<ModuleDef>,
@@ -686,7 +687,7 @@ impl Deref for RegexCfg {
 }
 
 #[serde_as]
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CustomModuleDef {
     pub name: String,
     pub command: String,
@@ -702,7 +703,7 @@ pub struct CustomModuleDef {
     // .. appearance etc
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct Config {
     #[serde(default = "default_log_level")]
     pub log_level: String,
@@ -774,5 +775,131 @@ impl Default for Config {
             custom_modules: vec![],
             menu_keyboard_focus: default_menu_keyboard_focus(),
         }
+    }
+}
+
+/// Errors returned when validating a [`Config`].
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ConfigValidationError {
+    /// Duplicate custom module definitions were found.
+    #[error("duplicate custom module definition for '{name}'")]
+    DuplicateCustomModule { name: String },
+
+    /// A module references a custom module definition that does not exist.
+    #[error("custom module '{name}' referenced in layout but not defined")]
+    MissingCustomModule { name: String },
+}
+
+impl Config {
+    /// Validates the configuration, ensuring module definitions are consistent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigValidationError`] if duplicate custom modules are defined or if
+    /// the module layout references undefined custom modules.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hydebar_proto::config::Config;
+    ///
+    /// let config = Config::default();
+    /// assert!(config.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), ConfigValidationError> {
+        let mut seen_custom_modules = HashSet::new();
+
+        for module in &self.custom_modules {
+            if !seen_custom_modules.insert(module.name.clone()) {
+                return Err(ConfigValidationError::DuplicateCustomModule {
+                    name: module.name.clone(),
+                });
+            }
+        }
+
+        let mut ensure_custom_module_exists = |name: &str| {
+            if !seen_custom_modules.contains(name) {
+                return Err(ConfigValidationError::MissingCustomModule {
+                    name: name.to_owned(),
+                });
+            }
+
+            Ok(())
+        };
+
+        for module_def in self
+            .modules
+            .left
+            .iter()
+            .chain(self.modules.center.iter())
+            .chain(self.modules.right.iter())
+        {
+            match module_def {
+                ModuleDef::Single(ModuleName::Custom(name)) => {
+                    ensure_custom_module_exists(name)?;
+                }
+                ModuleDef::Group(group) => {
+                    for module in group {
+                        if let ModuleName::Custom(name) = module {
+                            ensure_custom_module_exists(name)?;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn custom_module(name: &str) -> CustomModuleDef {
+        CustomModuleDef {
+            name: name.to_owned(),
+            command: String::from("true"),
+            icon: None,
+            listen_cmd: None,
+            icons: None,
+            alert: None,
+        }
+    }
+
+    #[test]
+    fn validate_accepts_default_config() {
+        let config = Config::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_custom_modules() {
+        let mut config = Config::default();
+        config.custom_modules = vec![custom_module("foo"), custom_module("foo")];
+
+        let error = config
+            .validate()
+            .expect_err("expected duplicate module error");
+        assert!(matches!(
+            error,
+            ConfigValidationError::DuplicateCustomModule { ref name } if name == "foo"
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_missing_custom_module_reference() {
+        let mut config = Config::default();
+        config.custom_modules = vec![custom_module("foo")];
+        config.modules.left = vec![ModuleDef::Single(ModuleName::Custom("bar".to_owned()))];
+
+        let error = config
+            .validate()
+            .expect_err("expected missing module error");
+        assert!(matches!(
+            error,
+            ConfigValidationError::MissingCustomModule { ref name } if name == "bar"
+        ));
     }
 }
