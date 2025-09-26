@@ -1,0 +1,12 @@
+[package]
+name = "hydebar-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hex_color.workspace = true
+iced.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_with.workspace = true

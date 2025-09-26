@@ -3,45 +3,25 @@
 #![allow(clippy::redundant_closure)]
 #![allow(clippy::double_ended_iterator_last)]
 
-use crate::config::get_config;
-use app::App;
 use clap::{Parser, command};
 use flexi_logger::{
     Age, Cleanup, Criterion, FileSpec, LogSpecBuilder, LogSpecification, Logger, Naming,
 };
+use hydebar_core::config::get_config;
+use hydebar_gui::{App, get_log_spec};
 use iced::Font;
 use log::{debug, error};
 use std::panic;
 use std::path::PathBuf;
 use std::{backtrace::Backtrace, borrow::Cow};
 
-mod app;
-mod centerbox;
-mod components;
-mod config;
-mod menu;
-mod modules;
-mod outputs;
-mod password_dialog;
-mod position_button;
-mod services;
-mod style;
-mod utils;
-
-const ICON_FONT: &[u8] = include_bytes!("../assets/SymbolsNerdFont-Regular.ttf");
-const HEIGHT: f64 = 34.;
+const ICON_FONT: &[u8] = include_bytes!("../../assets/SymbolsNerdFont-Regular.ttf");
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long, value_parser = clap::value_parser!(PathBuf))]
     config_path: Option<PathBuf>,
-}
-
-fn get_log_spec(log_level: &str) -> LogSpecification {
-    LogSpecification::env_or_parse(log_level).unwrap_or_else(|err| {
-        panic!("Failed to parse log level: {err}");
-    })
 }
 
 #[tokio::main]

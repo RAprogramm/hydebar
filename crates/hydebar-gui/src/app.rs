@@ -1,9 +1,9 @@
 use std::{collections::HashMap, f32::consts::PI, path::PathBuf};
 
-use crate::{
-    HEIGHT, centerbox,
-    config::{self, AppearanceStyle, Config, Position},
-    get_log_spec,
+use flexi_logger::LoggerHandle;
+use hydebar_core::{
+    HEIGHT,
+    config::{self, ConfigEvent},
     menu::{MenuSize, MenuType, menu_wrapper},
     modules::{
         self,
@@ -29,7 +29,7 @@ use crate::{
     style::{backdrop_color, darken_color, hydebar_theme},
     utils,
 };
-use flexi_logger::LoggerHandle;
+use hydebar_proto::config::{AppearanceStyle, Config, Position};
 use iced::{
     Alignment, Color, Element, Gradient, Length, Radians, Subscription, Task, Theme,
     daemon::Appearance,
@@ -44,6 +44,8 @@ use iced::{
 };
 use log::{debug, error, info, warn};
 use wayland_client::protocol::wl_output::WlOutput;
+
+use crate::{centerbox, get_log_spec};
 
 pub struct App {
     config_path: PathBuf,
@@ -528,7 +530,9 @@ impl App {
             Subscription::batch(self.modules_subscriptions(&self.config.modules.left)),
             Subscription::batch(self.modules_subscriptions(&self.config.modules.center)),
             Subscription::batch(self.modules_subscriptions(&self.config.modules.right)),
-            config::subscription(&self.config_path),
+            config::subscription(&self.config_path).map(|event| match event {
+                ConfigEvent::Updated(config) => Message::ConfigChanged(config),
+            }),
             listen_with(move |evt, _, _| match evt {
                 iced::Event::PlatformSpecific(iced::event::PlatformSpecific::Wayland(
                     WaylandEvent::Output(event, wl_output),

@@ -1,0 +1,34 @@
+[package]
+name = "hydebar-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+freedesktop-icons.workspace = true
+hydebar-proto = { path = "../hydebar-proto" }
+hyprland.workspace = true
+iced.workspace = true
+inotify.workspace = true
+itertools.workspace = true
+libpulse-binding.workspace = true
+linicon-theme.workspace = true
+log.workspace = true
+masterror.workspace = true
+pipewire.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+shellexpand.workspace = true
+sysinfo.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+toml.workspace = true
+udev.workspace = true
+uuid.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+zbus.workspace = true

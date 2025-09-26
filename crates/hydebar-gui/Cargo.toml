@@ -1,0 +1,13 @@
+[package]
+name = "hydebar-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+hydebar-core = { path = "../hydebar-core" }
+hydebar-proto = { path = "../hydebar-proto" }
+iced.workspace = true
+flexi_logger.workspace = true
+log.workspace = true
+wayland-client.workspace = true

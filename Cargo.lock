@@ -2264,15 +2264,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "hydebar"
-version = "0.2.4"
+name = "hydebar-app"
+version = "0.3.0"
+dependencies = [
+ "clap",
+ "flexi_logger",
+ "hydebar-core",
+ "hydebar-gui",
+ "hydebar-proto",
+ "iced",
+ "log",
+ "tokio",
+]
+
+[[package]]
+name = "hydebar-core"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "chrono",
- "clap",
- "flexi_logger",
  "freedesktop-icons",
- "hex_color",
+ "hydebar-proto",
  "hyprland",
  "iced",
  "inotify",
@@ -2296,6 +2308,29 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "zbus 5.11.0",
+]
+
+[[package]]
+name = "hydebar-gui"
+version = "0.3.0"
+dependencies = [
+ "flexi_logger",
+ "hydebar-core",
+ "hydebar-proto",
+ "iced",
+ "log",
+ "wayland-client",
+]
+
+[[package]]
+name = "hydebar-proto"
+version = "0.3.0"
+dependencies = [
+ "hex_color",
+ "iced",
+ "regex",
+ "serde",
+ "serde_with",
 ]
 
 [[package]]
