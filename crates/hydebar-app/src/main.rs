@@ -7,13 +7,14 @@ use clap::{Parser, command};
 use flexi_logger::{
     Age, Cleanup, Criterion, FileSpec, LogSpecBuilder, LogSpecification, Logger, Naming,
 };
-use hydebar_core::config::get_config;
+use hydebar_core::{adapters::hyprland_client::HyprlandClient, config::get_config};
 use hydebar_gui::{App, get_log_spec};
+use hydebar_proto::ports::hyprland::HyprlandPort;
 use iced::Font;
 use log::{debug, error};
 use std::panic;
 use std::path::PathBuf;
-use std::{backtrace::Backtrace, borrow::Cow};
+use std::{backtrace::Backtrace, borrow::Cow, sync::Arc};
 
 const ICON_FONT: &[u8] = include_bytes!("../../assets/SymbolsNerdFont-Regular.ttf");
 
@@ -65,6 +66,8 @@ async fn main() -> iced::Result {
         None => Font::DEFAULT,
     };
 
+    let hyprland: Arc<dyn HyprlandPort> = Arc::new(HyprlandClient::new());
+
     iced::daemon(App::title, App::update, App::view)
         .subscription(App::subscription)
         .theme(App::theme)
@@ -72,5 +75,5 @@ async fn main() -> iced::Result {
         .scale_factor(App::scale_factor)
         .font(Cow::from(ICON_FONT))
         .default_font(font)
-        .run_with(App::new((logger, config, config_path)))
+        .run_with(App::new((logger, config, config_path, hyprland)))
 }
