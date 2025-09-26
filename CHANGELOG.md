@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bluetooth: use alias instead of name for device name
 - Airplane button fail when the `rfkill` returns an error or is not present
 
+## [0.1.3] - 2025-09-26
+
+### Fixed
+
+- Restore the configuration file watcher when the inotify stream closes and avoid tight loops on stream shutdown.
+
 ## [0.1.1] - 2025-05-23
 
 ### Added
