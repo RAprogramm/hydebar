@@ -2,15 +2,15 @@
 
 ---
 
-## 1) Фича: новый модуль (ashell-mod-<name>)
+## 1) Фича: новый модуль (hydebar-mod-<name>)
 
 ```
-ЗАДАЧА: Реализовать модуль <name> для Hyprland-панели (ashell), UI через iced, слой iced_layershell.
+ЗАДАЧА: Реализовать модуль <name> для Hyprland-панели (hydebar), UI через iced, слой iced_layershell.
 
 СКОУП:
 - Ввести модульный контракт: Module/ModuleConfig/ModuleEvent уже в проекте; следовать ему.
-- Реализовать модуль ashell-mod-<name>: локальная модель, init с подписками/таймером, неблокирующая очередь событий.
-- Добавить view-адаптер в ashell-gui (без прямых вызовов iced из модуля).
+- Реализовать модуль hydebar-mod-<name>: локальная модель, init с подписками/таймером, неблокирующая очередь событий.
+- Добавить view-адаптер в hydebar-gui (без прямых вызовов iced из модуля).
 - Конфиг: схема, валидация, hot-reload изменяет только этот модуль.
 
 ВНЕ СКОУПА: версия crates/toolchain, CHANGELOG, общий рефактор ядра.
@@ -21,17 +21,17 @@ AR/DoD:
 - События модуля: DataUpdated/Redraw/PopupToggle; без panic/unwrap/unsafe, минимум clone().
 
 ПЛАН:
-1) Создать крейт/модуль ashell-mod-<name>, описать Config + Validate.
+1) Создать крейт/модуль hydebar-mod-<name>, описать Config + Validate.
 2) Реализовать Module/Ticked: init, poll, on_tick, reconfigure, shutdown.
-3) ashell-gui: добавить View/Message-мост, батчить Redraw.
+3) hydebar-gui: добавить View/Message-мост, батчить Redraw.
 4) Конфиг-схема + hot-reload.
 5) Юнит-тесты на логику; интеграционный на событие→GUI.
 
 ТОЧКИ ИЗМЕНЕНИЙ:
-- crates/ashell-mod-<name>/**
-- crates/ashell-gui/src/views/<name>.rs
-- crates/ashell-core/src/registry.rs (регистрация)
-- config/schema/<name>.json / examples/*.toml
+- crates/hydebar-mod-<name>/**
+- crates/hydebar-gui/src/views/<name>.rs
+- crates/hydebar-core/src/registry.rs (регистрация)
+- crates/hydebar-core/src/config/schema/<name>.json / examples/*.toml
 
 КОМАНДЫ: `cargo check && cargo test --all && cargo fmt --all && cargo clippy --all-targets -- -D warnings`
 
@@ -60,7 +60,7 @@ AR/DoD:
 2) GUI: общий PopupManager, слой, фокус/esc, auto-close.
 3) Мини-тесты на логику; ручная проверка.
 
-ТОЧКИ ИЗМЕНЕНИЙ: ashell-mod-<name>/**, ashell-gui/src/popup/**, ashell-gui/src/app.rs
+ТОЧКИ ИЗМЕНЕНИЙ: crates/hydebar-mod-<name>/**, crates/hydebar-gui/src/popup/**, crates/hydebar-gui/src/app.rs
 
 КОМАНДЫ: `cargo check && cargo test --all && cargo fmt --all && cargo clippy -- -D warnings`
 
@@ -75,8 +75,8 @@ AR/DoD:
 ЗАДАЧА: Вынести Hyprland-интеграцию в порт (trait + адаптер), убрать прямые вызовы из модулей/GUI.
 
 СКОУП:
-- В ashell-proto: ввести trait HyprlandPort (события workspaces/windows, запросы).
-- В ashell-core: адаптер на hyprland-rs с таймаутами/ретраями.
+- В hydebar-proto: ввести trait HyprlandPort (события workspaces/windows, запросы).
+- В hydebar-core: адаптер на hyprland-rs с таймаутами/ретраями.
 - Обновить места прямых обращений к hyprland-rs на использование порта.
 
 ВНЕ СКОУПА: новые фичи, изменение поведения UI.
@@ -87,12 +87,12 @@ AR/DoD:
 - hyprland-rs скрыт за портом; модулей это не касается.
 
 ПЛАН:
-1) Trait HyprlandPort в ashell-proto.
-2) Адаптер в ashell-core (ретраи, таймауты, логирование).
+1) Trait HyprlandPort в hydebar-proto.
+2) Адаптер в hydebar-core (ретраи, таймауты, логирование).
 3) Миграция вызовов по участкам, удаление прямых зависимостей.
 4) Тест/проверка.
 
-ИЗМЕНЕНИЯ: crates/ashell-proto/src/ports/**, crates/ashell-core/src/adapters/hyprland/**, обновления imports в модулях.
+ИЗМЕНЕНИЯ: crates/hydebar-proto/src/ports/**, crates/hydebar-core/src/adapters/hyprland/**, обновления imports в модулях.
 
 КОМАНДЫ: стандартный набор (check/test/fmt/clippy).
 
@@ -122,7 +122,7 @@ AR/DoD:
 3) Частичная перезагрузка, транзакционность.
 4) Тесты.
 
-ИЗМЕНЕНИЯ: ashell-core/src/config/**, config/schema/**, examples/**
+ИЗМЕНЕНИЯ: crates/hydebar-core/src/config/**, crates/hydebar-core/src/config/schema/**, examples/**
 
 КОМАНДЫ: стандартный набор.
 
@@ -149,7 +149,7 @@ AR/DoD:
 2) Микро-тикер в GUI.
 3) Бенч/замер.
 
-ИЗМЕНЕНИЯ: ashell-core/src/bus.rs, ashell-gui/src/app.rs
+ИЗМЕНЕНИЯ: crates/hydebar-core/src/bus.rs, crates/hydebar-gui/src/app.rs
 
 КОМАНДЫ: стандарт.
 
@@ -176,7 +176,7 @@ AR/DoD:
 2) Обернуть вызовы в адаптере.
 3) Лёгкие интеграционные тесты-симуляторы.
 
-ИЗМЕНЕНИЯ: ashell-core/src/adapters/**, common/utils/**
+ИЗМЕНЕНИЯ: crates/hydebar-core/src/adapters/**, crates/hydebar-core/src/utils/**
 
 КОМАНДЫ: стандарт.
 
@@ -205,7 +205,7 @@ AR/DoD:
 2) Исправить владение/отписки/Drop.
 3) Повторные тесты.
 
-ИЗМЕНЕНИЯ: ashell-mod-<name>/**
+ИЗМЕНЕНИЯ: crates/hydebar-mod-<name>/**
 
 КОМАНДЫ: стандарт.
 
@@ -217,12 +217,13 @@ AR/DoD:
 ## 8) Рефактор: разрез монолита на крейты
 
 ```
-ЗАДАЧА: Разбить репозиторий на workspace: ashell-proto, ashell-core, ashell-gui, ashell-mod-*, без изменения поведения.
+ЗАДАЧА: Разбить репозиторий на workspace: hydebar-proto, hydebar-core, hydebar-gui, hydebar-mod-*, без изменения поведения.
 
 СКОУП:
-- Вынести общие типы/трейты в ashell-proto.
-- Ядро (event-bus, registry, конфиг) в ashell-core.
-- GUI в ashell-gui.
+- Вынести общие типы/трейты в hydebar-proto.
+- Ядро (event-bus, registry, конфиг) в hydebar-core.
+- GUI в hydebar-gui.
+- Приложение-обёртка и CLI в hydebar-app.
 - Модули в отдельные крейты.
 
 AR/DoD:
@@ -246,7 +247,7 @@ AR/DoD:
 ## 9) DX: шаблон модуля и генератор
 
 ```
-ЗАДАЧА: Добавить rust-шаблон и cargo-генератор для нового модуля ashell-mod-<name>.
+ЗАДАЧА: Добавить rust-шаблон и cargo-генератор для нового модуля hydebar-mod-<name>.
 
 СКОУП:
 - cargo xtask или cargo generate шаблон: минимальный модуль с Config/Module/Ticked; тесты-заглушки.
@@ -259,7 +260,7 @@ AR/DoD:
 1) Шаблон + скрипт генерации.
 2) Док.
 
-ИЗМЕНЕНИЯ: xtask/**, templates/ashell-mod-template/**, docs/dev/modules.md
+ИЗМЕНЕНИЯ: xtask/**, templates/hydebar-mod-template/**, docs/dev/modules.md
 
 КОМАНДЫ: стандарт.
 ```
@@ -282,7 +283,7 @@ AR/DoD:
 2) Позитив/негатив кейсы.
 3) Замеры coalesce.
 
-ИЗМЕНЕНИЯ: tests/integration/gui_events.rs, ashell-gui/src/app.rs (точки инъекции)
+ИЗМЕНЕНИЯ: tests/integration/gui_events.rs, crates/hydebar-gui/src/app.rs (точки инъекции)
 
 КОМАНДЫ: стандарт.
 ```
@@ -307,7 +308,7 @@ AR/DoD:
 2) Пара примерных миграций.
 3) Тесты.
 
-ИЗМЕНЕНИЯ: ashell-core/src/config/migrations/**
+ИЗМЕНЕНИЯ: crates/hydebar-core/src/config/migrations/**
 
 КОМАНДЫ: стандарт.
 ```

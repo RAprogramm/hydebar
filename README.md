@@ -439,3 +439,7 @@ could be different
 | ![](https://raw.githubusercontent.com/RAprogramm/hydebar/main/screenshots/power-menu.png)    | ![](https://raw.githubusercontent.com/RAprogrammraprogramm/main/screenshots/sinks-selection.png) |
 | ![](https://raw.githubusercontent.com/RAprogramm/hydebar/main/screenshots/network-menu.png)  | ![](https://raw.githubusercontent.com/RAprogrammraprogramm/main/screenshots/bluetooth-menu.png)  |
 | ![](https://raw.githubusercontent.com/RAprogramm/hydebar/main/screenshots/vpn-menu.png)      | ![](https://raw.githubusercontent.com/RAprogramm/hydebar/main/screenshots/airplane-mode.png)   |
+
+## Acknowledgements
+
+hydebar evolved from early prototypes and ideas initially explored in the ashell project. Those lessons helped shape the current architecture.
