@@ -9,6 +9,7 @@ use crate::{
 use iced::{
     Alignment, Element, Length, Padding, Subscription, Task,
     alignment::Horizontal,
+    futures::channel::mpsc::{Sender, TrySendError},
     stream::channel,
     widget::{Column, button, column, container, horizontal_rule, row, scrollable, text},
     window::Id,
@@ -285,7 +286,9 @@ impl Module for Updates {
                     loop {
                         let updates = check_update_now(&check_cmd).await;
 
-                        let _ = output.try_send(Message::UpdatesCheckCompleted(updates));
+                        if let Err(err) = enqueue_updates_result(&mut output, updates) {
+                            error!("failed to enqueue updates check result: {err}");
+                        }
 
                         sleep(Duration::from_secs(3600)).await;
                     }
@@ -293,5 +296,36 @@ impl Module for Updates {
             )
             .map(app::Message::Updates),
         )
+    }
+}
+
+fn enqueue_updates_result(
+    sender: &mut Sender<Message>,
+    updates: Vec<Update>,
+) -> Result<(), TrySendError<Message>> {
+    sender.try_send(Message::UpdatesCheckCompleted(updates))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enqueue_updates_result_errors_when_channel_full() {
+        let (mut sender, _receiver) = iced::futures::channel::mpsc::channel(1);
+
+        enqueue_updates_result(&mut sender, Vec::new()).expect("first send should succeed");
+
+        let error = enqueue_updates_result(&mut sender, Vec::new()).expect_err("expected full");
+        assert!(error.is_full());
+    }
+
+    #[test]
+    fn enqueue_updates_result_errors_when_channel_closed() {
+        let (mut sender, receiver) = iced::futures::channel::mpsc::channel(1);
+        drop(receiver);
+
+        let error = enqueue_updates_result(&mut sender, Vec::new()).expect_err("expected closed");
+        assert!(error.is_disconnected());
     }
 }

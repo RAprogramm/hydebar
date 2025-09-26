@@ -1,10 +1,9 @@
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::{
     any::TypeId,
-    error::Error,
     ffi::{OsStr, OsString},
     fmt::Display,
-    fs::File,
     future::Future,
     io::Read,
     pin::Pin,
@@ -19,74 +18,162 @@ use iced::{Subscription, stream::channel};
 use inotify::{EventMask, Inotify, WatchMask};
 use log::{debug, error, info, warn};
 use shellexpand::full;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub enum ConfigEvent {
     Updated(Box<Config>),
 }
 
-pub fn get_config(path: Option<PathBuf>) -> Result<(Config, PathBuf), Box<dyn Error + Send>> {
+#[derive(Debug, Error)]
+pub enum ConfigLoadError {
+    #[error("failed to expand config path '{input}': {source}")]
+    Expand {
+        input: String,
+        #[source]
+        source: shellexpand::LookupError<std::env::VarError>,
+    },
+    #[error("config file does not exist: {path}")]
+    Missing { path: PathBuf },
+    #[error("config path '{path}' has no parent directory")]
+    MissingParent { path: PathBuf },
+    #[error("failed to create config directory '{path}': {source}")]
+    CreateDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+#[derive(Debug, Error)]
+enum ConfigReadError {
+    #[error("failed to read config file '{path}': {source}")]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to parse config file '{path}': {source}")]
+    Parse {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
+}
+
+pub fn get_config(path: Option<PathBuf>) -> Result<(Config, PathBuf), ConfigLoadError> {
     match path {
         Some(path) => {
             info!("Config path provided {path:?}");
-            expand_path(path).and_then(|expanded| {
-                if !expanded.exists() {
-                    Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("Config file does not exist: {}", expanded.display()),
-                    )))
-                } else {
-                    Ok((read_config(&expanded).unwrap_or_default(), expanded))
-                }
-            })
-        }
-        None => expand_path(PathBuf::from(DEFAULT_CONFIG_FILE_PATH)).map(|expanded| {
-            let parent = expanded
-                .parent()
-                .expect("Failed to get default config parent directory");
+            let expanded = expand_path(path)?;
 
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)
-                    .expect("Failed to create default config parent directory");
+            if !expanded.exists() {
+                return Err(ConfigLoadError::Missing { path: expanded });
             }
 
-            (read_config(&expanded).unwrap_or_default(), expanded)
-        }),
+            let config = load_config_or_default(&expanded);
+
+            Ok((config, expanded))
+        }
+        None => {
+            let expanded = expand_path(PathBuf::from(DEFAULT_CONFIG_FILE_PATH))?;
+            ensure_parent_exists(&expanded)?;
+
+            let config = load_config_or_default(&expanded);
+
+            Ok((config, expanded))
+        }
     }
 }
 
-fn expand_path(path: PathBuf) -> Result<PathBuf, Box<dyn Error + Send>> {
-    let str_path = path.to_string_lossy();
-    let expanded = full(&str_path).map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
-
-    Ok(PathBuf::from(expanded.to_string()))
+fn expand_path(path: PathBuf) -> Result<PathBuf, ConfigLoadError> {
+    let input = path.to_string_lossy().into_owned();
+    match full(&input) {
+        Ok(expanded) => Ok(PathBuf::from(expanded.to_string())),
+        Err(source) => Err(ConfigLoadError::Expand { input, source }),
+    }
 }
 
-fn read_config(path: &Path) -> Result<Config, Box<dyn Error + Send>> {
+fn ensure_parent_exists(path: &Path) -> Result<(), ConfigLoadError> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| ConfigLoadError::MissingParent {
+            path: path.to_path_buf(),
+        })?;
+
+    if !parent.exists() {
+        fs::create_dir_all(parent).map_err(|source| ConfigLoadError::CreateDir {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+
+    Ok(())
+}
+
+fn read_config(path: &Path) -> Result<Config, ConfigReadError> {
     let mut content = String::new();
-    let read_result = File::open(path).and_then(|mut file| file.read_to_string(&mut content));
+    File::open(path)
+        .and_then(|mut file| file.read_to_string(&mut content))
+        .map_err(|source| ConfigReadError::Read {
+            path: path.to_path_buf(),
+            source,
+        })?;
 
-    match read_result {
-        Ok(_) => {
-            info!("Decoding config file {path:?}");
+    toml::from_str(&content).map_err(|source| ConfigReadError::Parse {
+        path: path.to_path_buf(),
+        source,
+    })
+}
 
-            let res = toml::from_str(&content);
+fn load_config_or_default(path: &Path) -> Config {
+    info!("Decoding config file {path:?}");
 
-            match res {
-                Ok(config) => {
-                    info!("Config file loaded successfully");
-                    Ok(config)
-                }
-                Err(e) => {
-                    warn!("Failed to parse config file: {e}");
-                    Err(Box::new(e))
-                }
-            }
+    match read_config(path) {
+        Ok(config) => {
+            info!("Config file loaded successfully");
+            config
         }
-        Err(e) => {
-            warn!("Failed to read config file: {e}");
+        Err(err) => {
+            warn!("{err}");
+            warn!("Falling back to default configuration");
+            Config::default()
+        }
+    }
+}
 
-            Err(Box::new(e))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn get_config_returns_default_on_parse_error() {
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let config_path = temp_dir.path().join("config.toml");
+        fs::write(&config_path, "invalid = [").expect("failed to write invalid config");
+
+        let (config, returned_path) =
+            get_config(Some(config_path.clone())).expect("get_config should succeed");
+
+        assert_eq!(returned_path, config_path);
+        let default = Config::default();
+        assert_eq!(config.log_level, default.log_level);
+        assert_eq!(config.menu_keyboard_focus, default.menu_keyboard_focus);
+        assert_eq!(config.position, default.position);
+    }
+
+    #[test]
+    fn get_config_errors_when_file_missing() {
+        let temp_dir = TempDir::new().expect("failed to create temp dir");
+        let config_path = temp_dir.path().join("missing.toml");
+
+        let error = get_config(Some(config_path.clone())).expect_err("expected error");
+
+        match error {
+            ConfigLoadError::Missing { path } => assert_eq!(path, config_path),
+            other => panic!("unexpected error: {other:?}"),
         }
     }
 }
@@ -197,7 +284,7 @@ async fn handle_watch_event(
         Event::Changed => {
             info!("Reload config file");
 
-            let new_config = read_config(path).unwrap_or_default();
+            let new_config = load_config_or_default(path);
 
             output
                 .send(ConfigEvent::Updated(Box::new(new_config)))
