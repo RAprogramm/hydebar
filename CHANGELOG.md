@@ -18,6 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.2.3] - 2025-09-26
+
+### Changed
+
+- Replace `unwrap`/`expect` usage in the custom module listener with structured error
+  handling and graceful shutdown semantics.
+- Surface command failures to the UI via `ServiceEvent::Error` so custom modules can
+  react to listener issues.
+- Switch stdout processing to `next_line().await?` with explicit channel-closure
+  handling to avoid panics.
+
+### Added
+
+- Unit test covering early process termination and closed channel scenarios for the
+  custom module runtime.
+
 ### Changed
 
 - Move "truncate_title_after_length" to the window_title configuration
