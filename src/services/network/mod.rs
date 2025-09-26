@@ -3,15 +3,15 @@ use crate::services::ReadOnlyService;
 use dbus::ConnectivityState;
 use dbus::NetworkDbus;
 use iced::futures::TryFutureExt;
-use iced::futures::stream::pending;
 use iced::{
     Subscription, Task,
-    futures::{SinkExt, StreamExt, channel::mpsc::Sender},
+    futures::{SinkExt, Stream, StreamExt, channel::mpsc::Sender},
     stream::channel,
 };
 use iwd_dbus::IwdDbus;
 use log::{debug, error, info};
-use std::{any::TypeId, ops::Deref};
+use std::{any::TypeId, ops::Deref, time::Duration};
+use tokio::time::sleep;
 use zbus::zvariant::OwnedObjectPath;
 
 pub mod dbus;
@@ -71,6 +71,29 @@ pub enum NetworkEvent {
     Strength((String, u8)),
     RequestPasswordForSSID(String),
     ScanningNearbyWifi,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkServiceError {
+    message: String,
+}
+
+impl NetworkServiceError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl From<anyhow::Error> for NetworkServiceError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::new(format!("{err:#}"))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -142,6 +165,7 @@ pub struct NetworkData {
     pub airplane_mode: bool,
     pub connectivity: ConnectivityState,
     pub scanning_nearby_wifi: bool,
+    pub last_error: Option<NetworkServiceError>,
 }
 
 #[derive(Debug, Clone)]
@@ -167,9 +191,10 @@ enum State {
 
 impl ReadOnlyService for NetworkService {
     type UpdateEvent = NetworkEvent;
-    type Error = ();
+    type Error = NetworkServiceError;
 
     fn update(&mut self, event: Self::UpdateEvent) {
+        self.data.last_error = None;
         match event {
             NetworkEvent::AirplaneMode(airplane_mode) => {
                 self.data.airplane_mode = airplane_mode;
@@ -362,6 +387,33 @@ impl NetworkBackend for BackendChoiceWithConnection {
 }
 
 impl NetworkService {
+    pub fn apply_error(&mut self, error: NetworkServiceError) {
+        self.data.last_error = Some(error);
+    }
+
+    async fn consume_network_events<S>(
+        mut events: S,
+        output: &mut Sender<ServiceEvent<Self>>,
+    ) -> anyhow::Result<()>
+    where
+        S: Stream<Item = anyhow::Result<NetworkEvent>> + Unpin,
+    {
+        while let Some(event) = events.next().await {
+            let event = event?;
+            let mut exit_loop = false;
+            if let NetworkEvent::WirelessDevice { .. } = event {
+                exit_loop = true;
+            }
+            let _ = output.send(ServiceEvent::Update(event)).await;
+
+            if exit_loop {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn start_listening(state: State, output: &mut Sender<ServiceEvent<Self>>) -> State {
         match state {
             State::Init => match zbus::Connection::system().await {
@@ -416,12 +468,17 @@ impl NetworkService {
                             } else {
                                 error!("Failed to initialize network service: {err}");
                             }
+                            let error = NetworkServiceError::from(err);
+                            let _ = output.send(ServiceEvent::Error(error)).await;
                             State::Error
                         }
                     }
                 }
                 Err(err) => {
                     error!("Failed to connect to system bus: {err}");
+                    let error =
+                        NetworkServiceError::new(format!("Failed to connect to system bus: {err}"));
+                    let _ = output.send(ServiceEvent::Error(error)).await;
 
                     State::Error
                 }
@@ -436,31 +493,31 @@ impl NetworkService {
                             Ok(nm) => nm,
                             Err(e) => {
                                 error!("Failed to create NetworkDbus: {e}");
+                                let error = NetworkServiceError::from(e);
+                                let _ = output.send(ServiceEvent::Error(error)).await;
                                 return State::Error;
                             }
                         };
 
                         match nm.subscribe_events().await {
-                            Ok(mut events) => {
-                                while let Some(event) = events.next().await {
-                                    let mut exit_loop = false;
-                                    // TODO: why do we do this?
-                                    if let NetworkEvent::WirelessDevice { .. } = event {
-                                        exit_loop = true;
+                            Ok(events) => {
+                                match Self::consume_network_events(events, output).await {
+                                    Ok(()) => {
+                                        debug!("Network service exit events stream");
+                                        State::Active(conn, choice)
                                     }
-                                    let _ = output.send(ServiceEvent::Update(event)).await;
-
-                                    if exit_loop {
-                                        break;
+                                    Err(err) => {
+                                        error!("Network event stream error: {err}");
+                                        let error = NetworkServiceError::from(err);
+                                        let _ = output.send(ServiceEvent::Error(error)).await;
+                                        State::Error
                                     }
                                 }
-
-                                debug!("Network service exit events stream");
-
-                                State::Active(conn, choice)
                             }
                             Err(err) => {
                                 error!("Failed to listen for network events: {err}");
+                                let error = NetworkServiceError::from(err);
+                                let _ = output.send(ServiceEvent::Error(error)).await;
 
                                 State::Error
                             }
@@ -471,6 +528,8 @@ impl NetworkService {
                             Ok(iwd) => iwd,
                             Err(err) => {
                                 error!("Failed to create IwdDbus: {err}");
+                                let error = NetworkServiceError::from(err);
+                                let _ = output.send(ServiceEvent::Error(error)).await;
                                 return State::Error;
                             }
                         };
@@ -491,6 +550,8 @@ impl NetworkService {
                             }
                             Err(err) => {
                                 error!("Failed to listen for network events: {err}");
+                                let error = NetworkServiceError::from(err);
+                                let _ = output.send(ServiceEvent::Error(error)).await;
 
                                 State::Error
                             }
@@ -501,9 +562,9 @@ impl NetworkService {
             State::Error => {
                 error!("Network service error");
 
-                let _ = pending::<u8>().next().await;
+                sleep(Duration::from_secs(1)).await;
 
-                State::Error
+                State::Init
             }
         }
     }
@@ -593,5 +654,50 @@ impl Service for NetworkService {
                 )
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+    use futures::stream;
+    use iced::futures::{StreamExt, channel::mpsc};
+
+    #[tokio::test]
+    async fn consume_network_events_stops_on_error() {
+        let (mut sender, mut receiver) = mpsc::channel(4);
+
+        let events = stream::iter(vec![
+            Ok(NetworkEvent::WiFiEnabled(true)),
+            Err(anyhow!("boom")),
+            Ok(NetworkEvent::WiFiEnabled(false)),
+        ]);
+
+        let result = NetworkService::consume_network_events(events, &mut sender).await;
+        assert!(result.is_err(), "expected error from stream consumption");
+
+        let first_event = receiver.next().await;
+        assert!(
+            matches!(
+                first_event,
+                Some(ServiceEvent::Update(NetworkEvent::WiFiEnabled(true)))
+            ),
+            "unexpected event: {first_event:?}"
+        );
+
+        drop(sender);
+        assert!(
+            receiver.next().await.is_none(),
+            "no further events expected"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn state_error_transitions_to_init_after_delay() {
+        let (mut sender, _receiver) = mpsc::channel(1);
+
+        let state = NetworkService::start_listening(State::Error, &mut sender).await;
+        assert!(matches!(state, State::Init));
     }
 }
