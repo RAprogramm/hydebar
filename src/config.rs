@@ -1,7 +1,8 @@
 use crate::app::Message;
 use hex_color::HexColor;
-use iced::futures::StreamExt;
-use iced::{Color, Subscription, futures::SinkExt, stream::channel, theme::palette};
+use iced::futures::channel::mpsc::{SendError, Sender};
+use iced::futures::{SinkExt, Stream, StreamExt, pin_mut};
+use iced::{Color, Subscription, stream::channel, theme::palette};
 use inotify::EventMask;
 use inotify::Inotify;
 use inotify::WatchMask;
@@ -12,7 +13,17 @@ use serde_with::DisplayFromStr;
 use serde_with::serde_as;
 use std::path::PathBuf;
 use std::{
-    any::TypeId, collections::HashMap, error::Error, fs::File, io::Read, ops::Deref, path::Path,
+    any::TypeId,
+    collections::HashMap,
+    error::Error,
+    ffi::{OsStr, OsString},
+    fmt::Display,
+    fs::File,
+    future::Future,
+    io::Read,
+    ops::Deref,
+    path::Path,
+    pin::Pin,
 };
 
 pub const DEFAULT_CONFIG_FILE_PATH: &str = "~/.config/hydebar/config.toml";
@@ -853,9 +864,124 @@ fn read_config(path: &Path) -> Result<Config, Box<dyn Error + Send>> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Event {
     Changed,
     Removed,
+}
+
+trait WatchedEvent {
+    fn file_name(&self) -> Option<&OsStr>;
+
+    fn mask(&self) -> EventMask;
+}
+
+impl WatchedEvent for inotify::Event<OsString> {
+    fn file_name(&self) -> Option<&OsStr> {
+        self.name.as_deref()
+    }
+
+    fn mask(&self) -> EventMask {
+        self.mask
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WatchLoopOutcome {
+    StreamEnded,
+    HandlerClosed,
+}
+
+fn interpret_event<E: WatchedEvent>(event: &E, target_name: &OsStr) -> Option<Event> {
+    let name = event.file_name()?;
+
+    if name != target_name {
+        return None;
+    }
+
+    let mask = event.mask();
+
+    if mask == EventMask::DELETE | EventMask::MOVED_FROM {
+        debug!("File deleted or moved");
+        Some(Event::Removed)
+    } else if mask == EventMask::CREATE | EventMask::MODIFY | EventMask::MOVED_TO {
+        debug!("File created or moved");
+        Some(Event::Changed)
+    } else {
+        None
+    }
+}
+
+async fn process_event_batches<S, E, Err, F, Fut, HandlerErr>(
+    mut stream: Pin<&mut S>,
+    target_name: &OsStr,
+    mut handler: F,
+) -> WatchLoopOutcome
+where
+    S: Stream<Item = Vec<Result<E, Err>>>,
+    E: WatchedEvent + std::fmt::Debug,
+    Err: Display,
+    F: FnMut(Event) -> Fut,
+    Fut: Future<Output = Result<(), HandlerErr>>,
+    HandlerErr: Display,
+{
+    while let Some(batch) = stream.as_mut().next().await {
+        let mut file_event = None;
+
+        for event in batch {
+            match event {
+                Ok(event) => {
+                    debug!("Event: {event:?}");
+
+                    match interpret_event(&event, target_name) {
+                        Some(kind) => {
+                            file_event = Some(kind);
+                        }
+                        None => {
+                            debug!("Ignoring event");
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to read watch event: {err}");
+                }
+            }
+        }
+
+        if let Some(kind) = file_event {
+            if let Err(err) = handler(kind).await {
+                warn!("Stopping config watch because handler returned an error: {err}");
+                return WatchLoopOutcome::HandlerClosed;
+            }
+        } else {
+            debug!("No relevant file event detected.");
+        }
+    }
+
+    WatchLoopOutcome::StreamEnded
+}
+
+async fn handle_watch_event(
+    output: &mut Sender<Message>,
+    path: &Path,
+    event: Event,
+) -> Result<(), SendError> {
+    match event {
+        Event::Changed => {
+            info!("Reload config file");
+
+            let new_config = read_config(path).unwrap_or_default();
+
+            output
+                .send(Message::ConfigChanged(Box::new(new_config)))
+                .await
+        }
+        Event::Removed => {
+            info!("Config file removed");
+
+            output.send(Message::ConfigChanged(Box::default())).await
+        }
+    }
 }
 
 pub fn subscription(path: &Path) -> Subscription<Message> {
@@ -864,93 +990,162 @@ pub fn subscription(path: &Path) -> Subscription<Message> {
 
     Subscription::run_with_id(
         id,
-        channel(100, async move |mut output| {
-            match (path.parent(), path.file_name(), Inotify::init()) {
-                (Some(folder), Some(file_name), Ok(inotify)) => {
-                    debug!("Watching config file at {path:?}");
+        channel(100, async move |output| {
+            let Some(folder) = path.parent().map(Path::to_path_buf) else {
+                error!(
+                    "Config file path does not have a parent directory, cannot watch for changes"
+                );
+                return;
+            };
 
-                    let res = inotify.watches().add(
-                        folder,
-                        WatchMask::CREATE | WatchMask::DELETE | WatchMask::MOVE | WatchMask::MODIFY,
-                    );
+            let Some(file_name) = path.file_name().map(OsStr::to_os_string) else {
+                error!("Config file path does not have a file name, cannot watch for changes");
+                return;
+            };
 
-                    if let Err(e) = res {
-                        error!("Failed to add watch for {folder:?}: {e}");
-                        return;
+            loop {
+                let inotify = match Inotify::init() {
+                    Ok(inotify) => inotify,
+                    Err(e) => {
+                        error!("Failed to initialize inotify: {e}");
+                        break;
                     }
+                };
 
-                    let buffer = [0; 1024];
-                    let stream = inotify.into_event_stream(buffer);
+                debug!("Watching config file at {path:?}");
 
-                    if let Ok(stream) = stream {
-                        let mut stream = stream.ready_chunks(10);
+                let watch_result = inotify.watches().add(
+                    &folder,
+                    WatchMask::CREATE | WatchMask::DELETE | WatchMask::MOVE | WatchMask::MODIFY,
+                );
 
-                        loop {
-                            let events = stream.next().await.unwrap_or(vec![]);
+                if let Err(e) = watch_result {
+                    error!("Failed to add watch for {folder:?}: {e}");
+                    break;
+                }
 
-                            let mut file_event = None;
-
-                            for event in events {
-                                debug!("Event: {event:?}");
-                                match event {
-                                    Ok(inotify::Event {
-                                        name: Some(name),
-                                        mask: EventMask::DELETE | EventMask::MOVED_FROM,
-                                        ..
-                                    }) if file_name == name => {
-                                        debug!("File deleted or moved");
-                                        file_event = Some(Event::Removed);
-                                    }
-                                    Ok(inotify::Event {
-                                        name: Some(name),
-                                        mask:
-                                            EventMask::CREATE | EventMask::MODIFY | EventMask::MOVED_TO,
-                                        ..
-                                    }) if file_name == name => {
-                                        debug!("File created or moved");
-
-                                        file_event = Some(Event::Changed);
-                                    }
-                                    _ => {
-                                        debug!("Ignoring event");
-                                    }
-                                }
-                            }
-
-                            match file_event {
-                                Some(Event::Changed) => {
-                                    info!("Reload config file");
-
-                                    let new_config = read_config(&path).unwrap_or_default();
-
-                                    let _ = output
-                                        .send(Message::ConfigChanged(Box::new(new_config)))
-                                        .await;
-                                }
-                                Some(Event::Removed) => {
-                                    info!("Config file removed");
-                                    let _ =
-                                        output.send(Message::ConfigChanged(Box::default())).await;
-                                }
-                                None => {
-                                    debug!("No relevant file event detected.");
-                                }
-                            }
-                        }
+                let buffer = [0; 1024];
+                let stream = match inotify.into_event_stream(buffer) {
+                    Ok(stream) => stream,
+                    Err(e) => {
+                        error!("Failed to create inotify event stream: {e}");
+                        break;
                     }
-                }
-                (None, _, _) => {
-                    error!(
-                        "Config file path does not have a parent directory, cannot watch for changes"
-                    );
-                }
-                (_, None, _) => {
-                    error!("Config file path does not have a file name, cannot watch for changes");
-                }
-                (_, _, Err(e)) => {
-                    error!("Failed to initialize inotify: {e}");
+                };
+
+                let event_stream = stream.ready_chunks(10);
+                pin_mut!(event_stream);
+
+                let sender_template = output.clone();
+                let path_clone = path.clone();
+
+                match process_event_batches(
+                    event_stream.as_mut(),
+                    file_name.as_os_str(),
+                    move |event| {
+                        let mut sender = sender_template.clone();
+                        let path = path_clone.clone();
+
+                        async move { handle_watch_event(&mut sender, &path, event).await }
+                    },
+                )
+                .await
+                {
+                    WatchLoopOutcome::StreamEnded => {
+                        info!(
+                            "Config watch stream closed; attempting to restart the inotify watcher"
+                        );
+                        continue;
+                    }
+                    WatchLoopOutcome::HandlerClosed => {
+                        info!("Config watch handler closed; stopping watcher loop");
+                        break;
+                    }
                 }
             }
+
+            info!("Config watcher terminated");
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::futures::{executor::block_on, stream};
+    use std::cell::RefCell;
+    use std::ffi::OsStr;
+    use std::fmt;
+    use std::rc::Rc;
+
+    #[derive(Debug, Clone)]
+    struct TestEvent {
+        name: Option<OsString>,
+        mask: EventMask,
+    }
+
+    impl TestEvent {
+        fn changed(name: &str) -> Self {
+            Self {
+                name: Some(OsString::from(name)),
+                mask: EventMask::CREATE | EventMask::MODIFY | EventMask::MOVED_TO,
+            }
+        }
+    }
+
+    impl WatchedEvent for TestEvent {
+        fn file_name(&self) -> Option<&OsStr> {
+            self.name.as_deref()
+        }
+
+        fn mask(&self) -> EventMask {
+            self.mask
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct TestError;
+
+    impl Display for TestError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "test error")
+        }
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct TestHandlerError;
+
+    impl Display for TestHandlerError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "handler error")
+        }
+    }
+
+    #[test]
+    fn process_event_batches_stops_on_stream_end() {
+        let batches: Vec<Vec<Result<TestEvent, TestError>>> =
+            vec![vec![Ok(TestEvent::changed("config.toml"))]];
+
+        let stream = stream::iter(batches);
+        iced::futures::pin_mut!(stream);
+
+        let handled_events = Rc::new(RefCell::new(Vec::new()));
+        let handled_events_clone = Rc::clone(&handled_events);
+
+        let outcome = block_on(process_event_batches(
+            stream.as_mut(),
+            OsStr::new("config.toml"),
+            move |event| {
+                let handled_events = Rc::clone(&handled_events_clone);
+
+                async move {
+                    handled_events.borrow_mut().push(event);
+                    Ok::<(), TestHandlerError>(())
+                }
+            },
+        ));
+
+        assert_eq!(outcome, WatchLoopOutcome::StreamEnded);
+        assert_eq!(handled_events.borrow().as_slice(), &[Event::Changed]);
+    }
 }
