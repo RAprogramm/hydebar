@@ -2265,7 +2265,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-app"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "clap",
  "flexi_logger",
@@ -2279,7 +2279,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2300,6 +2300,8 @@ dependencies = [
  "serde_with",
  "shellexpand",
  "sysinfo",
+ "tempfile",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "toml 0.9.7",
@@ -2312,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-gui"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "flexi_logger",
  "hydebar-core",
@@ -2324,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-proto"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "hex_color",
  "iced",

@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.3.2] - 2025-09-26
+
+### Changed
+
+- Return typed errors from the configuration loader and application entrypoint to avoid process aborts.
+- Handle channel backpressure gracefully across runtime modules, logging and skipping events instead of panicking.
+
+### Fixed
+
+- Added regression tests covering configuration read failures and channel send errors to ensure the application remains stable.
+
 ## [0.3.1] - 2025-09-26
 
 ### Added
