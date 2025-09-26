@@ -7,8 +7,8 @@ use crate::{
     menu::{MenuSize, MenuType, menu_wrapper},
     modules::{
         self,
-        battery::Battery,
         app_launcher::AppLauncher,
+        battery::Battery,
         clipboard::Clipboard,
         clock::Clock,
         custom_module::Custom,
@@ -26,7 +26,7 @@ use crate::{
     outputs::{HasOutput, Outputs},
     position_button::ButtonUIRef,
     services::{Service, ServiceEvent, brightness::BrightnessCommand, tray::TrayEvent},
-    style::{hydebar_theme, backdrop_color, darken_color},
+    style::{backdrop_color, darken_color, hydebar_theme},
     utils,
 };
 use flexi_logger::LoggerHandle;
