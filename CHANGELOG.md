@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2025-09-27
+
+### Changed
+
+- Move the privacy module to runtime-spawned listeners driven by `ModuleContext`,
+  replacing the iced subscription bridge and publishing `PrivacyMessage` events
+  through the module event bus with typed senders.
+- Expose a reusable privacy event publisher trait so `PrivacyService::start_listening`
+  can be invoked directly by modules while propagating listener failures as
+  structured errors.
+
+### Added
+
+- Unit tests covering privacy listener error propagation and task cancellation to
+  guard the new runtime-driven flow.
+
 ## [0.5.2] - 2025-09-27
 
 ### Changed

@@ -4,9 +4,7 @@ pub mod error;
 use self::error::PrivacyError;
 use iced::{
     Subscription,
-    futures::{
-        FutureExt, SinkExt, Stream, StreamExt, channel::mpsc::Sender, select, stream::pending,
-    },
+    futures::{FutureExt, Stream, StreamExt, channel::mpsc::Sender, select, stream::pending},
     stream::channel,
 };
 use inotify::{EventMask, Inotify, WatchMask};
@@ -21,6 +19,27 @@ use tokio::sync::{
 const WEBCAM_DEVICE_PATH: &str = "/dev/video0";
 
 type PrivacyStream = Pin<Box<dyn Stream<Item = PrivacyEvent> + Send>>;
+
+/// Sink used to publish privacy service events to interested consumers.
+pub trait PrivacyEventPublisher {
+    type SendFuture<'a>: Future<Output = Result<(), PrivacyError>> + Send + 'a
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<PrivacyService>) -> Self::SendFuture<'_>;
+}
+
+impl PrivacyEventPublisher for Sender<ServiceEvent<PrivacyService>> {
+    type SendFuture<'a> = Pin<Box<dyn Future<Output = Result<(), PrivacyError>> + Send + 'a>>;
+
+    fn send(&mut self, event: ServiceEvent<PrivacyService>) -> Self::SendFuture<'_> {
+        Box::pin(async move {
+            self.send(event)
+                .await
+                .map_err(|err| PrivacyError::channel(err.to_string()))
+        })
+    }
+}
 
 /// Media class reported by PipeWire for an application node.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -242,40 +261,41 @@ impl PrivacyService {
         Ok(stream)
     }
 
-    async fn emit_event(
-        output: &mut Sender<ServiceEvent<Self>>,
-        event: ServiceEvent<Self>,
-    ) -> Result<(), PrivacyError> {
-        output
-            .send(event)
-            .await
-            .map_err(|err| PrivacyError::channel(err.to_string()))
+    async fn emit_event<P>(publisher: &mut P, event: ServiceEvent<Self>) -> Result<(), PrivacyError>
+    where
+        P: PrivacyEventPublisher,
+    {
+        publisher.send(event).await
     }
 
-    async fn start_listening(
+    pub(crate) async fn start_listening<P>(
         state: State,
-        output: &mut Sender<ServiceEvent<Self>>,
-    ) -> Result<State, PrivacyError> {
+        publisher: &mut P,
+    ) -> Result<State, PrivacyError>
+    where
+        P: PrivacyEventPublisher,
+    {
         Self::start_listening_with_factories(
             state,
-            output,
+            publisher,
             Self::create_pipewire_listener,
             Self::webcam_listener,
         )
         .await
     }
 
-    async fn start_listening_with_factories<P, PFut, W, WFut>(
+    async fn start_listening_with_factories<PF, PFut, WF, WFut, Pub>(
         state: State,
-        output: &mut Sender<ServiceEvent<Self>>,
-        mut pipewire_factory: P,
-        mut webcam_factory: W,
+        publisher: &mut Pub,
+        mut pipewire_factory: PF,
+        mut webcam_factory: WF,
     ) -> Result<State, PrivacyError>
     where
-        P: FnMut() -> PFut,
+        PF: FnMut() -> PFut,
         PFut: Future<Output = Result<UnboundedReceiver<PrivacyEvent>, PrivacyError>> + Send,
-        W: FnMut() -> WFut,
+        WF: FnMut() -> WFut,
         WFut: Future<Output = Result<PrivacyStream, PrivacyError>> + Send,
+        Pub: PrivacyEventPublisher,
     {
         match state {
             State::Init => {
@@ -290,7 +310,7 @@ impl PrivacyService {
                 };
 
                 let data = PrivacyData::new();
-                Self::emit_event(output, ServiceEvent::Init(PrivacyService { data })).await?;
+                Self::emit_event(publisher, ServiceEvent::Init(PrivacyService { data })).await?;
 
                 Ok(State::Active { pipewire, webcam })
             }
@@ -307,7 +327,7 @@ impl PrivacyService {
                     value = pipewire.recv().fuse() => {
                         match value {
                             Some(event) => {
-                                Self::emit_event(output, ServiceEvent::Update(event)).await?;
+                                Self::emit_event(publisher, ServiceEvent::Update(event)).await?;
                             }
                             None => {
                                 error!("PipeWire listener exited unexpectedly");
@@ -320,7 +340,7 @@ impl PrivacyService {
                     value = webcam_future => {
                         match value {
                             Some(event) => {
-                                Self::emit_event(output, ServiceEvent::Update(event)).await?;
+                                Self::emit_event(publisher, ServiceEvent::Update(event)).await?;
                             }
                             None => {
                                 error!("Webcam listener exited unexpectedly");
@@ -338,23 +358,25 @@ impl PrivacyService {
     }
 
     #[cfg(test)]
-    async fn start_listening_with<P, PFut, W, WFut>(
+    async fn start_listening_with<Pub, PF, PFut, WF, WFut>(
         state: State,
-        output: &mut Sender<ServiceEvent<Self>>,
-        pipewire_factory: P,
-        webcam_factory: W,
+        publisher: &mut Pub,
+        pipewire_factory: PF,
+        webcam_factory: WF,
     ) -> Result<State, PrivacyError>
     where
-        P: FnMut() -> PFut,
+        Pub: PrivacyEventPublisher,
+        PF: FnMut() -> PFut,
         PFut: Future<Output = Result<UnboundedReceiver<PrivacyEvent>, PrivacyError>> + Send,
-        W: FnMut() -> WFut,
+        WF: FnMut() -> WFut,
         WFut: Future<Output = Result<PrivacyStream, PrivacyError>> + Send,
     {
-        Self::start_listening_with_factories(state, output, pipewire_factory, webcam_factory).await
+        Self::start_listening_with_factories(state, publisher, pipewire_factory, webcam_factory)
+            .await
     }
 }
 
-enum State {
+pub(crate) enum State {
     Init,
     Active {
         pipewire: UnboundedReceiver<PrivacyEvent>,
@@ -412,12 +434,13 @@ impl ReadOnlyService for PrivacyService {
                             state = next_state;
                         }
                         Err(error) => {
-                            if output
-                                .send(ServiceEvent::Error(error.clone()))
-                                .await
-                                .is_err()
+                            if let Err(send_error) = PrivacyService::emit_event(
+                                &mut output,
+                                ServiceEvent::Error(error.clone()),
+                            )
+                            .await
                             {
-                                warn!("Failed to emit privacy service error event");
+                                warn!("Failed to emit privacy service error event: {send_error}");
                                 break;
                             }
 
