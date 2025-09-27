@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2025-09-27
+
+### Changed
+
+- Move the tray module onto runtime-spawned listeners using typed module event
+  senders, removing the iced subscription bridge and wiring command dispatch
+  through the shared runtime.  
+  (Refactors command execution to publish feedback via the module event bus.)
+
+### Added
+
+- Regression tests ensuring tray listener tasks are aborted on re-registration
+  and that menu commands surface updates through the event bus.
+
 ## [0.5.1] - 2025-09-27
 
 ### Added

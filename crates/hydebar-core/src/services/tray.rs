@@ -5,19 +5,14 @@ use dbus::{
 };
 use freedesktop_icons::lookup;
 use iced::{
-    Subscription, Task,
-    futures::{
-        SinkExt, Stream, StreamExt,
-        channel::mpsc::Sender,
-        stream::{pending, select_all},
-        stream_select,
-    },
-    stream::channel,
+    Task,
+    futures::{Stream, StreamExt, stream::select_all, stream_select},
     widget::{image, svg},
 };
 use linicon_theme::get_icon_theme;
 use log::{debug, error, info, trace};
-use std::{any::TypeId, ops::Deref};
+use std::{future::Future, ops::Deref, pin::Pin};
+use tokio::future::pending;
 
 pub mod dbus;
 
@@ -323,7 +318,23 @@ impl TrayService {
         .boxed())
     }
 
-    async fn start_listening(state: State, output: &mut Sender<ServiceEvent<Self>>) -> State {
+    pub async fn start_listening<F, Fut>(mut publisher: F)
+    where
+        F: FnMut(ServiceEvent<Self>) -> Fut + Send,
+        Fut: Future<Output = ()> + Send,
+    {
+        let mut state = State::Init;
+
+        loop {
+            state = Self::drive_state(state, &mut publisher).await;
+        }
+    }
+
+    async fn drive_state<F, Fut>(state: State, publisher: &mut F) -> State
+    where
+        F: FnMut(ServiceEvent<Self>) -> Fut + Send,
+        Fut: Future<Output = ()> + Send,
+    {
         match state {
             State::Init => match StatusNotifierWatcher::start_server().await {
                 Ok(conn) => {
@@ -333,12 +344,11 @@ impl TrayService {
                         Ok(data) => {
                             info!("Tray service initialized");
 
-                            let _ = output
-                                .send(ServiceEvent::Init(TrayService {
-                                    data,
-                                    _conn: conn.clone(),
-                                }))
-                                .await;
+                            publisher(ServiceEvent::Init(TrayService {
+                                data,
+                                _conn: conn.clone(),
+                            }))
+                            .await;
 
                             State::Active(conn)
                         }
@@ -365,7 +375,7 @@ impl TrayService {
 
                             let reload_events = matches!(event, TrayEvent::Registered(_));
 
-                            let _ = output.send(ServiceEvent::Update(event)).await;
+                            publisher(ServiceEvent::Update(event)).await;
 
                             if reload_events {
                                 break;
@@ -383,13 +393,13 @@ impl TrayService {
             State::Error => {
                 error!("Tray service error");
 
-                let _ = pending::<u8>().next().await;
+                pending::<()>().await;
                 State::Error
             }
         }
     }
 
-    async fn menu_voice_selected(
+    pub async fn menu_voice_selected(
         menu_proxy: &DBusMenuProxy<'_>,
         id: i32,
     ) -> anyhow::Result<Layout> {
@@ -406,6 +416,29 @@ impl TrayService {
         let (_, layout) = menu_proxy.get_layout(0, -1, &[]).await?;
 
         Ok(layout)
+    }
+
+    pub fn prepare_command(&self, command: TrayCommand) -> Option<TrayCommandFuture> {
+        match command {
+            TrayCommand::MenuSelected(name, id) => {
+                let menu = self.data.iter().find(|item| item.name == name)?;
+                let proxy = menu.menu_proxy.clone();
+                let tray_name = menu.name.clone();
+
+                Some(Box::pin(async move {
+                    debug!("Click tray menu voice {tray_name} : {id}");
+                    match TrayService::menu_voice_selected(&proxy, id).await {
+                        Ok(new_layout) => ServiceEvent::Update(TrayEvent::MenuLayoutChanged(
+                            tray_name, new_layout,
+                        )),
+                        Err(err) => {
+                            error!("Failed to execute tray command: {err}");
+                            ServiceEvent::Update(TrayEvent::None)
+                        }
+                    }
+                }))
+            }
+        }
     }
 }
 
@@ -449,18 +482,7 @@ impl ReadOnlyService for TrayService {
     }
 
     fn subscribe() -> iced::Subscription<ServiceEvent<Self>> {
-        let id = TypeId::of::<Self>();
-
-        Subscription::run_with_id(
-            id,
-            channel(100, async |mut output| {
-                let mut state = State::Init;
-
-                loop {
-                    state = TrayService::start_listening(state, &mut output).await;
-                }
-            }),
-        )
+        iced::Subscription::none()
     }
 }
 
@@ -469,36 +491,14 @@ pub enum TrayCommand {
     MenuSelected(String, i32),
 }
 
+type TrayCommandFuture = Pin<Box<dyn Future<Output = ServiceEvent<TrayService>> + Send + 'static>>;
+
 impl Service for TrayService {
     type Command = TrayCommand;
 
     fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
-        match command {
-            TrayCommand::MenuSelected(name, id) => {
-                let menu = self.data.iter().find(|item| item.name == name);
-                if let Some(menu) = menu {
-                    let name_cb = name.clone();
-                    Task::perform(
-                        {
-                            let proxy = menu.menu_proxy.clone();
-
-                            async move {
-                                debug!("Click tray menu voice {name} : {id}");
-                                TrayService::menu_voice_selected(&proxy, id).await
-                            }
-                        },
-                        move |new_layout| match new_layout {
-                            Ok(new_layout) => ServiceEvent::Update(TrayEvent::MenuLayoutChanged(
-                                name_cb.clone(),
-                                new_layout,
-                            )),
-                            _ => ServiceEvent::Update(TrayEvent::None),
-                        },
-                    )
-                } else {
-                    Task::none()
-                }
-            }
-        }
+        self.prepare_command(command)
+            .map(|future| Task::perform(future, |event| event))
+            .unwrap_or_else(Task::none)
     }
 }
