@@ -61,7 +61,7 @@ impl KeyboardSubmap {
 
 impl Module for KeyboardSubmap {
     type ViewData<'a> = ();
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -74,7 +74,7 @@ impl Module for KeyboardSubmap {
         }
     }
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         let id = TypeId::of::<Self>();
 
         let hyprland = Arc::clone(&self.hyprland);

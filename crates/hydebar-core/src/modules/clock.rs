@@ -1,17 +1,21 @@
-use crate::app;
+use crate::{ModuleContext, app};
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 use chrono::{DateTime, Local};
 use iced::{Element, Subscription, time::every, widget::text};
 use std::time::Duration;
 
 pub struct Clock {
     date: DateTime<Local>,
+    tick_interval: Duration,
 }
 
 impl Default for Clock {
     fn default() -> Self {
-        Self { date: Local::now() }
+        Self {
+            date: Local::now(),
+            tick_interval: Duration::from_secs(5),
+        }
     }
 }
 
@@ -28,23 +32,9 @@ impl Clock {
             }
         }
     }
-}
 
-impl Module for Clock {
-    type ViewData<'a> = &'a str;
-    type SubscriptionData<'a> = &'a str;
-    fn view(
-        &self,
-        format: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
-        Some((text(self.date.format(format).to_string()).into(), None))
-    }
-
-    fn subscription(
-        &self,
-        format: Self::SubscriptionData<'_>,
-    ) -> Option<Subscription<app::Message>> {
-        let second_specifiers = [
+    fn determine_interval(format: &str) -> Duration {
+        const SECOND_SPECIFIERS: [&str; 6] = [
             "%S",  // Seconds (00-60)
             "%T",  // Hour:Minute:Second
             "%X",  // Locale time representation with seconds
@@ -52,14 +42,40 @@ impl Module for Clock {
             "%:z", // UTC offset with seconds
             "%s",  // Unix timestamp (seconds since epoch)
         ];
-        let interval = if second_specifiers.iter().any(|&spec| format.contains(spec)) {
+
+        if SECOND_SPECIFIERS
+            .iter()
+            .any(|specifier| format.contains(specifier))
+        {
             Duration::from_secs(1)
         } else {
             Duration::from_secs(5)
-        };
+        }
+    }
+}
 
+impl Module for Clock {
+    type ViewData<'a> = &'a str;
+    type RegistrationData<'a> = &'a str;
+
+    fn register(
+        &mut self,
+        _: &ModuleContext,
+        format: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.tick_interval = Self::determine_interval(format);
+        Ok(())
+    }
+    fn view(
+        &self,
+        format: Self::ViewData<'_>,
+    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+        Some((text(self.date.format(format).to_string()).into(), None))
+    }
+
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(
-            every(interval)
+            every(self.tick_interval)
                 .map(|_| Message::Update)
                 .map(app::Message::Clock),
         )

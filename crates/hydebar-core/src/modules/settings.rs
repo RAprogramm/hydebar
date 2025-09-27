@@ -644,7 +644,7 @@ impl Settings {
 
 impl Module for Settings {
     type ViewData<'a> = ();
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -693,7 +693,7 @@ impl Module for Settings {
         ))
     }
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(
             Subscription::batch(vec![
                 UPowerService::subscribe()

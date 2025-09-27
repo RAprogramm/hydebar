@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+## [0.4.0] - 2025-09-30
+
+### Changed
+
+- Replace module subscription configuration with a registration hook that receives
+  `ModuleContext`, allowing modules to cache typed senders and initialise state
+  before exposing subscriptions.
+- Persist registration data for clock, updates, workspaces, and custom modules so
+  subscriptions no longer require borrowed configuration.
+- Wire the GUI to construct a shared `ModuleContext`, register modules on startup
+  and configuration reloads, and batch module subscriptions with the existing
+  application subscriptions.
+
 ## [0.3.6] - 2025-09-29
 
 ### Added

@@ -1,6 +1,6 @@
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    app,
+    ModuleContext, app,
     config::{AppearanceColor, WorkspaceVisibilityMode, WorkspacesModuleConfig},
     outputs::Outputs,
     style::workspace_button_style,
@@ -137,6 +137,12 @@ fn map_snapshot_to_workspaces(
 pub struct Workspaces {
     hyprland: Arc<dyn HyprlandPort>,
     workspaces: Vec<Workspace>,
+    registration: Option<WorkspacesRegistration>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct WorkspacesRegistration {
+    enable_workspace_filling: bool,
 }
 
 impl Workspaces {
@@ -146,6 +152,7 @@ impl Workspaces {
         Self {
             hyprland,
             workspaces,
+            registration: None,
         }
     }
 
@@ -213,7 +220,19 @@ impl Module for Workspaces {
         &'a [AppearanceColor],
         Option<&'a [AppearanceColor]>,
     );
-    type SubscriptionData<'a> = &'a WorkspacesModuleConfig;
+    type RegistrationData<'a> = &'a WorkspacesModuleConfig;
+
+    fn register(
+        &mut self,
+        _: &ModuleContext,
+        config: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.registration = Some(WorkspacesRegistration {
+            enable_workspace_filling: config.enable_workspace_filling,
+        });
+
+        Ok(())
+    }
 
     fn view(
         &'_ self,
@@ -294,12 +313,10 @@ impl Module for Workspaces {
         ))
     }
 
-    fn subscription(
-        &self,
-        config: Self::SubscriptionData<'_>,
-    ) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
+        let registration = self.registration?;
         let id = TypeId::of::<Self>();
-        let enable_workspace_filling = config.enable_workspace_filling;
+        let enable_workspace_filling = registration.enable_workspace_filling;
 
         let hyprland = Arc::clone(&self.hyprland);
 

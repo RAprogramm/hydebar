@@ -1,7 +1,11 @@
+use std::borrow::Cow;
+
 use crate::{
     app::{self, App, Message},
     config::{AppearanceStyle, ModuleDef, ModuleName},
+    event_bus::EventBusError,
     menu::MenuType,
+    module_context::ModuleContext,
     position_button::position_button,
     style::module_button_style,
 };
@@ -28,6 +32,7 @@ pub mod window_title;
 pub mod workspaces;
 
 use log::error;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub enum OnModulePress {
@@ -35,16 +40,86 @@ pub enum OnModulePress {
     ToggleMenu(MenuType),
 }
 
+/// Errors that can occur while registering a module.
+#[derive(Debug, Error)]
+pub enum ModuleError {
+    /// Propagates failures originating from the event bus.
+    #[error("module event bus interaction failed: {0}")]
+    EventBus(#[from] EventBusError),
+    /// Domain-specific registration failures surfaced by the module.
+    #[error("module registration failed: {reason}")]
+    Registration { reason: Cow<'static, str> },
+}
+
+impl ModuleError {
+    /// Construct a registration error with the provided reason.
+    pub fn registration(reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Registration {
+            reason: reason.into(),
+        }
+    }
+}
+
+/// Behaviour shared by all UI modules rendered inside the bar.
+///
+/// Modules receive configuration snapshots as [`ViewData`](Module::ViewData) when rendering and
+/// may opt into background work by overriding [`subscription`](Module::subscription). The
+/// [`register`](Module::register) hook exposes the shared [`ModuleContext`], allowing modules to
+/// cache typed event senders or eagerly request redraws during initialisation.
 pub trait Module {
     type ViewData<'a>;
-    type SubscriptionData<'a>;
+    type RegistrationData<'a>;
+
+    /// Register the module with the shared runtime context.
+    ///
+    /// The default implementation performs no work. Implementations can use the [`ModuleContext`]
+    /// to, for example, acquire a [`ModuleEventSender`](crate::ModuleEventSender) tied to their
+    /// event enum:
+    ///
+    /// ```no_run
+    /// use hydebar_core::event_bus::ModuleEvent;
+    /// use hydebar_core::modules::{Module, ModuleError};
+    /// use hydebar_core::ModuleContext;
+    ///
+    /// #[derive(Default)]
+    /// struct ExampleModule {
+    ///     sender: Option<hydebar_core::ModuleEventSender<ExampleMessage>>,
+    /// }
+    ///
+    /// #[derive(Debug, Clone)]
+    /// enum ExampleMessage {
+    ///     Tick,
+    /// }
+    ///
+    /// impl Module for ExampleModule {
+    ///     type ViewData<'a> = ();
+    ///     type RegistrationData<'a> = ();
+    ///
+    ///     fn register(
+    ///         &mut self,
+    ///         ctx: &ModuleContext,
+    ///         _data: Self::RegistrationData<'_>,
+    ///     ) -> Result<(), ModuleError> {
+    ///         self.sender = Some(ctx.module_sender(ModuleEvent::Clock));
+    ///         Ok(())
+    ///     }
+    /// }
+    /// ```
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        data: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        let _ = (ctx, data);
+        Ok(())
+    }
 
     fn view(
         &self,
         data: Self::ViewData<'_>,
     ) -> Option<(Element<app::Message>, Option<OnModulePress>)>;
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         None
     }
 }
@@ -52,7 +127,7 @@ pub trait Module {
 impl App {
     pub fn modules_section(
         &self,
-        modules_def: &Vec<ModuleDef>,
+        modules_def: &[ModuleDef],
         id: Id,
         opacity: f32,
     ) -> Element<Message> {
@@ -73,19 +148,26 @@ impl App {
     }
 
     pub fn modules_subscriptions(&self, modules_def: &[ModuleDef]) -> Vec<Subscription<Message>> {
-        modules_def
-            .iter()
-            .flat_map(|module_def| match module_def {
+        let mut subscriptions = Vec::new();
+
+        for module_def in modules_def {
+            match module_def {
                 ModuleDef::Single(module) => {
-                    vec![self.get_module_subscription(module)]
+                    if let Some(subscription) = self.get_module_subscription(module) {
+                        subscriptions.push(subscription);
+                    }
                 }
-                ModuleDef::Group(group) => group
-                    .iter()
-                    .map(|module| self.get_module_subscription(module))
-                    .collect(),
-            })
-            .flatten()
-            .collect()
+                ModuleDef::Group(group) => {
+                    for module in group {
+                        if let Some(subscription) = self.get_module_subscription(module) {
+                            subscriptions.push(subscription);
+                        }
+                    }
+                }
+            }
+        }
+
+        subscriptions
     }
 
     fn single_module_wrapper(
@@ -272,34 +354,38 @@ impl App {
 
     fn get_module_subscription(&self, module_name: &ModuleName) -> Option<Subscription<Message>> {
         match module_name {
-            ModuleName::AppLauncher => self.app_launcher.subscription(()),
-            ModuleName::Custom(name) => self
-                .config
-                .custom_modules
-                .iter()
-                .find(|m| &m.name == name)
-                .and_then(|mc| self.custom.get(name).map(|cm| cm.subscription(mc)))
-                .unwrap_or_else(|| {
+            ModuleName::AppLauncher => self.app_launcher.subscription(),
+            ModuleName::Custom(name) => {
+                let Some(module) = self.custom.get(name) else {
+                    error!("Custom module `{name}` not found");
+                    return None;
+                };
+
+                if self
+                    .config
+                    .custom_modules
+                    .iter()
+                    .any(|definition| &definition.name == name)
+                {
+                    module.subscription()
+                } else {
                     error!("Custom module def `{name}` not found");
                     None
-                }),
-            ModuleName::Updates => self
-                .config
-                .updates
-                .as_ref()
-                .and_then(|updates_config| self.updates.subscription(updates_config)),
-            ModuleName::Clipboard => self.clipboard.subscription(()),
-            ModuleName::Workspaces => self.workspaces.subscription(&self.config.workspaces),
-            ModuleName::WindowTitle => self.window_title.subscription(()),
-            ModuleName::SystemInfo => self.system_info.subscription(()),
-            ModuleName::KeyboardLayout => self.keyboard_layout.subscription(()),
-            ModuleName::KeyboardSubmap => self.keyboard_submap.subscription(()),
-            ModuleName::Tray => self.tray.subscription(()),
-            ModuleName::Clock => self.clock.subscription(&self.config.clock.format),
-            ModuleName::Battery => self.battery.subscription(()),
-            ModuleName::Privacy => self.privacy.subscription(()),
-            ModuleName::Settings => self.settings.subscription(()),
-            ModuleName::MediaPlayer => self.media_player.subscription(()),
+                }
+            }
+            ModuleName::Updates => self.updates.subscription(),
+            ModuleName::Clipboard => self.clipboard.subscription(),
+            ModuleName::Workspaces => self.workspaces.subscription(),
+            ModuleName::WindowTitle => self.window_title.subscription(),
+            ModuleName::SystemInfo => self.system_info.subscription(),
+            ModuleName::KeyboardLayout => self.keyboard_layout.subscription(),
+            ModuleName::KeyboardSubmap => self.keyboard_submap.subscription(),
+            ModuleName::Tray => self.tray.subscription(),
+            ModuleName::Clock => self.clock.subscription(),
+            ModuleName::Battery => self.battery.subscription(),
+            ModuleName::Privacy => self.privacy.subscription(),
+            ModuleName::Settings => self.settings.subscription(),
+            ModuleName::MediaPlayer => self.media_player.subscription(),
         }
     }
 }

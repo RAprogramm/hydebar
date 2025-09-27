@@ -11,7 +11,7 @@ pub struct Clipboard;
 
 impl Module for Clipboard {
     type ViewData<'a> = &'a Option<String>;
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,

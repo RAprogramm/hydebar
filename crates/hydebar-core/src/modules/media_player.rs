@@ -149,7 +149,7 @@ impl MediaPlayer {
 
 impl Module for MediaPlayer {
     type ViewData<'a> = &'a MediaPlayerModuleConfig;
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -172,7 +172,7 @@ impl Module for MediaPlayer {
         })
     }
 
-    fn subscription(&self, (): Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(
             MprisPlayerService::subscribe()
                 .map(|event| app::Message::MediaPlayer(Message::Event(event))),

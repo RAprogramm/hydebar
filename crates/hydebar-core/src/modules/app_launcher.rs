@@ -11,7 +11,7 @@ pub struct AppLauncher;
 
 impl Module for AppLauncher {
     type ViewData<'a> = &'a Option<String>;
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,

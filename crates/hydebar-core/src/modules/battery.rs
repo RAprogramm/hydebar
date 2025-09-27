@@ -109,7 +109,7 @@ impl Battery {
 
 impl Module for Battery {
     type ViewData<'a> = &'a BatteryModuleConfig;
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -151,7 +151,7 @@ impl Module for Battery {
         Some((content.into(), action))
     }
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(
             UPowerService::subscription_with_id(TypeId::of::<SubscriptionMarker>())
                 .map(Message::Event)

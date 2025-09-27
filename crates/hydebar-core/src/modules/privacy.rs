@@ -58,7 +58,7 @@ impl Privacy {
 
 impl Module for Privacy {
     type ViewData<'a> = ();
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     /// Render the privacy indicator when data is available.
     fn view(
@@ -96,7 +96,7 @@ impl Module for Privacy {
     }
 
     /// Subscribe to the privacy service updates.
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(PrivacyService::subscribe().map(|e| app::Message::Privacy(PrivacyMessage::Event(e))))
     }
 }
