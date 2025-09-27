@@ -8,7 +8,6 @@ use flexi_logger::{
     Age, Cleanup, Criterion, FileSpec, LogSpecBuilder, LogSpecification, Logger, Naming,
 };
 use hydebar_core::{
-    ModuleContext,
     adapters::hyprland_client::HyprlandClient,
     config::{ConfigLoadError, ConfigManager, get_config},
     event_bus::EventBus,
@@ -21,6 +20,7 @@ use std::panic;
 use std::path::PathBuf;
 use std::{backtrace::Backtrace, borrow::Cow, num::NonZeroUsize, sync::Arc};
 use thiserror::Error;
+use tokio::runtime::Handle;
 
 const ICON_FONT: &[u8] = include_bytes!("../../assets/SymbolsNerdFont-Regular.ttf");
 
@@ -89,7 +89,8 @@ async fn run() -> Result<(), MainError> {
 
     let bus_capacity = NonZeroUsize::new(256).ok_or(MainError::BusCapacity)?;
     let event_bus = EventBus::new(bus_capacity);
-    let module_context = ModuleContext::new(event_bus.sender(), tokio::runtime::Handle::current());
+    let event_sender = event_bus.sender();
+    let runtime_handle = Handle::current();
     let bus_receiver = event_bus.receiver();
 
     iced::daemon(App::title, App::update, App::view)
@@ -105,7 +106,8 @@ async fn run() -> Result<(), MainError> {
             config_manager,
             config_path,
             hyprland,
-            module_context,
+            event_sender,
+            runtime_handle,
             bus_receiver,
         )))
         .map_err(MainError::from)
