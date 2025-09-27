@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-09-27
+
+### Changed
+
+- Move the media player module onto runtime-spawned listeners driven by the
+  shared `ModuleContext`, caching the typed module sender and executing MPRIS
+  commands on the runtime while forwarding results through the event bus.
+- Expose asynchronous helpers from the MPRIS service that surface command
+  failures as `ModuleError` values, aligning service interactions with the
+  runtime-driven pattern.
+
+### Added
+
+- Regression tests covering media player command feedback and listener
+  cancellation to ensure command results reach the UI and background tasks are
+  aborted on re-registration.
+
 ## [0.5.4] - 2025-09-27
 
 ### Changed

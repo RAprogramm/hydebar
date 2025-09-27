@@ -41,7 +41,7 @@ pub enum OnModulePress {
 }
 
 /// Errors that can occur while registering a module.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum ModuleError {
     /// Propagates failures originating from the event bus.
     #[error("module event bus interaction failed: {0}")]
