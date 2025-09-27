@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2025-09-27
+
+### Changed
+
+- Move the system info module to a runtime-driven refresh loop powered by
+  `ModuleContext`, publishing updates through typed module senders instead of
+  iced subscriptions.
+
+### Added
+
+- Unit tests covering periodic refresh scheduling and task teardown to ensure
+  polling loops honour cancellation on re-registration.
+
 ## [0.5.3] - 2025-09-27
 
 ### Changed
