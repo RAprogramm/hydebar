@@ -1,4 +1,4 @@
-use super::{ReadOnlyService, Service, ServiceEvent};
+use super::{ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher};
 use crate::{components::icons::Icons, utils::IndicatorState};
 use dbus::{Battery, PowerProfilesProxy, UPowerDbus};
 use iced::{
@@ -151,11 +151,7 @@ impl UPowerService {
         Subscription::run_with_id(
             id,
             channel(100, async |mut output| {
-                let mut state = State::Init;
-
-                loop {
-                    state = UPowerService::start_listening(state, &mut output).await;
-                }
+                UPowerService::listen(&mut output).await;
             }),
         )
     }
@@ -297,10 +293,10 @@ impl UPowerService {
         Ok(stream_select!(battery_event, power_profile_event))
     }
 
-    pub(crate) async fn start_listening(
-        state: State,
-        output: &mut Sender<ServiceEvent<Self>>,
-    ) -> State {
+    pub(crate) async fn start_listening<P>(state: State, publisher: &mut P) -> State
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
         match state {
             State::Init => match zbus::Connection::system().await {
                 Ok(conn) => {
@@ -322,7 +318,7 @@ impl UPowerService {
                         power_profile,
                         conn: conn.clone(),
                     };
-                    let _ = output.send(ServiceEvent::Init(service)).await;
+                    let _ = publisher.send(ServiceEvent::Init(service)).await;
 
                     State::Active(conn, battery_path)
                 }
@@ -335,7 +331,7 @@ impl UPowerService {
                 match UPowerService::events(&conn, &battery_devices).await {
                     Ok(mut events) => {
                         while let Some(event) = events.next().await {
-                            let _ = output.send(ServiceEvent::Update(event)).await;
+                            let _ = publisher.send(ServiceEvent::Update(event)).await;
                         }
 
                         State::Active(conn, battery_devices)
@@ -354,6 +350,64 @@ impl UPowerService {
             }
         }
     }
+
+    pub async fn listen<P>(publisher: &mut P)
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
+        let mut state = State::Init;
+
+        loop {
+            state = Self::start_listening(state, publisher).await;
+        }
+    }
+
+    pub async fn run_command(self, command: PowerProfileCommand) -> ServiceEvent<Self> {
+        let conn = self.conn.clone();
+        let power_profile = self.power_profile;
+
+        let powerprofiles = match PowerProfilesProxy::new(&conn).await {
+            Ok(proxy) => proxy,
+            Err(err) => {
+                error!("Failed to create PowerProfilesProxy: {err}");
+                return ServiceEvent::Error(());
+            }
+        };
+
+        let next_profile = match command {
+            PowerProfileCommand::Toggle => match power_profile {
+                PowerProfile::Balanced => {
+                    if powerprofiles
+                        .set_active_profile("performance")
+                        .await
+                        .is_err()
+                    {
+                        return ServiceEvent::Error(());
+                    }
+                    PowerProfile::Performance
+                }
+                PowerProfile::Performance => {
+                    if powerprofiles
+                        .set_active_profile("power-saver")
+                        .await
+                        .is_err()
+                    {
+                        return ServiceEvent::Error(());
+                    }
+                    PowerProfile::PowerSaver
+                }
+                PowerProfile::PowerSaver => {
+                    if powerprofiles.set_active_profile("balanced").await.is_err() {
+                        return ServiceEvent::Error(());
+                    }
+                    PowerProfile::Balanced
+                }
+                PowerProfile::Unknown => PowerProfile::Unknown,
+            },
+        };
+
+        ServiceEvent::Update(UPowerEvent::UpdatePowerProfile(next_profile))
+    }
 }
 
 pub enum PowerProfileCommand {
@@ -364,41 +418,11 @@ impl Service for UPowerService {
     type Command = PowerProfileCommand;
 
     fn command(&mut self, command: Self::Command) -> iced::Task<ServiceEvent<Self>> {
+        let service = self.clone();
+
         iced::Task::perform(
-            {
-                let conn = self.conn.clone();
-                let power_profile = self.power_profile;
-                async move {
-                    let powerprofiles = PowerProfilesProxy::new(&conn)
-                        .await
-                        .expect("Failed to create PowerProfilesProxy");
-
-                    match command {
-                        PowerProfileCommand::Toggle => {
-                            let current_profile = power_profile;
-                            match current_profile {
-                                PowerProfile::Balanced => {
-                                    let _ = powerprofiles.set_active_profile("performance").await;
-
-                                    PowerProfile::Performance
-                                }
-                                PowerProfile::Performance => {
-                                    let _ = powerprofiles.set_active_profile("power-saver").await;
-
-                                    PowerProfile::PowerSaver
-                                }
-                                PowerProfile::PowerSaver => {
-                                    let _ = powerprofiles.set_active_profile("balanced").await;
-
-                                    PowerProfile::Balanced
-                                }
-                                PowerProfile::Unknown => PowerProfile::Unknown,
-                            }
-                        }
-                    }
-                }
-            },
-            |power_profile| ServiceEvent::Update(UPowerEvent::UpdatePowerProfile(power_profile)),
+            async move { UPowerService::run_command(service, command).await },
+            |event| event,
         )
     }
 }

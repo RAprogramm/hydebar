@@ -1,4 +1,8 @@
-use iced::{Subscription, Task};
+use iced::{
+    Subscription, Task,
+    futures::{SinkExt, channel::mpsc::Sender},
+};
+use std::{future::Future, pin::Pin};
 
 pub mod audio;
 pub mod bluetooth;
@@ -30,4 +34,28 @@ pub trait ReadOnlyService: Sized {
     fn update(&mut self, event: Self::UpdateEvent);
 
     fn subscribe() -> Subscription<ServiceEvent<Self>>;
+}
+
+pub trait ServiceEventPublisher<S: ReadOnlyService> {
+    type SendFuture<'a>: Future<Output = ()> + Send + 'a
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<S>) -> Self::SendFuture<'_>;
+}
+
+impl<S> ServiceEventPublisher<S> for Sender<ServiceEvent<S>>
+where
+    S: ReadOnlyService + 'static,
+{
+    type SendFuture<'a>
+        = Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<S>) -> Self::SendFuture<'_> {
+        Box::pin(async move {
+            let _ = self.send(event).await;
+        })
+    }
 }

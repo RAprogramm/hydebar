@@ -1,4 +1,4 @@
-use super::{Service, ServiceEvent};
+use super::{Service, ServiceEvent, ServiceEventPublisher};
 use crate::services::ReadOnlyService;
 use dbus::ConnectivityState;
 use dbus::NetworkDbus;
@@ -255,11 +255,7 @@ impl ReadOnlyService for NetworkService {
         Subscription::run_with_id(
             id,
             channel(50, async |mut output| {
-                let mut state = State::Init;
-
-                loop {
-                    state = NetworkService::start_listening(state, &mut output).await;
-                }
+                NetworkService::listen(&mut output).await;
             }),
         )
     }
@@ -391,12 +387,10 @@ impl NetworkService {
         self.data.last_error = Some(error);
     }
 
-    async fn consume_network_events<S>(
-        mut events: S,
-        output: &mut Sender<ServiceEvent<Self>>,
-    ) -> anyhow::Result<()>
+    async fn consume_network_events<S, P>(mut events: S, publisher: &mut P) -> anyhow::Result<()>
     where
         S: Stream<Item = anyhow::Result<NetworkEvent>> + Unpin,
+        P: ServiceEventPublisher<Self> + Send,
     {
         while let Some(event) = events.next().await {
             let event = event?;
@@ -404,7 +398,7 @@ impl NetworkService {
             if let NetworkEvent::WirelessDevice { .. } = event {
                 exit_loop = true;
             }
-            let _ = output.send(ServiceEvent::Update(event)).await;
+            let _ = publisher.send(ServiceEvent::Update(event)).await;
 
             if exit_loop {
                 break;
@@ -414,11 +408,13 @@ impl NetworkService {
         Ok(())
     }
 
-    async fn start_listening(state: State, output: &mut Sender<ServiceEvent<Self>>) -> State {
+    async fn start_listening<P>(state: State, publisher: &mut P) -> State
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
         match state {
             State::Init => match zbus::Connection::system().await {
                 Ok(conn) => {
-                    // get first backend that is available
                     info!("Connecting to backend");
                     let maybe_backend: Result<(NetworkData, BackendChoice), _> =
                         match NetworkDbus::new(&conn)
@@ -453,7 +449,7 @@ impl NetworkService {
                     match maybe_backend {
                         Ok((data, choice)) => {
                             info!("Network service initialized");
-                            let _ = output
+                            let _ = publisher
                                 .send(ServiceEvent::Init(NetworkService {
                                     data,
                                     conn: conn.clone(),
@@ -469,7 +465,7 @@ impl NetworkService {
                                 error!("Failed to initialize network service: {err}");
                             }
                             let error = NetworkServiceError::from(err);
-                            let _ = output.send(ServiceEvent::Error(error)).await;
+                            let _ = publisher.send(ServiceEvent::Error(error)).await;
                             State::Error
                         }
                     }
@@ -478,7 +474,7 @@ impl NetworkService {
                     error!("Failed to connect to system bus: {err}");
                     let error =
                         NetworkServiceError::new(format!("Failed to connect to system bus: {err}"));
-                    let _ = output.send(ServiceEvent::Error(error)).await;
+                    let _ = publisher.send(ServiceEvent::Error(error)).await;
 
                     State::Error
                 }
@@ -486,7 +482,6 @@ impl NetworkService {
             State::Active(conn, choice) => {
                 info!("Listening for network events");
 
-                // TODO: i dont know how to combine the opaque types.. rust streams
                 match choice {
                     BackendChoice::NetworkManager => {
                         let nm = match NetworkDbus::new(&conn).await {
@@ -494,14 +489,14 @@ impl NetworkService {
                             Err(e) => {
                                 error!("Failed to create NetworkDbus: {e}");
                                 let error = NetworkServiceError::from(e);
-                                let _ = output.send(ServiceEvent::Error(error)).await;
+                                let _ = publisher.send(ServiceEvent::Error(error)).await;
                                 return State::Error;
                             }
                         };
 
                         match nm.subscribe_events().await {
                             Ok(events) => {
-                                match Self::consume_network_events(events, output).await {
+                                match Self::consume_network_events(events, publisher).await {
                                     Ok(()) => {
                                         debug!("Network service exit events stream");
                                         State::Active(conn, choice)
@@ -509,7 +504,7 @@ impl NetworkService {
                                     Err(err) => {
                                         error!("Network event stream error: {err}");
                                         let error = NetworkServiceError::from(err);
-                                        let _ = output.send(ServiceEvent::Error(error)).await;
+                                        let _ = publisher.send(ServiceEvent::Error(error)).await;
                                         State::Error
                                     }
                                 }
@@ -517,7 +512,7 @@ impl NetworkService {
                             Err(err) => {
                                 error!("Failed to listen for network events: {err}");
                                 let error = NetworkServiceError::from(err);
-                                let _ = output.send(ServiceEvent::Error(error)).await;
+                                let _ = publisher.send(ServiceEvent::Error(error)).await;
 
                                 State::Error
                             }
@@ -529,7 +524,7 @@ impl NetworkService {
                             Err(err) => {
                                 error!("Failed to create IwdDbus: {err}");
                                 let error = NetworkServiceError::from(err);
-                                let _ = output.send(ServiceEvent::Error(error)).await;
+                                let _ = publisher.send(ServiceEvent::Error(error)).await;
                                 return State::Error;
                             }
                         };
@@ -537,10 +532,7 @@ impl NetworkService {
                             Ok(mut event_s) => {
                                 while let Some(events) = event_s.next().await {
                                     for event in events {
-                                        // TODO: network manager leaves with device - we can also
-                                        // do that, but would need a different way to disable
-                                        // scanning
-                                        let _ = output.send(ServiceEvent::Update(event)).await;
+                                        let _ = publisher.send(ServiceEvent::Update(event)).await;
                                     }
                                 }
 
@@ -551,7 +543,7 @@ impl NetworkService {
                             Err(err) => {
                                 error!("Failed to listen for network events: {err}");
                                 let error = NetworkServiceError::from(err);
-                                let _ = output.send(ServiceEvent::Error(error)).await;
+                                let _ = publisher.send(ServiceEvent::Error(error)).await;
 
                                 State::Error
                             }
@@ -568,66 +560,58 @@ impl NetworkService {
             }
         }
     }
-}
 
-impl Service for NetworkService {
-    type Command = NetworkCommand;
+    pub async fn listen<P>(publisher: &mut P)
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
+        let mut state = State::Init;
 
-    fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
-        debug!("Command: {command:?}");
-        let conn = self.conn.clone();
-        let mut bc = self.backend_choice.with_connection(conn);
+        loop {
+            state = Self::start_listening(state, publisher).await;
+        }
+    }
+
+    pub async fn run_command(mut self, command: NetworkCommand) -> ServiceEvent<Self> {
+        let mut bc = self.backend_choice.with_connection(self.conn.clone());
+
         match command {
             NetworkCommand::ToggleAirplaneMode => {
                 let airplane_mode = self.airplane_mode;
+                debug!("Toggling airplane mode to: {}", !airplane_mode);
+                let result = bc.set_airplane_mode(!airplane_mode).await;
+                let new_state = if result.is_ok() {
+                    !airplane_mode
+                } else {
+                    airplane_mode
+                };
 
-                Task::perform(
-                    async move {
-                        debug!("Toggling airplane mode to: {}", !airplane_mode);
-                        let res = bc.set_airplane_mode(!airplane_mode).await;
-
-                        if res.is_ok() {
-                            !airplane_mode
-                        } else {
-                            airplane_mode
-                        }
-                    },
-                    |airplane_mode| ServiceEvent::Update(NetworkEvent::AirplaneMode(airplane_mode)),
-                )
+                ServiceEvent::Update(NetworkEvent::AirplaneMode(new_state))
             }
-            NetworkCommand::ScanNearByWiFi => Task::perform(
-                async move {
-                    let _ = bc.scan_nearby_wifi().await;
-                },
-                |_| ServiceEvent::Update(NetworkEvent::ScanningNearbyWifi),
-            ),
+            NetworkCommand::ScanNearByWiFi => {
+                let _ = bc.scan_nearby_wifi().await;
+                ServiceEvent::Update(NetworkEvent::ScanningNearbyWifi)
+            }
             NetworkCommand::ToggleWiFi => {
                 let wifi_enabled = self.wifi_enabled;
+                debug!("Toggling wifi to: {}", !wifi_enabled);
+                let result = bc.set_wifi_enabled(!wifi_enabled).await;
+                let new_state = if result.is_ok() {
+                    !wifi_enabled
+                } else {
+                    wifi_enabled
+                };
 
-                Task::perform(
-                    async move {
-                        let res = bc.set_wifi_enabled(!wifi_enabled).await;
-
-                        if res.is_ok() {
-                            !wifi_enabled
-                        } else {
-                            wifi_enabled
-                        }
-                    },
-                    |wifi_enabled| ServiceEvent::Update(NetworkEvent::WiFiEnabled(wifi_enabled)),
-                )
+                ServiceEvent::Update(NetworkEvent::WiFiEnabled(new_state))
             }
-            NetworkCommand::SelectAccessPoint((access_point, password)) => Task::perform(
-                async move {
-                    bc.select_access_point(&access_point, password)
-                        .await
-                        .unwrap_or_default();
-                    bc.known_connections().await.unwrap_or_default()
-                },
-                |known_connections| {
-                    ServiceEvent::Update(NetworkEvent::KnownConnections(known_connections))
-                },
-            ),
+            NetworkCommand::SelectAccessPoint((access_point, password)) => {
+                bc.select_access_point(&access_point, password)
+                    .await
+                    .unwrap_or_default();
+                let known_connections = bc.known_connections().await.unwrap_or_default();
+
+                ServiceEvent::Update(NetworkEvent::KnownConnections(known_connections))
+            }
             NetworkCommand::ToggleVpn(vpn) => {
                 let mut active_vpn = self.active_connections.iter().find_map(|kc| match kc {
                     ActiveConnectionInfo::Vpn { name, object_path } if name == &vpn.name => {
@@ -636,24 +620,32 @@ impl Service for NetworkService {
                     _ => None,
                 });
 
-                Task::perform(
-                    async move {
-                        let (object_path, new_state) = if let Some(active_vpn) = active_vpn.take() {
-                            (active_vpn, false)
-                        } else {
-                            (vpn.path, true)
-                        };
-                        bc.set_vpn(object_path, new_state).await.unwrap_or_default();
-                        let res = bc.known_connections().await;
-                        debug!("VPN toggled: {res:?}");
-                        res.unwrap_or_default()
-                    },
-                    |known_connections| {
-                        ServiceEvent::Update(NetworkEvent::KnownConnections(known_connections))
-                    },
-                )
+                let (object_path, new_state) = if let Some(active_vpn) = active_vpn.take() {
+                    (active_vpn, false)
+                } else {
+                    (vpn.path, true)
+                };
+
+                bc.set_vpn(object_path, new_state).await.unwrap_or_default();
+                let known_connections = bc.known_connections().await.unwrap_or_default();
+
+                ServiceEvent::Update(NetworkEvent::KnownConnections(known_connections))
             }
         }
+    }
+}
+
+impl Service for NetworkService {
+    type Command = NetworkCommand;
+
+    fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
+        debug!("Command: {command:?}");
+        let service = self.clone();
+
+        Task::perform(
+            async move { NetworkService::run_command(service, command).await },
+            |event| event,
+        )
     }
 }
 

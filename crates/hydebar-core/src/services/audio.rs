@@ -1,4 +1,4 @@
-use super::{ReadOnlyService, Service, ServiceEvent};
+use super::{ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher};
 use crate::components::icons::Icons;
 use iced::{
     Subscription, Task,
@@ -161,11 +161,14 @@ impl AudioService {
         PulseAudioServer::start().await
     }
 
-    async fn start_listening(state: State, output: &mut Sender<ServiceEvent<Self>>) -> State {
+    async fn start_listening<P>(state: State, publisher: &mut P) -> State
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
         match state {
             State::Init => match Self::init_service().await {
                 Ok(handle) => {
-                    let _ = output
+                    let _ = publisher
                         .send(ServiceEvent::Init(AudioService {
                             data: AudioData {
                                 server_info: ServerInfo::default(),
@@ -190,21 +193,21 @@ impl AudioService {
                     State::Error
                 }
                 Some(PulseAudioServerEvent::Sinks(sinks)) => {
-                    let _ = output
+                    let _ = publisher
                         .send(ServiceEvent::Update(AudioEvent::Sinks(sinks)))
                         .await;
 
                     State::Active(handle)
                 }
                 Some(PulseAudioServerEvent::Sources(sources)) => {
-                    let _ = output
+                    let _ = publisher
                         .send(ServiceEvent::Update(AudioEvent::Sources(sources)))
                         .await;
 
                     State::Active(handle)
                 }
                 Some(PulseAudioServerEvent::ServerInfo(info)) => {
-                    let _ = output
+                    let _ = publisher
                         .send(ServiceEvent::Update(AudioEvent::ServerInfo(info)))
                         .await;
 
@@ -219,6 +222,92 @@ impl AudioService {
                 State::Error
             }
         }
+    }
+
+    pub async fn listen<P>(publisher: &mut P)
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
+        let mut state = State::Init;
+
+        loop {
+            state = Self::start_listening(state, publisher).await;
+        }
+    }
+
+    fn apply_command(&mut self, command: AudioCommand) {
+        match command {
+            AudioCommand::ToggleSinkMute => {
+                if let Some(sink) = self
+                    .data
+                    .sinks
+                    .iter()
+                    .find(|sink| sink.name == self.data.server_info.default_sink)
+                {
+                    let _ = self.commander.send(PulseAudioCommand::SinkMute(
+                        sink.name.clone(),
+                        !sink.is_mute,
+                    ));
+                }
+            }
+            AudioCommand::ToggleSourceMute => {
+                if let Some(source) = self
+                    .data
+                    .sources
+                    .iter()
+                    .find(|source| source.name == self.data.server_info.default_source)
+                {
+                    let _ = self.commander.send(PulseAudioCommand::SourceMute(
+                        source.name.clone(),
+                        !source.is_mute,
+                    ));
+                }
+            }
+            AudioCommand::SinkVolume(volume) => {
+                if let Some(sink) = self
+                    .data
+                    .sinks
+                    .iter_mut()
+                    .find(|sink| sink.name == self.data.server_info.default_sink)
+                {
+                    if let Some(volume) = sink.volume.scale_volume(volume as f64 / 100.) {
+                        let _ = self
+                            .commander
+                            .send(PulseAudioCommand::SinkVolume(sink.name.clone(), *volume));
+                    }
+                }
+            }
+            AudioCommand::SourceVolume(volume) => {
+                if let Some(source) = self
+                    .data
+                    .sources
+                    .iter_mut()
+                    .find(|source| source.name == self.data.server_info.default_source)
+                {
+                    if let Some(volume) = source.volume.scale_volume(volume as f64 / 100.) {
+                        let _ = self.commander.send(PulseAudioCommand::SourceVolume(
+                            source.name.clone(),
+                            *volume,
+                        ));
+                    }
+                }
+            }
+            AudioCommand::DefaultSink(name, port) => {
+                let _ = self
+                    .commander
+                    .send(PulseAudioCommand::DefaultSink(name, port));
+            }
+            AudioCommand::DefaultSource(name, port) => {
+                let _ = self
+                    .commander
+                    .send(PulseAudioCommand::DefaultSource(name, port));
+            }
+        }
+    }
+
+    pub async fn run_command(mut self, command: AudioCommand) -> Option<ServiceEvent<Self>> {
+        self.apply_command(command);
+        None
     }
 }
 
@@ -339,11 +428,7 @@ impl ReadOnlyService for AudioService {
         Subscription::run_with_id(
             id,
             channel(100, async |mut output| {
-                let mut state = State::Init;
-
-                loop {
-                    state = AudioService::start_listening(state, &mut output).await;
-                }
+                AudioService::listen(&mut output).await;
             }),
         )
     }
@@ -362,74 +447,7 @@ impl Service for AudioService {
     type Command = AudioCommand;
 
     fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
-        match command {
-            AudioCommand::ToggleSinkMute => {
-                if let Some(sink) = self
-                    .data
-                    .sinks
-                    .iter()
-                    .find(|sink| sink.name == self.data.server_info.default_sink)
-                {
-                    let _ = self.commander.send(PulseAudioCommand::SinkMute(
-                        sink.name.clone(),
-                        !sink.is_mute,
-                    ));
-                }
-            }
-            AudioCommand::ToggleSourceMute => {
-                if let Some(source) = self
-                    .data
-                    .sources
-                    .iter()
-                    .find(|source| source.name == self.data.server_info.default_source)
-                {
-                    let _ = self.commander.send(PulseAudioCommand::SourceMute(
-                        source.name.clone(),
-                        !source.is_mute,
-                    ));
-                }
-            }
-            AudioCommand::SinkVolume(volume) => {
-                if let Some(sink) = self
-                    .data
-                    .sinks
-                    .iter_mut()
-                    .find(|sink| sink.name == self.data.server_info.default_sink)
-                {
-                    if let Some(volume) = sink.volume.scale_volume(volume as f64 / 100.) {
-                        let _ = self
-                            .commander
-                            .send(PulseAudioCommand::SinkVolume(sink.name.clone(), *volume));
-                    }
-                }
-            }
-            AudioCommand::SourceVolume(volume) => {
-                if let Some(source) = self
-                    .data
-                    .sources
-                    .iter_mut()
-                    .find(|source| source.name == self.data.server_info.default_source)
-                {
-                    if let Some(volume) = source.volume.scale_volume(volume as f64 / 100.) {
-                        let _ = self.commander.send(PulseAudioCommand::SourceVolume(
-                            source.name.clone(),
-                            *volume,
-                        ));
-                    }
-                }
-            }
-            AudioCommand::DefaultSink(name, port) => {
-                let _ = self
-                    .commander
-                    .send(PulseAudioCommand::DefaultSink(name, port));
-            }
-            AudioCommand::DefaultSource(name, port) => {
-                let _ = self
-                    .commander
-                    .send(PulseAudioCommand::DefaultSource(name, port));
-            }
-        }
-
+        self.apply_command(command);
         iced::Task::none()
     }
 }
