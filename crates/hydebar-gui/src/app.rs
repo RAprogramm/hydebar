@@ -558,7 +558,10 @@ impl App {
                 self.battery.update(message);
                 Task::none()
             }
-            Message::Privacy(msg) => self.privacy.update(msg),
+            Message::Privacy(msg) => {
+                self.privacy.update(msg);
+                Task::none()
+            }
             Message::Settings(message) => self.settings.update(
                 message,
                 &self.config.settings,
