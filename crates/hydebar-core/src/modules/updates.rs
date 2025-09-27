@@ -1,24 +1,23 @@
 use crate::{
-    ModuleContext,
+    ModuleContext, ModuleEventSender,
     app::{self},
     components::icons::{Icons, icon},
     config::UpdatesModuleConfig,
+    event_bus::ModuleEvent,
     menu::MenuType,
     outputs::Outputs,
     style::ghost_button_style,
 };
 use iced::{
-    Alignment, Element, Length, Padding, Subscription, Task,
+    Alignment, Element, Length, Padding, Task,
     alignment::Horizontal,
-    futures::channel::mpsc::{Sender, TrySendError},
-    stream::channel,
     widget::{Column, button, column, container, horizontal_rule, row, scrollable, text},
     window::Id,
 };
-use log::error;
+use log::{error, warn};
 use serde::Deserialize;
-use std::{any::TypeId, convert, process::Stdio, sync::Arc, time::Duration};
-use tokio::{process, spawn, time::sleep};
+use std::{convert, process::Stdio, sync::Arc, time::Duration};
+use tokio::{process, runtime::Handle, task::JoinHandle, time::sleep};
 
 use super::{Module, ModuleError, OnModulePress};
 
@@ -96,18 +95,22 @@ pub struct Updates {
     pub updates: Vec<Update>,
     pub is_updates_list_open: bool,
     registration: Option<UpdatesRegistration>,
+    sender: Option<ModuleEventSender<Message>>,
+    runtime: Option<Handle>,
+    tasks: Vec<JoinHandle<()>>,
 }
 
 #[derive(Debug, Clone)]
 struct UpdatesRegistration {
     check_command: Arc<str>,
+    update_command: Arc<str>,
 }
 
 impl Updates {
     pub fn update(
         &mut self,
         message: Message,
-        config: &UpdatesModuleConfig,
+        _config: &UpdatesModuleConfig,
         outputs: &mut Outputs,
         main_config: &crate::config::Config,
     ) -> Task<crate::app::Message> {
@@ -131,29 +134,53 @@ impl Updates {
             }
             Message::CheckNow => {
                 self.state = State::Checking;
-                let check_command = config.check_cmd.clone();
-                Task::perform(
-                    async move { check_update_now(&check_command).await },
-                    move |updates| app::Message::Updates(Message::UpdatesCheckCompleted(updates)),
-                )
+
+                match (
+                    self.runtime.clone(),
+                    self.sender.clone(),
+                    self.registration
+                        .as_ref()
+                        .map(|registration| Arc::clone(&registration.check_command)),
+                ) {
+                    (Some(runtime), Some(sender), Some(check_command)) => {
+                        runtime.spawn(async move {
+                            let updates = check_update_now(check_command.as_ref()).await;
+
+                            if let Err(err) =
+                                sender.try_send(Message::UpdatesCheckCompleted(updates))
+                            {
+                                error!("failed to publish updates check result: {err}");
+                            }
+                        });
+                    }
+                    _ => {
+                        warn!("updates module is not fully initialised; skipping manual check");
+                        self.state = State::Ready;
+                    }
+                }
+
+                Task::none()
             }
             Message::Update(id) => {
-                let update_command = config.update_cmd.clone();
-                let mut cmds = vec![Task::perform(
-                    async move {
-                        spawn({
-                            async move {
-                                update(&update_command).await;
-                            }
-                        })
-                        .await
-                    },
-                    move |_| app::Message::Updates(Message::UpdateFinished),
-                )];
+                if let (Some(runtime), Some(sender), Some(registration)) = (
+                    self.runtime.clone(),
+                    self.sender.clone(),
+                    self.registration.as_ref(),
+                ) {
+                    let update_command = Arc::clone(&registration.update_command);
 
-                cmds.push(outputs.close_menu_if(id, MenuType::Updates, main_config));
+                    runtime.spawn(async move {
+                        update(update_command.as_ref()).await;
 
-                Task::batch(cmds)
+                        if let Err(err) = sender.try_send(Message::UpdateFinished) {
+                            error!("failed to publish update completion: {err}");
+                        }
+                    });
+                } else {
+                    warn!("updates module is not fully initialised; skipping update command");
+                }
+
+                outputs.close_menu_if(id, MenuType::Updates, main_config)
             }
         }
     }
@@ -255,12 +282,40 @@ impl Module for Updates {
 
     fn register(
         &mut self,
-        _: &ModuleContext,
+        ctx: &ModuleContext,
         config: Self::RegistrationData<'_>,
     ) -> Result<(), ModuleError> {
+        self.sender = Some(ctx.module_sender(ModuleEvent::Updates));
+        self.runtime = Some(ctx.runtime_handle().clone());
+
+        for task in self.tasks.drain(..) {
+            task.abort();
+        }
+
         self.registration = config.map(|definition| UpdatesRegistration {
             check_command: Arc::from(definition.check_cmd.as_str()),
+            update_command: Arc::from(definition.update_cmd.as_str()),
         });
+
+        if let (Some(registration), Some(sender)) =
+            (self.registration.as_ref(), self.sender.clone())
+        {
+            let check_command = Arc::clone(&registration.check_command);
+
+            let task = ctx.runtime_handle().spawn(async move {
+                loop {
+                    let updates = check_update_now(check_command.as_ref()).await;
+
+                    if let Err(err) = sender.try_send(Message::UpdatesCheckCompleted(updates)) {
+                        error!("failed to publish scheduled updates check: {err}");
+                    }
+
+                    sleep(Duration::from_secs(3600)).await;
+                }
+            });
+
+            self.tasks.push(task);
+        }
 
         Ok(())
     }
@@ -290,63 +345,159 @@ impl Module for Updates {
             None
         }
     }
-
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        let registration = self.registration.as_ref()?;
-        let id = TypeId::of::<Self>();
-        let check_command = Arc::clone(&registration.check_command);
-
-        Some(
-            Subscription::run_with_id(
-                id,
-                channel(10, move |mut output| {
-                    let check_command = Arc::clone(&check_command);
-
-                    async move {
-                        loop {
-                            let updates = check_update_now(check_command.as_ref()).await;
-
-                            if let Err(err) = enqueue_updates_result(&mut output, updates) {
-                                error!("failed to enqueue updates check result: {err}");
-                            }
-
-                            sleep(Duration::from_secs(3600)).await;
-                        }
-                    }
-                }),
-            )
-            .map(app::Message::Updates),
-        )
-    }
-}
-
-fn enqueue_updates_result(
-    sender: &mut Sender<Message>,
-    updates: Vec<Update>,
-) -> Result<(), TrySendError<Message>> {
-    sender.try_send(Message::UpdatesCheckCompleted(updates))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        num::NonZeroUsize,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+    };
+
+    use futures::future;
+    use tokio::runtime::Runtime;
+
+    use crate::{
+        config::Config,
+        event_bus::{BusEvent, EventBus, ModuleEvent},
+        outputs::Outputs,
+    };
+
     use super::*;
 
     #[test]
-    fn enqueue_updates_result_errors_when_channel_full() {
-        let (mut sender, _receiver) = iced::futures::channel::mpsc::channel(1);
+    fn register_spawns_hourly_task() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+        let ctx = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let mut updates = Updates::default();
+        let config = UpdatesModuleConfig {
+            check_cmd: ":".into(),
+            update_cmd: ":".into(),
+        };
 
-        enqueue_updates_result(&mut sender, Vec::new()).expect("first send should succeed");
+        updates
+            .register(&ctx, Some(&config))
+            .expect("register should succeed");
 
-        let error = enqueue_updates_result(&mut sender, Vec::new()).expect_err("expected full");
-        assert!(error.is_full());
+        assert!(updates.sender.is_some());
+        assert_eq!(updates.tasks.len(), 1);
+
+        for task in updates.tasks.drain(..) {
+            task.abort();
+        }
     }
 
     #[test]
-    fn enqueue_updates_result_errors_when_channel_closed() {
-        let (mut sender, receiver) = iced::futures::channel::mpsc::channel(1);
-        drop(receiver);
+    fn register_aborts_existing_tasks() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+        let ctx = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let mut updates = Updates::default();
 
-        let error = enqueue_updates_result(&mut sender, Vec::new()).expect_err("expected closed");
-        assert!(error.is_disconnected());
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let guard_flag = Arc::clone(&cancelled);
+
+        updates.tasks.push(runtime.spawn(async move {
+            struct CancelGuard(Arc<AtomicBool>);
+
+            impl Drop for CancelGuard {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::SeqCst);
+                }
+            }
+
+            let _guard = CancelGuard(guard_flag);
+
+            future::pending::<()>().await;
+        }));
+
+        let config = UpdatesModuleConfig {
+            check_cmd: ":".into(),
+            update_cmd: ":".into(),
+        };
+
+        updates
+            .register(&ctx, Some(&config))
+            .expect("register should succeed");
+
+        runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(1), async {
+                loop {
+                    if cancelled.load(Ordering::SeqCst) {
+                        break;
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("task should be aborted promptly");
+        });
+
+        for task in updates.tasks.drain(..) {
+            task.abort();
+        }
+    }
+
+    #[test]
+    fn check_now_enqueues_result_on_event_bus() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+        let mut receiver = bus.receiver();
+        let ctx = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let mut updates = Updates::default();
+        let config = UpdatesModuleConfig {
+            check_cmd: "printf 'pkg 1 -> 2\\n'".into(),
+            update_cmd: ":".into(),
+        };
+
+        updates
+            .register(&ctx, Some(&config))
+            .expect("register should succeed");
+
+        // Drain the initial scheduled check, if it has already emitted a result.
+        while matches!(
+            receiver.try_recv().expect("drain"),
+            Some(BusEvent::Module(ModuleEvent::Updates(
+                Message::UpdatesCheckCompleted(_)
+            )))
+        ) {}
+
+        let mut outputs = dummy_outputs();
+        let main_config = Config::default();
+
+        updates.update(Message::CheckNow, &config, &mut outputs, &main_config);
+
+        runtime.block_on(async {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if let Some(BusEvent::Module(ModuleEvent::Updates(message))) =
+                        receiver.try_recv().expect("recv")
+                    {
+                        if let Message::UpdatesCheckCompleted(updates) = message {
+                            assert_eq!(updates.len(), 1);
+                            break;
+                        }
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("check-now result should arrive");
+        });
+
+        for task in updates.tasks.drain(..) {
+            task.abort();
+        }
+    }
+
+    fn dummy_outputs() -> Outputs {
+        let config = Config::default();
+        Outputs::new::<crate::app::Message>(config.appearance.style, config.position, &config).0
     }
 }
