@@ -14,7 +14,7 @@ use log::{debug, error, info, warn};
 use tokio::io::{Interest, unix::AsyncFd};
 use zbus::proxy;
 
-use super::{ReadOnlyService, Service, ServiceEvent};
+use super::{ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher};
 
 #[path = "brightness/error.rs"]
 mod error;
@@ -129,10 +129,10 @@ impl BrightnessService {
             .collect())
     }
 
-    async fn start_listening(
-        state: State,
-        output: &mut Sender<ServiceEvent<Self>>,
-    ) -> Result<State, BrightnessError> {
+    async fn start_listening<P>(state: State, publisher: &mut P) -> Result<State, BrightnessError>
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
         match state {
             State::Init => {
                 let (conn, device_path) = Self::init_service().await?;
@@ -142,7 +142,7 @@ impl BrightnessService {
                     device_path: device_path.clone(),
                     conn,
                 };
-                let _ = output.send(ServiceEvent::Init(service)).await;
+                let _ = publisher.send(ServiceEvent::Init(service)).await;
 
                 Ok(State::Active(device_path))
             }
@@ -168,7 +168,7 @@ impl BrightnessService {
 
                                 if new_value != current_value {
                                     current_value = new_value;
-                                    let _ = output
+                                    let _ = publisher
                                         .send(ServiceEvent::Update(BrightnessEvent(new_value)))
                                         .await;
                                 }
@@ -220,6 +220,45 @@ impl BrightnessService {
     }
 }
 
+impl BrightnessService {
+    pub async fn listen<P>(publisher: &mut P)
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
+        let mut state = State::Init;
+
+        loop {
+            match Self::start_listening(state, publisher).await {
+                Ok(next_state) => {
+                    state = next_state;
+                }
+                Err(err) => {
+                    error!("Brightness service failure: {err:?}");
+                    let _ = publisher.send(ServiceEvent::Error(err.clone())).await;
+                    state = State::Error;
+                }
+            }
+        }
+    }
+
+    pub async fn run_command(self, command: BrightnessCommand) -> ServiceEvent<Self> {
+        match command {
+            BrightnessCommand::Set(value) => {
+                match Self::set_brightness(&self.conn, &self.device_path, value).await {
+                    Ok(()) => ServiceEvent::Update(BrightnessEvent(value)),
+                    Err(err) => ServiceEvent::Error(err),
+                }
+            }
+            BrightnessCommand::Refresh => {
+                match Self::get_actual_brightness(&self.device_path).await {
+                    Ok(value) => ServiceEvent::Update(BrightnessEvent(value)),
+                    Err(err) => ServiceEvent::Error(err),
+                }
+            }
+        }
+    }
+}
+
 enum State {
     Init,
     Active(PathBuf),
@@ -243,20 +282,7 @@ impl ReadOnlyService for BrightnessService {
         Subscription::run_with_id(
             id,
             channel(100, async |mut output| {
-                let mut state = State::Init;
-
-                loop {
-                    match BrightnessService::start_listening(state, &mut output).await {
-                        Ok(next_state) => {
-                            state = next_state;
-                        }
-                        Err(err) => {
-                            error!("Brightness service failure: {err:?}");
-                            let _ = output.send(ServiceEvent::Error(err.clone())).await;
-                            state = State::Error;
-                        }
-                    }
-                }
+                BrightnessService::listen(&mut output).await;
             }),
         )
     }
@@ -272,29 +298,11 @@ impl Service for BrightnessService {
     type Command = BrightnessCommand;
 
     fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
-        Task::perform(
-            {
-                let conn = self.conn.clone();
-                let device_path = self.device_path.clone();
+        let service = self.clone();
 
-                async move {
-                    match command {
-                        BrightnessCommand::Set(value) => {
-                            debug!("Setting brightness to {value}");
-                            BrightnessService::set_brightness(&conn, &device_path, value).await?;
-                            Ok(value)
-                        }
-                        BrightnessCommand::Refresh => {
-                            debug!("Refreshing brightness data");
-                            BrightnessService::get_actual_brightness(&device_path).await
-                        }
-                    }
-                }
-            },
-            |result| match result {
-                Ok(value) => ServiceEvent::Update(BrightnessEvent(value)),
-                Err(err) => ServiceEvent::Error(err),
-            },
+        Task::perform(
+            async move { BrightnessService::run_command(service, command).await },
+            |event| event,
         )
     }
 }

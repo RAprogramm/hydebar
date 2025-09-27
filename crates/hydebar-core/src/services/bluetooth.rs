@@ -1,4 +1,4 @@
-use super::{ReadOnlyService, Service, ServiceEvent};
+use super::{ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher};
 use dbus::{BatteryProxy, BluetoothDbus};
 use iced::{
     Subscription, Task,
@@ -120,7 +120,10 @@ impl BluetoothService {
         Ok(combined)
     }
 
-    async fn start_listening(state: State, output: &mut Sender<ServiceEvent<Self>>) -> State {
+    async fn start_listening<P>(state: State, publisher: &mut P) -> State
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
         match state {
             State::Init => match zbus::Connection::system().await {
                 Ok(conn) => {
@@ -130,7 +133,7 @@ impl BluetoothService {
                         Ok(data) => {
                             info!("Bluetooth service initialized");
 
-                            let _ = output
+                            let _ = publisher
                                 .send(ServiceEvent::Init(BluetoothService {
                                     data,
                                     conn: conn.clone(),
@@ -159,7 +162,7 @@ impl BluetoothService {
                     Ok(mut events) => {
                         while events.next().await.is_some() {
                             if let Ok(data) = BluetoothService::initialize_data(&conn).await {
-                                let _ = output.send(ServiceEvent::Update(data)).await;
+                                let _ = publisher.send(ServiceEvent::Update(data)).await;
                             }
                         }
 
@@ -208,6 +211,42 @@ impl BluetoothService {
 
         Ok(())
     }
+
+    pub async fn listen<P>(publisher: &mut P)
+    where
+        P: ServiceEventPublisher<Self> + Send,
+    {
+        let mut state = State::Init;
+
+        loop {
+            state = Self::start_listening(state, publisher).await;
+        }
+    }
+
+    pub async fn run_command(mut self, command: BluetoothCommand) -> Option<ServiceEvent<Self>> {
+        match command {
+            BluetoothCommand::Toggle => {
+                if self.data.state == BluetoothState::Unavailable {
+                    None
+                } else {
+                    let mut data = self.data.clone();
+                    let powered = data.state == BluetoothState::Active;
+
+                    let result = Self::toggle_power(&self.conn, !powered).await;
+
+                    if result.is_ok() {
+                        data.state = if powered {
+                            BluetoothState::Inactive
+                        } else {
+                            BluetoothState::Active
+                        };
+                    }
+
+                    Some(ServiceEvent::Update(data))
+                }
+            }
+        }
+    }
 }
 
 impl ReadOnlyService for BluetoothService {
@@ -224,11 +263,7 @@ impl ReadOnlyService for BluetoothService {
         Subscription::run_with_id(
             id,
             channel(100, async |mut output| {
-                let mut state = State::Init;
-
-                loop {
-                    state = BluetoothService::start_listening(state, &mut output).await;
-                }
+                BluetoothService::listen(&mut output).await;
             }),
         )
     }
@@ -238,35 +273,14 @@ impl Service for BluetoothService {
     type Command = BluetoothCommand;
 
     fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
-        match command {
-            BluetoothCommand::Toggle => {
-                let conn = self.conn.clone();
+        let service = self.clone();
+        let fallback = self.data.clone();
 
-                if self.data.state == BluetoothState::Unavailable {
-                    Task::none()
-                } else {
-                    let mut data = self.data.clone();
-
-                    Task::perform(
-                        async move {
-                            let powered = data.state == BluetoothState::Active;
-                            debug!("Toggling bluetooth power to: {}", !powered);
-                            let res = BluetoothService::toggle_power(&conn, !powered).await;
-
-                            if res.is_ok() {
-                                data.state = if powered {
-                                    BluetoothState::Inactive
-                                } else {
-                                    BluetoothState::Active
-                                }
-                            }
-
-                            data
-                        },
-                        ServiceEvent::Update,
-                    )
-                }
-            }
-        }
+        Task::perform(
+            async move { BluetoothService::run_command(service, command).await },
+            move |maybe_event| {
+                maybe_event.unwrap_or_else(|| ServiceEvent::Update(fallback.clone()))
+            },
+        )
     }
 }

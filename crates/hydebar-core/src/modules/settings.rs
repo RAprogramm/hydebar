@@ -1,18 +1,19 @@
 use self::{
     audio::AudioMessage, bluetooth::BluetoothMessage, network::NetworkMessage, power::PowerMessage,
 };
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    app,
+    ModuleContext, ModuleEventSender, app,
     components::icons::{Icons, icon},
     config::{Position, SettingsModuleConfig},
+    event_bus::ModuleEvent,
     menu::MenuType,
     modules::settings::power::power_menu,
     outputs::Outputs,
     password_dialog,
     position_button::ButtonUIRef,
     services::{
-        ReadOnlyService, Service, ServiceEvent,
+        ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher,
         audio::{AudioCommand, AudioService},
         bluetooth::{BluetoothCommand, BluetoothService, BluetoothState},
         brightness::{BrightnessCommand, BrightnessService},
@@ -26,12 +27,14 @@ use crate::{
 };
 use brightness::BrightnessMessage;
 use iced::{
-    Alignment, Background, Border, Element, Length, Padding, Subscription, Task, Theme,
+    Alignment, Background, Border, Element, Length, Padding, Task, Theme,
     alignment::{Horizontal, Vertical},
     widget::{Column, Row, Space, button, column, container, horizontal_space, row, text},
     window::Id,
 };
 use log::{info, warn};
+use std::future::{Ready, ready};
+use tokio::{runtime::Handle, task::JoinHandle};
 use upower::UPowerMessage;
 
 pub mod audio;
@@ -50,6 +53,9 @@ pub struct Settings {
     pub sub_menu: Option<SubMenu>,
     upower: Option<UPowerService>,
     pub password_dialog: Option<(String, String)>,
+    sender: Option<ModuleEventSender<Message>>,
+    runtime: Option<Handle>,
+    tasks: Vec<JoinHandle<()>>,
 }
 
 impl Default for Settings {
@@ -71,6 +77,9 @@ impl Default for Settings {
             sub_menu: None,
             upower: None,
             password_dialog: None,
+            sender: None,
+            runtime: None,
+            tasks: Vec::new(),
         }
     }
 }
@@ -101,6 +110,95 @@ pub enum SubMenu {
 }
 
 impl Settings {
+    fn runtime(&self) -> Option<Handle> {
+        self.runtime.as_ref().cloned()
+    }
+
+    fn sender(&self) -> Option<ModuleEventSender<Message>> {
+        self.sender.as_ref().cloned()
+    }
+
+    fn spawn_audio_command(&self, command: AudioCommand) {
+        if let (Some(handle), Some(sender), Some(service)) =
+            (self.runtime(), self.sender(), self.audio.clone())
+        {
+            handle.spawn(async move {
+                if let Some(event) = AudioService::run_command(service, command).await {
+                    if let Err(err) = sender.try_send(Message::Audio(AudioMessage::Event(event))) {
+                        warn!("failed to publish audio command event: {err}");
+                    }
+                }
+            });
+        } else {
+            warn!("audio command ignored because runtime, sender, or service is unavailable");
+        }
+    }
+
+    fn spawn_brightness_command(&self, command: BrightnessCommand) {
+        if let (Some(handle), Some(sender), Some(service)) =
+            (self.runtime(), self.sender(), self.brightness.clone())
+        {
+            handle.spawn(async move {
+                let event = BrightnessService::run_command(service, command).await;
+                if let Err(err) =
+                    sender.try_send(Message::Brightness(BrightnessMessage::Event(event)))
+                {
+                    warn!("failed to publish brightness command event: {err}");
+                }
+            });
+        } else {
+            warn!("brightness command ignored because runtime, sender, or service is unavailable");
+        }
+    }
+
+    fn spawn_network_command(&self, command: NetworkCommand) {
+        if let (Some(handle), Some(sender), Some(service)) =
+            (self.runtime(), self.sender(), self.network.clone())
+        {
+            handle.spawn(async move {
+                let event = NetworkService::run_command(service, command).await;
+                if let Err(err) = sender.try_send(Message::Network(NetworkMessage::Event(event))) {
+                    warn!("failed to publish network command event: {err}");
+                }
+            });
+        } else {
+            warn!("network command ignored because runtime, sender, or service is unavailable");
+        }
+    }
+
+    fn spawn_bluetooth_command(&self, command: BluetoothCommand) {
+        if let (Some(handle), Some(sender), Some(service)) =
+            (self.runtime(), self.sender(), self.bluetooth.clone())
+        {
+            handle.spawn(async move {
+                if let Some(event) = BluetoothService::run_command(service, command).await {
+                    if let Err(err) =
+                        sender.try_send(Message::Bluetooth(BluetoothMessage::Event(event)))
+                    {
+                        warn!("failed to publish bluetooth command event: {err}");
+                    }
+                }
+            });
+        } else {
+            warn!("bluetooth command ignored because runtime, sender, or service is unavailable");
+        }
+    }
+
+    fn spawn_upower_command(&self, command: PowerProfileCommand) {
+        if let (Some(handle), Some(sender), Some(service)) =
+            (self.runtime(), self.sender(), self.upower.clone())
+        {
+            handle.spawn(async move {
+                let event = UPowerService::run_command(service, command).await;
+                if let Err(err) = sender.try_send(Message::UPower(UPowerMessage::Event(event))) {
+                    warn!("failed to publish upower command event: {err}");
+                }
+            });
+        } else {
+            warn!("upower command ignored because runtime, sender, or service is unavailable");
+        }
+    }
+
     pub fn update(
         &mut self,
         message: Message,
@@ -137,39 +235,27 @@ impl Settings {
                     ServiceEvent::Error(_) => Task::none(),
                 },
                 AudioMessage::ToggleSinkMute => {
-                    if let Some(audio) = self.audio.as_mut() {
-                        let _ = audio.command(AudioCommand::ToggleSinkMute);
-                    }
+                    self.spawn_audio_command(AudioCommand::ToggleSinkMute);
                     Task::none()
                 }
                 AudioMessage::SinkVolumeChanged(value) => {
-                    if let Some(audio) = self.audio.as_mut() {
-                        let _ = audio.command(AudioCommand::SinkVolume(value));
-                    }
+                    self.spawn_audio_command(AudioCommand::SinkVolume(value));
                     Task::none()
                 }
                 AudioMessage::DefaultSinkChanged(name, port) => {
-                    if let Some(audio) = self.audio.as_mut() {
-                        let _ = audio.command(AudioCommand::DefaultSink(name, port));
-                    }
+                    self.spawn_audio_command(AudioCommand::DefaultSink(name, port));
                     Task::none()
                 }
                 AudioMessage::ToggleSourceMute => {
-                    if let Some(audio) = self.audio.as_mut() {
-                        let _ = audio.command(AudioCommand::ToggleSourceMute);
-                    }
+                    self.spawn_audio_command(AudioCommand::ToggleSourceMute);
                     Task::none()
                 }
                 AudioMessage::SourceVolumeChanged(value) => {
-                    if let Some(audio) = self.audio.as_mut() {
-                        let _ = audio.command(AudioCommand::SourceVolume(value));
-                    }
+                    self.spawn_audio_command(AudioCommand::SourceVolume(value));
                     Task::none()
                 }
                 AudioMessage::DefaultSourceChanged(name, port) => {
-                    if let Some(audio) = self.audio.as_mut() {
-                        let _ = audio.command(AudioCommand::DefaultSource(name, port));
-                    }
+                    self.spawn_audio_command(AudioCommand::DefaultSource(name, port));
                     Task::none()
                 }
                 AudioMessage::SinksMore(id) => {
@@ -203,12 +289,10 @@ impl Settings {
                     }
                     ServiceEvent::Error(_) => Task::none(),
                 },
-                UPowerMessage::TogglePowerProfile => match self.upower.as_mut() {
-                    Some(upower) => upower.command(PowerProfileCommand::Toggle).map(|event| {
-                        crate::app::Message::Settings(Message::UPower(UPowerMessage::Event(event)))
-                    }),
-                    _ => Task::none(),
-                },
+                UPowerMessage::TogglePowerProfile => {
+                    self.spawn_upower_command(PowerProfileCommand::Toggle);
+                    Task::none()
+                }
             },
             Message::Network(msg) => match msg {
                 NetworkMessage::Event(event) => match event {
@@ -228,60 +312,35 @@ impl Settings {
                     }
                     _ => Task::none(),
                 },
-                NetworkMessage::ToggleAirplaneMode => match self.network.as_mut() {
-                    Some(network) => {
-                        if self.sub_menu == Some(SubMenu::Wifi) {
-                            self.sub_menu = None;
-                        }
+                NetworkMessage::ToggleAirplaneMode => {
+                    if self.sub_menu == Some(SubMenu::Wifi) {
+                        self.sub_menu = None;
+                    }
 
-                        network
-                            .command(NetworkCommand::ToggleAirplaneMode)
-                            .map(|event| {
-                                crate::app::Message::Settings(Message::Network(
-                                    NetworkMessage::Event(event),
-                                ))
-                            })
+                    self.spawn_network_command(NetworkCommand::ToggleAirplaneMode);
+                    Task::none()
+                }
+                NetworkMessage::ToggleWiFi => {
+                    if self.sub_menu == Some(SubMenu::Wifi) {
+                        self.sub_menu = None;
                     }
-                    _ => Task::none(),
-                },
-                NetworkMessage::ToggleWiFi => match self.network.as_mut() {
-                    Some(network) => {
-                        if self.sub_menu == Some(SubMenu::Wifi) {
-                            self.sub_menu = None;
-                        }
-                        network.command(NetworkCommand::ToggleWiFi).map(|event| {
-                            crate::app::Message::Settings(Message::Network(NetworkMessage::Event(
-                                event,
-                            )))
-                        })
-                    }
-                    _ => Task::none(),
-                },
-                NetworkMessage::SelectAccessPoint(ac) => match self.network.as_mut() {
-                    Some(network) => network
-                        .command(NetworkCommand::SelectAccessPoint((ac, None)))
-                        .map(|event| {
-                            crate::app::Message::Settings(Message::Network(NetworkMessage::Event(
-                                event,
-                            )))
-                        }),
-                    _ => Task::none(),
-                },
+
+                    self.spawn_network_command(NetworkCommand::ToggleWiFi);
+                    Task::none()
+                }
+                NetworkMessage::SelectAccessPoint(ac) => {
+                    self.spawn_network_command(NetworkCommand::SelectAccessPoint((ac, None)));
+                    Task::none()
+                }
                 NetworkMessage::RequestWiFiPassword(id, ssid) => {
                     info!("Requesting password for {ssid}");
                     self.password_dialog = Some((ssid, "".to_string()));
                     outputs.request_keyboard(id, main_config.menu_keyboard_focus)
                 }
-                NetworkMessage::ScanNearByWiFi => match self.network.as_mut() {
-                    Some(network) => network
-                        .command(NetworkCommand::ScanNearByWiFi)
-                        .map(|event| {
-                            crate::app::Message::Settings(Message::Network(NetworkMessage::Event(
-                                event,
-                            )))
-                        }),
-                    _ => Task::none(),
-                },
+                NetworkMessage::ScanNearByWiFi => {
+                    self.spawn_network_command(NetworkCommand::ScanNearByWiFi);
+                    Task::none()
+                }
                 NetworkMessage::WiFiMore(id) => {
                     if let Some(cmd) = &config.wifi_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
@@ -298,16 +357,10 @@ impl Settings {
                         Task::none()
                     }
                 }
-                NetworkMessage::ToggleVpn(vpn) => match self.network.as_mut() {
-                    Some(network) => network
-                        .command(NetworkCommand::ToggleVpn(vpn))
-                        .map(|event| {
-                            crate::app::Message::Settings(Message::Network(NetworkMessage::Event(
-                                event,
-                            )))
-                        }),
-                    _ => Task::none(),
-                },
+                NetworkMessage::ToggleVpn(vpn) => {
+                    self.spawn_network_command(NetworkCommand::ToggleVpn(vpn));
+                    Task::none()
+                }
             },
             Message::Bluetooth(msg) => match msg {
                 BluetoothMessage::Event(event) => match event {
@@ -329,11 +382,8 @@ impl Settings {
                             self.sub_menu = None;
                         }
 
-                        bluetooth.command(BluetoothCommand::Toggle).map(|event| {
-                            crate::app::Message::Settings(Message::Bluetooth(
-                                BluetoothMessage::Event(event),
-                            ))
-                        })
+                        self.spawn_bluetooth_command(BluetoothCommand::Toggle);
+                        Task::none()
                     }
                     _ => Task::none(),
                 },
@@ -360,18 +410,10 @@ impl Settings {
                     }
                     _ => Task::none(),
                 },
-                BrightnessMessage::Change(value) => match self.brightness.as_mut() {
-                    Some(brightness) => {
-                        brightness
-                            .command(BrightnessCommand::Set(value))
-                            .map(|event| {
-                                crate::app::Message::Settings(Message::Brightness(
-                                    BrightnessMessage::Event(event),
-                                ))
-                            })
-                    }
-                    _ => Task::none(),
-                },
+                BrightnessMessage::Change(value) => {
+                    self.spawn_brightness_command(BrightnessCommand::Set(value));
+                    Task::none()
+                }
             },
             Message::ToggleSubMenu(menu_type) => {
                 if self.sub_menu == Some(menu_type) {
@@ -380,15 +422,7 @@ impl Settings {
                     self.sub_menu.replace(menu_type);
 
                     if menu_type == SubMenu::Wifi {
-                        if let Some(network) = self.network.as_mut() {
-                            return network
-                                .command(NetworkCommand::ScanNearByWiFi)
-                                .map(|event| {
-                                    crate::app::Message::Settings(Message::Network(
-                                        NetworkMessage::Event(event),
-                                    ))
-                                });
-                        }
+                        self.spawn_network_command(NetworkCommand::ScanNearByWiFi);
                     }
                 }
 
@@ -420,34 +454,21 @@ impl Settings {
                 }
                 password_dialog::Message::DialogConfirmed(id) => {
                     if let Some((ssid, password)) = self.password_dialog.take() {
-                        let network_command = match self.network.as_mut() {
-                            Some(network) => {
-                                let ap = network
-                                    .wireless_access_points
-                                    .iter()
-                                    .find(|ap| ap.ssid == ssid)
-                                    .cloned();
-                                if let Some(ap) = ap {
-                                    network
-                                        .command(NetworkCommand::SelectAccessPoint((
-                                            ap,
-                                            Some(password),
-                                        )))
-                                        .map(|event| {
-                                            crate::app::Message::Settings(Message::Network(
-                                                NetworkMessage::Event(event),
-                                            ))
-                                        })
-                                } else {
-                                    Task::none()
-                                }
+                        if let Some(network) = self.network.as_ref() {
+                            if let Some(access_point) = network
+                                .wireless_access_points
+                                .iter()
+                                .find(|ap| ap.ssid == ssid)
+                                .cloned()
+                            {
+                                self.spawn_network_command(NetworkCommand::SelectAccessPoint((
+                                    access_point,
+                                    Some(password.clone()),
+                                )));
                             }
-                            _ => Task::none(),
-                        };
-                        Task::batch(vec![
-                            network_command,
-                            outputs.release_keyboard(id, main_config.menu_keyboard_focus),
-                        ])
+                        }
+
+                        outputs.release_keyboard(id, main_config.menu_keyboard_focus)
                     } else {
                         outputs.release_keyboard(id, main_config.menu_keyboard_focus)
                     }
@@ -646,6 +667,51 @@ impl Module for Settings {
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        _: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        for task in self.tasks.drain(..) {
+            task.abort();
+        }
+
+        let sender = ctx.module_sender(ModuleEvent::Settings);
+
+        let mut tasks = Vec::new();
+
+        let mut audio_publisher = AudioEventForwarder::new(sender.clone());
+        tasks.push(ctx.runtime_handle().spawn(async move {
+            AudioService::listen(&mut audio_publisher).await;
+        }));
+
+        let mut brightness_publisher = BrightnessEventForwarder::new(sender.clone());
+        tasks.push(ctx.runtime_handle().spawn(async move {
+            BrightnessService::listen(&mut brightness_publisher).await;
+        }));
+
+        let mut network_publisher = NetworkEventForwarder::new(sender.clone());
+        tasks.push(ctx.runtime_handle().spawn(async move {
+            NetworkService::listen(&mut network_publisher).await;
+        }));
+
+        let mut bluetooth_publisher = BluetoothEventForwarder::new(sender.clone());
+        tasks.push(ctx.runtime_handle().spawn(async move {
+            BluetoothService::listen(&mut bluetooth_publisher).await;
+        }));
+
+        let mut upower_publisher = UPowerEventForwarder::new(sender.clone());
+        tasks.push(ctx.runtime_handle().spawn(async move {
+            UPowerService::listen(&mut upower_publisher).await;
+        }));
+
+        self.sender = Some(sender);
+        self.runtime = Some(ctx.runtime_handle().clone());
+        self.tasks = tasks;
+
+        Ok(())
+    }
+
     fn view(
         &self,
         _: Self::ViewData<'_>,
@@ -692,22 +758,145 @@ impl Module for Settings {
             Some(OnModulePress::ToggleMenu(MenuType::Settings)),
         ))
     }
+}
 
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        Some(
-            Subscription::batch(vec![
-                UPowerService::subscribe()
-                    .map(|event| Message::UPower(UPowerMessage::Event(event))),
-                AudioService::subscribe().map(|evenet| Message::Audio(AudioMessage::Event(evenet))),
-                BrightnessService::subscribe()
-                    .map(|event| Message::Brightness(BrightnessMessage::Event(event))),
-                NetworkService::subscribe()
-                    .map(|event| Message::Network(NetworkMessage::Event(event))),
-                BluetoothService::subscribe()
-                    .map(|event| Message::Bluetooth(BluetoothMessage::Event(event))),
-            ])
-            .map(app::Message::Settings),
-        )
+struct AudioEventForwarder {
+    sender: ModuleEventSender<Message>,
+}
+
+impl AudioEventForwarder {
+    fn new(sender: ModuleEventSender<Message>) -> Self {
+        Self { sender }
+    }
+}
+
+impl ServiceEventPublisher<AudioService> for AudioEventForwarder {
+    type SendFuture<'a>
+        = Ready<()>
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<AudioService>) -> Self::SendFuture<'_> {
+        if let Err(err) = self
+            .sender
+            .try_send(Message::Audio(AudioMessage::Event(event)))
+        {
+            warn!("failed to publish audio event: {err}");
+        }
+
+        ready(())
+    }
+}
+
+struct BrightnessEventForwarder {
+    sender: ModuleEventSender<Message>,
+}
+
+impl BrightnessEventForwarder {
+    fn new(sender: ModuleEventSender<Message>) -> Self {
+        Self { sender }
+    }
+}
+
+impl ServiceEventPublisher<BrightnessService> for BrightnessEventForwarder {
+    type SendFuture<'a>
+        = Ready<()>
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<BrightnessService>) -> Self::SendFuture<'_> {
+        if let Err(err) = self
+            .sender
+            .try_send(Message::Brightness(BrightnessMessage::Event(event)))
+        {
+            warn!("failed to publish brightness event: {err}");
+        }
+
+        ready(())
+    }
+}
+
+struct NetworkEventForwarder {
+    sender: ModuleEventSender<Message>,
+}
+
+impl NetworkEventForwarder {
+    fn new(sender: ModuleEventSender<Message>) -> Self {
+        Self { sender }
+    }
+}
+
+impl ServiceEventPublisher<NetworkService> for NetworkEventForwarder {
+    type SendFuture<'a>
+        = Ready<()>
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<NetworkService>) -> Self::SendFuture<'_> {
+        if let Err(err) = self
+            .sender
+            .try_send(Message::Network(NetworkMessage::Event(event)))
+        {
+            warn!("failed to publish network event: {err}");
+        }
+
+        ready(())
+    }
+}
+
+struct BluetoothEventForwarder {
+    sender: ModuleEventSender<Message>,
+}
+
+impl BluetoothEventForwarder {
+    fn new(sender: ModuleEventSender<Message>) -> Self {
+        Self { sender }
+    }
+}
+
+impl ServiceEventPublisher<BluetoothService> for BluetoothEventForwarder {
+    type SendFuture<'a>
+        = Ready<()>
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<BluetoothService>) -> Self::SendFuture<'_> {
+        if let Err(err) = self
+            .sender
+            .try_send(Message::Bluetooth(BluetoothMessage::Event(event)))
+        {
+            warn!("failed to publish bluetooth event: {err}");
+        }
+
+        ready(())
+    }
+}
+
+struct UPowerEventForwarder {
+    sender: ModuleEventSender<Message>,
+}
+
+impl UPowerEventForwarder {
+    fn new(sender: ModuleEventSender<Message>) -> Self {
+        Self { sender }
+    }
+}
+
+impl ServiceEventPublisher<UPowerService> for UPowerEventForwarder {
+    type SendFuture<'a>
+        = Ready<()>
+    where
+        Self: 'a;
+
+    fn send(&mut self, event: ServiceEvent<UPowerService>) -> Self::SendFuture<'_> {
+        if let Err(err) = self
+            .sender
+            .try_send(Message::UPower(UPowerMessage::Event(event)))
+        {
+            warn!("failed to publish upower event: {err}");
+        }
+
+        ready(())
     }
 }
 
@@ -751,6 +940,76 @@ fn quick_settings_section<'a>(
     }
 
     section.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ModuleContext, event_bus::EventBus};
+    use futures::future;
+    use std::{
+        num::NonZeroUsize,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+    };
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn register_spawns_service_tasks() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+        let ctx = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let mut settings = Settings::default();
+
+        settings
+            .register(&ctx, ())
+            .expect("register should succeed");
+
+        assert!(settings.sender.is_some());
+        assert!(settings.runtime.is_some());
+        assert_eq!(settings.tasks.len(), 5);
+
+        for task in settings.tasks.drain(..) {
+            task.abort();
+        }
+    }
+
+    #[test]
+    fn register_aborts_existing_tasks() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+        let ctx = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let mut settings = Settings::default();
+
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let guard_flag = Arc::clone(&cancelled);
+
+        settings.tasks.push(runtime.spawn(async move {
+            struct CancelGuard(Arc<AtomicBool>);
+
+            impl Drop for CancelGuard {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::SeqCst);
+                }
+            }
+
+            let _guard = CancelGuard(guard_flag);
+
+            future::pending::<()>().await;
+        }));
+
+        settings
+            .register(&ctx, ())
+            .expect("register should succeed");
+
+        assert!(cancelled.load(Ordering::SeqCst));
+
+        for task in settings.tasks.drain(..) {
+            task.abort();
+        }
+    }
 }
 
 fn sub_menu_wrapper<Msg: 'static>(content: Element<Msg>, opacity: f32) -> Element<Msg> {
