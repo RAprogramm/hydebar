@@ -111,7 +111,7 @@ impl WindowTitle {
 
 impl Module for WindowTitle {
     type ViewData<'a> = ();
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -128,7 +128,7 @@ impl Module for WindowTitle {
         })
     }
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         let id = TypeId::of::<Self>();
         let hyprland = Arc::clone(&self.hyprland);
 

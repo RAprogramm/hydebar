@@ -8,6 +8,7 @@ use flexi_logger::{
     Age, Cleanup, Criterion, FileSpec, LogSpecBuilder, LogSpecification, Logger, Naming,
 };
 use hydebar_core::{
+    ModuleContext,
     adapters::hyprland_client::HyprlandClient,
     config::{ConfigLoadError, ConfigManager, get_config},
     event_bus::EventBus,
@@ -88,6 +89,7 @@ async fn run() -> Result<(), MainError> {
 
     let bus_capacity = NonZeroUsize::new(256).ok_or(MainError::BusCapacity)?;
     let event_bus = EventBus::new(bus_capacity);
+    let module_context = ModuleContext::new(event_bus.sender(), tokio::runtime::Handle::current());
     let bus_receiver = event_bus.receiver();
 
     iced::daemon(App::title, App::update, App::view)
@@ -103,6 +105,7 @@ async fn run() -> Result<(), MainError> {
             config_manager,
             config_path,
             hyprland,
+            module_context,
             bus_receiver,
         )))
         .map_err(MainError::from)

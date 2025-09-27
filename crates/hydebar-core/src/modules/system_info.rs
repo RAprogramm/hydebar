@@ -296,7 +296,7 @@ impl SystemInfo {
 
 impl Module for SystemInfo {
     type ViewData<'a> = &'a SystemModuleConfig;
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -405,7 +405,7 @@ impl Module for SystemInfo {
         ))
     }
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(every(Duration::from_secs(5)).map(|_| app::Message::SystemInfo(Message::Update)))
     }
 }

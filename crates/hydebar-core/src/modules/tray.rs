@@ -158,7 +158,7 @@ impl TrayModule {
 
 impl Module for TrayModule {
     type ViewData<'a> = (Id, f32);
-    type SubscriptionData<'a> = ();
+    type RegistrationData<'a> = ();
 
     fn view(
         &self,
@@ -206,7 +206,7 @@ impl Module for TrayModule {
             })
     }
 
-    fn subscription(&self, _: Self::SubscriptionData<'_>) -> Option<Subscription<app::Message>> {
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
         Some(TrayService::subscribe().map(|e| app::Message::Tray(TrayMessage::Event(Box::new(e)))))
     }
 }

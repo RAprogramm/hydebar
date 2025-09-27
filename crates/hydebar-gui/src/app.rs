@@ -8,7 +8,7 @@ use std::{
 
 use flexi_logger::LoggerHandle;
 use hydebar_core::{
-    HEIGHT,
+    HEIGHT, ModuleContext,
     config::{self, ConfigApplied, ConfigDegradation, ConfigEvent, ConfigImpact, ConfigManager},
     event_bus::{BusEvent, EventReceiver, ModuleEvent},
     menu::{MenuSize, MenuType, menu_wrapper},
@@ -62,6 +62,7 @@ pub struct App {
     config_manager: Arc<ConfigManager>,
     bus_receiver: Arc<Mutex<EventReceiver>>,
     micro_ticker: MicroTicker,
+    module_context: ModuleContext,
     pub config: Config,
     pub outputs: Outputs,
     pub app_launcher: AppLauncher,
@@ -191,7 +192,10 @@ impl Default for MicroTicker {
 mod tests {
     use super::*;
     use flexi_logger::LoggerHandle;
-    use hydebar_core::{config::ConfigManager, event_bus::EventBus, test_utils::MockHyprlandPort};
+    use hydebar_core::{
+        config::ConfigManager, event_bus::EventBus, module_context::ModuleContext,
+        test_utils::MockHyprlandPort,
+    };
     use hydebar_proto::ports::hyprland::HyprlandPort;
     use std::{num::NonZeroUsize, sync::OnceLock};
 
@@ -218,6 +222,8 @@ mod tests {
         let config_manager = Arc::new(ConfigManager::new(config.clone()));
         let capacity = NonZeroUsize::new(16).expect("non-zero");
         let bus = EventBus::new(capacity);
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let module_context = ModuleContext::new(bus.sender(), runtime.handle().clone());
 
         let (app, _) = App::new((
             logger,
@@ -225,6 +231,7 @@ mod tests {
             Arc::clone(&config_manager),
             path,
             Arc::clone(&mock_port),
+            module_context,
             bus.receiver(),
         ))();
 
@@ -242,6 +249,8 @@ mod tests {
         let config_manager = Arc::new(ConfigManager::new(config.clone()));
         let capacity = NonZeroUsize::new(16).expect("non-zero");
         let bus = EventBus::new(capacity);
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let module_context = ModuleContext::new(bus.sender(), runtime.handle().clone());
 
         let (mut app, _) = App::new((
             logger,
@@ -249,6 +258,7 @@ mod tests {
             Arc::clone(&config_manager),
             path,
             mock_port,
+            module_context,
             bus.receiver(),
         ))();
 
@@ -262,12 +272,13 @@ mod tests {
 
 impl App {
     pub fn new(
-        (logger, config, config_manager, config_path, hyprland, bus_receiver): (
+        (logger, config, config_manager, config_path, hyprland, module_context, bus_receiver): (
             LoggerHandle,
             Config,
             Arc<ConfigManager>,
             PathBuf,
             Arc<dyn HyprlandPort>,
+            ModuleContext,
             EventReceiver,
         ),
     ) -> impl FnOnce() -> (Self, Task<Message>) {
@@ -280,37 +291,36 @@ impl App {
                 .map(|o| (o.name.clone(), Custom::default()))
                 .collect();
             let hyprland_clone = Arc::clone(&hyprland);
-            (
-                App {
-                    config_path,
-                    logger,
-                    hyprland,
-                    config_manager,
-                    bus_receiver: Arc::new(Mutex::new(bus_receiver)),
-                    micro_ticker: MicroTicker::default(),
-                    outputs,
-                    app_launcher: AppLauncher,
-                    custom,
-                    updates: Updates::default(),
-                    clipboard: Clipboard,
-                    workspaces: Workspaces::new(Arc::clone(&hyprland_clone), &config.workspaces),
-                    window_title: WindowTitle::new(
-                        Arc::clone(&hyprland_clone),
-                        &config.window_title,
-                    ),
-                    system_info: SystemInfo::default(),
-                    keyboard_layout: KeyboardLayout::new(Arc::clone(&hyprland_clone)),
-                    keyboard_submap: KeyboardSubmap::new(hyprland_clone),
-                    tray: TrayModule::default(),
-                    clock: Clock::default(),
-                    battery: Battery::default(),
-                    privacy: Privacy::default(),
-                    settings: Settings::default(),
-                    media_player: MediaPlayer::default(),
-                    config,
-                },
-                task,
-            )
+            let mut app = App {
+                config_path,
+                logger,
+                hyprland,
+                config_manager,
+                bus_receiver: Arc::new(Mutex::new(bus_receiver)),
+                micro_ticker: MicroTicker::default(),
+                module_context,
+                outputs,
+                app_launcher: AppLauncher,
+                custom,
+                updates: Updates::default(),
+                clipboard: Clipboard,
+                workspaces: Workspaces::new(Arc::clone(&hyprland_clone), &config.workspaces),
+                window_title: WindowTitle::new(Arc::clone(&hyprland_clone), &config.window_title),
+                system_info: SystemInfo::default(),
+                keyboard_layout: KeyboardLayout::new(Arc::clone(&hyprland_clone)),
+                keyboard_submap: KeyboardSubmap::new(hyprland_clone),
+                tray: TrayModule::default(),
+                clock: Clock::default(),
+                battery: Battery::default(),
+                privacy: Privacy::default(),
+                settings: Settings::default(),
+                media_player: MediaPlayer::default(),
+                config,
+            };
+
+            app.register_modules();
+
+            (app, task)
         }
     }
 
@@ -396,6 +406,8 @@ impl App {
                 }
 
                 self.config = new_config;
+
+                self.register_modules();
 
                 if impact.log_level_changed {
                     if let Err(err) = self
@@ -567,6 +579,66 @@ impl App {
                 _ => Task::none(),
             },
             Message::MediaPlayer(msg) => self.media_player.update(msg),
+        }
+    }
+
+    fn register_modules(&mut self) {
+        let ctx = &self.module_context;
+        let mut register = |name: &str, result: Result<(), modules::ModuleError>| {
+            if let Err(err) = result {
+                error!("failed to register {name} module: {err}");
+            }
+        };
+
+        register("app-launcher", self.app_launcher.register(ctx, ())); // uses optional config at view time
+        register("clipboard", self.clipboard.register(ctx, ()));
+        register("clock", self.clock.register(ctx, &self.config.clock.format));
+        register(
+            "updates",
+            self.updates.register(ctx, self.config.updates.as_ref()),
+        );
+        register(
+            "workspaces",
+            self.workspaces.register(ctx, &self.config.workspaces),
+        );
+        register("window-title", self.window_title.register(ctx, ()));
+        register("system-info", self.system_info.register(ctx, ()));
+        register("keyboard-layout", self.keyboard_layout.register(ctx, ()));
+        register("keyboard-submap", self.keyboard_submap.register(ctx, ()));
+        register("tray", self.tray.register(ctx, ()));
+        register("battery", self.battery.register(ctx, ()));
+        register("privacy", self.privacy.register(ctx, ()));
+        register("settings", self.settings.register(ctx, ()));
+        register("media-player", self.media_player.register(ctx, ()));
+
+        for definition in &self.config.custom_modules {
+            match self.custom.get_mut(&definition.name) {
+                Some(module) => {
+                    if let Err(err) = module.register(ctx, Some(definition)) {
+                        error!(
+                            "failed to register custom module '{}': {err}",
+                            definition.name
+                        );
+                    }
+                }
+                None => error!(
+                    "custom module '{}' missing runtime state entry during registration",
+                    definition.name
+                ),
+            }
+        }
+
+        for (name, module) in self.custom.iter_mut() {
+            if !self
+                .config
+                .custom_modules
+                .iter()
+                .any(|definition| definition.name == *name)
+            {
+                if let Err(err) = module.register(ctx, None) {
+                    error!("failed to clear registration for custom module '{name}': {err}");
+                }
+            }
         }
     }
 
@@ -799,7 +871,7 @@ impl App {
     pub fn subscription(&self) -> Subscription<Message> {
         let timer = time::every(self.micro_ticker.interval()).map(|_| Message::MicroTick);
 
-        Subscription::batch(vec![
+        let mut subscriptions = vec![
             timer,
             config::subscription(&self.config_path, Arc::clone(&self.config_manager)).map(
                 |event| match event {
@@ -825,7 +897,13 @@ impl App {
                 }
                 _ => None,
             }),
-        ])
+        ];
+
+        subscriptions.extend(self.modules_subscriptions(&self.config.modules.left));
+        subscriptions.extend(self.modules_subscriptions(&self.config.modules.center));
+        subscriptions.extend(self.modules_subscriptions(&self.config.modules.right));
+
+        Subscription::batch(subscriptions)
     }
 }
 

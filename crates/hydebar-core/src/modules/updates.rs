@@ -1,4 +1,5 @@
 use crate::{
+    ModuleContext,
     app::{self},
     components::icons::{Icons, icon},
     config::UpdatesModuleConfig,
@@ -16,10 +17,10 @@ use iced::{
 };
 use log::error;
 use serde::Deserialize;
-use std::{any::TypeId, convert, process::Stdio, time::Duration};
+use std::{any::TypeId, convert, process::Stdio, sync::Arc, time::Duration};
 use tokio::{process, spawn, time::sleep};
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Update {
@@ -94,6 +95,12 @@ pub struct Updates {
     state: State,
     pub updates: Vec<Update>,
     pub is_updates_list_open: bool,
+    registration: Option<UpdatesRegistration>,
+}
+
+#[derive(Debug, Clone)]
+struct UpdatesRegistration {
+    check_command: Arc<str>,
 }
 
 impl Updates {
@@ -244,7 +251,19 @@ impl Updates {
 
 impl Module for Updates {
     type ViewData<'a> = &'a Option<UpdatesModuleConfig>;
-    type SubscriptionData<'a> = &'a UpdatesModuleConfig;
+    type RegistrationData<'a> = Option<&'a UpdatesModuleConfig>;
+
+    fn register(
+        &mut self,
+        _: &ModuleContext,
+        config: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.registration = config.map(|definition| UpdatesRegistration {
+            check_command: Arc::from(definition.check_cmd.as_str()),
+        });
+
+        Ok(())
+    }
 
     fn view(
         &self,
@@ -272,25 +291,27 @@ impl Module for Updates {
         }
     }
 
-    fn subscription(
-        &self,
-        config: Self::SubscriptionData<'_>,
-    ) -> Option<Subscription<app::Message>> {
-        let check_cmd = config.check_cmd.clone();
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
+        let registration = self.registration.as_ref()?;
         let id = TypeId::of::<Self>();
+        let check_command = Arc::clone(&registration.check_command);
 
         Some(
             Subscription::run_with_id(
                 id,
-                channel(10, async move |mut output| {
-                    loop {
-                        let updates = check_update_now(&check_cmd).await;
+                channel(10, move |mut output| {
+                    let check_command = Arc::clone(&check_command);
 
-                        if let Err(err) = enqueue_updates_result(&mut output, updates) {
-                            error!("failed to enqueue updates check result: {err}");
+                    async move {
+                        loop {
+                            let updates = check_update_now(check_command.as_ref()).await;
+
+                            if let Err(err) = enqueue_updates_result(&mut output, updates) {
+                                error!("failed to enqueue updates check result: {err}");
+                            }
+
+                            sleep(Duration::from_secs(3600)).await;
                         }
-
-                        sleep(Duration::from_secs(3600)).await;
                     }
                 }),
             )

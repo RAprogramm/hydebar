@@ -1,6 +1,7 @@
 use std::{any::TypeId, process::Stdio, sync::Arc};
 
 use crate::{
+    ModuleContext,
     app::{self},
     components::icons::{Icons, icon, icon_raw},
     config::CustomModuleDef,
@@ -29,12 +30,19 @@ use tokio::{
     task::yield_now,
 };
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 
 #[derive(Default, Debug, Clone)]
 pub struct Custom {
     data: CustomListenData,
     last_error: Option<CustomCommandError>,
+    registration: Option<CustomRegistration>,
+}
+
+#[derive(Debug, Clone)]
+struct CustomRegistration {
+    name: Arc<str>,
+    listen_command: Arc<str>,
 }
 
 impl Custom {
@@ -242,7 +250,25 @@ impl<Message> Program<Message> for AlertIndicator {
 
 impl Module for Custom {
     type ViewData<'a> = &'a CustomModuleDef;
-    type SubscriptionData<'a> = &'a CustomModuleDef;
+    type RegistrationData<'a> = Option<&'a CustomModuleDef>;
+
+    fn register(
+        &mut self,
+        _: &ModuleContext,
+        config: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.registration = config.and_then(|definition| {
+            definition
+                .listen_cmd
+                .as_ref()
+                .map(|command| CustomRegistration {
+                    name: Arc::from(definition.name.as_str()),
+                    listen_command: Arc::from(command.as_str()),
+                })
+        });
+
+        Ok(())
+    }
 
     fn view(
         &self,
@@ -324,30 +350,40 @@ impl Module for Custom {
         ))
     }
 
-    fn subscription(
-        &self,
-        config: Self::SubscriptionData<'_>,
-    ) -> Option<Subscription<app::Message>> {
-        if let Some(check_cmd) = config.listen_cmd.clone() {
-            let id = TypeId::of::<Self>();
-            let name = config.name.clone();
+    fn subscription(&self) -> Option<Subscription<app::Message>> {
+        let registration = self.registration.as_ref()?;
+        let id = TypeId::of::<Self>();
+        let identifier = format!("{id:?}-{}", registration.name);
+        let module_name = Arc::clone(&registration.name);
+        let listen_command = Arc::clone(&registration.listen_command);
 
-            Some(Subscription::run_with_id(
-                format!("{id:?}-{name}"),
-                channel(10, async move |mut output| {
-                    if let Err(error) = run_custom_listener(&name, &check_cmd, &mut output).await {
-                        error!("Custom module '{name}' listener terminated with error: {error:?}");
+        Some(Subscription::run_with_id(
+            identifier,
+            channel(10, move |mut output| {
+                let module_name = Arc::clone(&module_name);
+                let listen_command = Arc::clone(&listen_command);
+
+                async move {
+                    let module_label = module_name.as_ref();
+                    if let Err(error) =
+                        run_custom_listener(module_label, listen_command.as_ref(), &mut output)
+                            .await
+                    {
+                        error!(
+                            "Custom module '{module_label}' listener terminated with error: {error:?}"
+                        );
                         if !matches!(error, CustomCommandError::ChannelClosed) {
-                            let _ =
-                                send_event(&mut output, &name, ServiceEvent::Error(error.clone()))
-                                    .await;
+                            let _ = send_event(
+                                &mut output,
+                                module_label,
+                                ServiceEvent::Error(error.clone()),
+                            )
+                            .await;
                         }
                     }
-                }),
-            ))
-        } else {
-            None
-        }
+                }
+            }),
+        ))
     }
 }
 
