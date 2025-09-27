@@ -1,10 +1,11 @@
 use crate::{
+    ModuleContext,
     app::{self},
     components::icons::{Icons, icon},
 };
 use iced::Element;
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 
 #[derive(Default, Debug, Clone)]
 pub struct Clipboard;
@@ -12,6 +13,14 @@ pub struct Clipboard;
 impl Module for Clipboard {
     type ViewData<'a> = &'a Option<String>;
     type RegistrationData<'a> = ();
+
+    fn register(
+        &mut self,
+        _: &ModuleContext,
+        _: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        Ok(())
+    }
 
     fn view(
         &self,

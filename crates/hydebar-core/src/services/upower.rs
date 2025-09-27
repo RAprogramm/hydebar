@@ -117,7 +117,7 @@ pub struct UPowerService {
     conn: zbus::Connection,
 }
 
-enum State {
+pub(crate) enum State {
     Init,
     Active(zbus::Connection, Option<Vec<ObjectPath<'static>>>),
     Error,
@@ -297,7 +297,10 @@ impl UPowerService {
         Ok(stream_select!(battery_event, power_profile_event))
     }
 
-    async fn start_listening(state: State, output: &mut Sender<ServiceEvent<Self>>) -> State {
+    pub(crate) async fn start_listening(
+        state: State,
+        output: &mut Sender<ServiceEvent<Self>>,
+    ) -> State {
         match state {
             State::Init => match zbus::Connection::system().await {
                 Ok(conn) => {

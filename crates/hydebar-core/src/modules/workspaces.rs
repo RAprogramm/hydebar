@@ -1,7 +1,8 @@
 use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    ModuleContext, app,
+    ModuleContext, ModuleEventSender, app,
     config::{AppearanceColor, WorkspaceVisibilityMode, WorkspacesModuleConfig},
+    event_bus::ModuleEvent,
     outputs::Outputs,
     style::workspace_button_style,
 };
@@ -12,20 +13,15 @@ use hydebar_proto::ports::hyprland::{
 };
 
 use iced::{
-    Element, Length, Subscription, alignment,
-    stream::channel,
+    Element, Length, alignment,
     widget::{Row, button, container, text},
     window::Id,
 };
 
 use itertools::Itertools;
 use log::{debug, error};
-use std::{
-    any::TypeId,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
-use tokio::time::sleep;
+use std::{sync::Arc, time::Duration};
+use tokio::{task::JoinHandle, time::sleep};
 use tokio_stream::StreamExt;
 
 const WORKSPACE_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
@@ -137,12 +133,8 @@ fn map_snapshot_to_workspaces(
 pub struct Workspaces {
     hyprland: Arc<dyn HyprlandPort>,
     workspaces: Vec<Workspace>,
-    registration: Option<WorkspacesRegistration>,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct WorkspacesRegistration {
-    enable_workspace_filling: bool,
+    sender: Option<ModuleEventSender<Message>>,
+    task: Option<JoinHandle<()>>,
 }
 
 impl Workspaces {
@@ -152,7 +144,8 @@ impl Workspaces {
         Self {
             hyprland,
             workspaces,
-            registration: None,
+            sender: None,
+            task: None,
         }
     }
 
@@ -224,12 +217,65 @@ impl Module for Workspaces {
 
     fn register(
         &mut self,
-        _: &ModuleContext,
+        ctx: &ModuleContext,
         config: Self::RegistrationData<'_>,
     ) -> Result<(), ModuleError> {
-        self.registration = Some(WorkspacesRegistration {
-            enable_workspace_filling: config.enable_workspace_filling,
-        });
+        self.workspaces = get_workspaces(self.hyprland.as_ref(), config);
+
+        self.sender = Some(ctx.module_sender(ModuleEvent::Workspaces));
+
+        if let Some(handle) = self.task.take() {
+            handle.abort();
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            let hyprland = Arc::clone(&self.hyprland);
+            self.task = Some(ctx.runtime_handle().spawn(async move {
+                loop {
+                    match hyprland.workspace_events() {
+                        Ok(mut stream) => {
+                            while let Some(event) = stream.next().await {
+                                match event {
+                                    Ok(
+                                        HyprlandWorkspaceEvent::Added
+                                        | HyprlandWorkspaceEvent::Changed
+                                        | HyprlandWorkspaceEvent::Removed
+                                        | HyprlandWorkspaceEvent::Moved
+                                        | HyprlandWorkspaceEvent::SpecialChanged
+                                        | HyprlandWorkspaceEvent::SpecialRemoved
+                                        | HyprlandWorkspaceEvent::WindowClosed
+                                        | HyprlandWorkspaceEvent::WindowOpened
+                                        | HyprlandWorkspaceEvent::WindowMoved
+                                        | HyprlandWorkspaceEvent::ActiveMonitorChanged,
+                                    ) => {
+                                        if let Err(err) =
+                                            sender.try_send(Message::WorkspacesChanged)
+                                        {
+                                            error!("failed to publish workspace update: {err}");
+                                        }
+                                    }
+                                    Err(err) => {
+                                        error!("workspace event stream error: {err}");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("failed to start workspace event stream: {err}");
+                        }
+                    }
+
+                    sleep(WORKSPACE_EVENT_RETRY_DELAY).await;
+                }
+            }));
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            if let Err(err) = sender.try_send(Message::WorkspacesChanged) {
+                error!("failed to enqueue initial workspace refresh: {err}");
+            }
+        }
 
         Ok(())
     }
@@ -313,76 +359,7 @@ impl Module for Workspaces {
         ))
     }
 
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        let registration = self.registration?;
-        let id = TypeId::of::<Self>();
-        let enable_workspace_filling = registration.enable_workspace_filling;
-
-        let hyprland = Arc::clone(&self.hyprland);
-
-        Some(
-            Subscription::run_with_id(
-                format!("{id:?}-{enable_workspace_filling}"),
-                channel(10, move |output| {
-                    let hyprland = Arc::clone(&hyprland);
-                    let output = Arc::new(RwLock::new(output));
-
-                    async move {
-                        loop {
-                            match hyprland.workspace_events() {
-                                Ok(mut stream) => {
-                                    while let Some(event) = stream.next().await {
-                                        match event {
-                                            Ok(
-                                                HyprlandWorkspaceEvent::Added
-                                                | HyprlandWorkspaceEvent::Changed
-                                                | HyprlandWorkspaceEvent::Removed
-                                                | HyprlandWorkspaceEvent::Moved
-                                                | HyprlandWorkspaceEvent::SpecialChanged
-                                                | HyprlandWorkspaceEvent::SpecialRemoved
-                                                | HyprlandWorkspaceEvent::WindowClosed
-                                                | HyprlandWorkspaceEvent::WindowOpened
-                                                | HyprlandWorkspaceEvent::WindowMoved
-                                                | HyprlandWorkspaceEvent::ActiveMonitorChanged,
-                                            ) => {
-                                                if let Ok(mut guard) = output.write() {
-                                                    if let Err(err) =
-                                                        guard.try_send(Message::WorkspacesChanged)
-                                                    {
-                                                        error!(
-                                                            "failed to enqueue WorkspacesChanged: {err}"
-                                                        );
-                                                    }
-                                                } else {
-                                                    error!(
-                                                        "failed to acquire output lock for WorkspacesChanged"
-                                                    );
-                                                }
-                                            }
-                                            Err(err) => {
-                                                error!(
-                                                    "workspace event stream error, restarting listener: {err}"
-                                                );
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    error!(
-                                        "failed to start workspace event stream, retrying: {err}"
-                                    );
-                                }
-                            }
-
-                            sleep(WORKSPACE_EVENT_RETRY_DELAY).await;
-                        }
-                    }
-                }),
-            )
-            .map(app::Message::Workspaces),
-        )
-    }
+    // Background updates are delivered via the shared module event sender.
 }
 
 #[cfg(test)]

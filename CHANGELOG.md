@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-09-27
+
 ### Added
 
 - Add option to remove the airplane button
@@ -24,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared `ModuleContext`, registers each module with its registration data, and
   keeps a runtime handle for modules to publish redraws without direct iced
   dependencies.
+- Convert module subscriptions for clock, battery, keyboard layout/submap, window
+  title, and workspaces into background tasks registered through typed
+  `ModuleEventSender`s, eliminating direct iced subscriptions and aligning with
+  the new module registration API.
 
 ## [0.4.0] - 2025-09-30
 

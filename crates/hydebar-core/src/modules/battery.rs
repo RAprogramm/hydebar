@@ -1,27 +1,41 @@
 use crate::{
-    app,
+    ModuleContext, ModuleEventSender, app,
     components::icons::{Icons, icon},
     config::BatteryModuleConfig,
+    event_bus::ModuleEvent,
     menu::MenuType,
-    modules::{Module, OnModulePress},
+    modules::{Module, ModuleError, OnModulePress},
     services::{
         ServiceEvent,
-        upower::{BatteryData, PowerProfile, UPowerEvent, UPowerService},
+        upower::{BatteryData, PowerProfile, State, UPowerEvent, UPowerService},
     },
     utils::IndicatorState,
 };
+use futures::StreamExt;
 use iced::{
-    Alignment, Element, Subscription, Theme,
+    Alignment, Element, Theme,
     widget::{Row, container, row, text},
 };
-use log::warn;
-use std::any::TypeId;
+use log::{error, warn};
+use tokio::task::JoinHandle;
 
 /// Maintains state required to render the battery module.
-#[derive(Default)]
 pub struct Battery {
     battery: Option<BatteryData>,
     power_profile: PowerProfile,
+    sender: Option<ModuleEventSender<Message>>,
+    tasks: Vec<JoinHandle<()>>,
+}
+
+impl Default for Battery {
+    fn default() -> Self {
+        Self {
+            battery: None,
+            power_profile: PowerProfile::Unknown,
+            sender: None,
+            tasks: Vec::new(),
+        }
+    }
 }
 
 /// Messages emitted by the battery module runtime.
@@ -29,8 +43,6 @@ pub struct Battery {
 pub enum Message {
     Event(ServiceEvent<UPowerService>),
 }
-
-struct SubscriptionMarker;
 
 impl Battery {
     /// Updates the module state in response to a new message.
@@ -111,6 +123,44 @@ impl Module for Battery {
     type ViewData<'a> = &'a BatteryModuleConfig;
     type RegistrationData<'a> = ();
 
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        _: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.sender = Some(ctx.module_sender(ModuleEvent::Battery));
+
+        for task in self.tasks.drain(..) {
+            task.abort();
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            let (mut tx, mut rx) = iced::futures::channel::mpsc::channel(100);
+            let initial_state = State::Init;
+
+            let producer = ctx.runtime_handle().spawn(async move {
+                let mut state = initial_state;
+
+                loop {
+                    state = UPowerService::start_listening(state, &mut tx).await;
+                }
+            });
+
+            let forward_sender = sender.clone();
+            let forwarder = ctx.runtime_handle().spawn(async move {
+                while let Some(event) = rx.next().await {
+                    if let Err(err) = forward_sender.try_send(Message::Event(event)) {
+                        error!("failed to publish battery event: {err}");
+                    }
+                }
+            });
+
+            self.tasks = vec![producer, forwarder];
+        }
+
+        Ok(())
+    }
+
     fn view(
         &self,
         config: Self::ViewData<'_>,
@@ -149,14 +199,6 @@ impl Module for Battery {
             .then_some(OnModulePress::ToggleMenu(MenuType::Settings));
 
         Some((content.into(), action))
-    }
-
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        Some(
-            UPowerService::subscription_with_id(TypeId::of::<SubscriptionMarker>())
-                .map(Message::Event)
-                .map(app::Message::Battery),
-        )
     }
 }
 
