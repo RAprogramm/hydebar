@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add custom commands for power menu actions
 - Add battery module with configurable power-profile indicator and fallback view
 
+### Changed
+
+- Route the event bus sender into the GUI application so `App::new` provisions the
+  shared `ModuleContext`, registers each module with its registration data, and
+  keeps a runtime handle for modules to publish redraws without direct iced
+  dependencies.
+
 ## [0.4.0] - 2025-09-30
 
 ### Changed

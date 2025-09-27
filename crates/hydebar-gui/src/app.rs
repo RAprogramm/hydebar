@@ -10,7 +10,7 @@ use flexi_logger::LoggerHandle;
 use hydebar_core::{
     HEIGHT, ModuleContext,
     config::{self, ConfigApplied, ConfigDegradation, ConfigEvent, ConfigImpact, ConfigManager},
-    event_bus::{BusEvent, EventReceiver, ModuleEvent},
+    event_bus::{BusEvent, EventReceiver, EventSender, ModuleEvent},
     menu::{MenuSize, MenuType, menu_wrapper},
     modules::{
         self,
@@ -51,6 +51,7 @@ use iced::{
     window::Id,
 };
 use log::{debug, error, info, warn};
+use tokio::runtime::Handle;
 use wayland_client::protocol::wl_output::WlOutput;
 
 use crate::{centerbox, get_log_spec};
@@ -192,10 +193,7 @@ impl Default for MicroTicker {
 mod tests {
     use super::*;
     use flexi_logger::LoggerHandle;
-    use hydebar_core::{
-        config::ConfigManager, event_bus::EventBus, module_context::ModuleContext,
-        test_utils::MockHyprlandPort,
-    };
+    use hydebar_core::{config::ConfigManager, event_bus::EventBus, test_utils::MockHyprlandPort};
     use hydebar_proto::ports::hyprland::HyprlandPort;
     use std::{num::NonZeroUsize, sync::OnceLock};
 
@@ -223,7 +221,9 @@ mod tests {
         let capacity = NonZeroUsize::new(16).expect("non-zero");
         let bus = EventBus::new(capacity);
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
-        let module_context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let event_sender = bus.sender();
+        let runtime_handle = runtime.handle().clone();
+        let bus_receiver = bus.receiver();
 
         let (app, _) = App::new((
             logger,
@@ -231,8 +231,9 @@ mod tests {
             Arc::clone(&config_manager),
             path,
             Arc::clone(&mock_port),
-            module_context,
-            bus.receiver(),
+            event_sender,
+            runtime_handle,
+            bus_receiver,
         ))();
 
         assert!(Arc::ptr_eq(&app.hyprland, &mock_port));
@@ -250,7 +251,9 @@ mod tests {
         let capacity = NonZeroUsize::new(16).expect("non-zero");
         let bus = EventBus::new(capacity);
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
-        let module_context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let event_sender = bus.sender();
+        let runtime_handle = runtime.handle().clone();
+        let bus_receiver = bus.receiver();
 
         let (mut app, _) = App::new((
             logger,
@@ -258,8 +261,9 @@ mod tests {
             Arc::clone(&config_manager),
             path,
             mock_port,
-            module_context,
-            bus.receiver(),
+            event_sender,
+            runtime_handle,
+            bus_receiver,
         ))();
 
         let _ = app.update(Message::KeyboardLayout(
@@ -272,13 +276,23 @@ mod tests {
 
 impl App {
     pub fn new(
-        (logger, config, config_manager, config_path, hyprland, module_context, bus_receiver): (
+        (
+            logger,
+            config,
+            config_manager,
+            config_path,
+            hyprland,
+            event_sender,
+            runtime_handle,
+            bus_receiver,
+        ): (
             LoggerHandle,
             Config,
             Arc<ConfigManager>,
             PathBuf,
             Arc<dyn HyprlandPort>,
-            ModuleContext,
+            EventSender,
+            Handle,
             EventReceiver,
         ),
     ) -> impl FnOnce() -> (Self, Task<Message>) {
@@ -290,6 +304,7 @@ impl App {
                 .iter()
                 .map(|o| (o.name.clone(), Custom::default()))
                 .collect();
+            let module_context = ModuleContext::new(event_sender, runtime_handle);
             let hyprland_clone = Arc::clone(&hyprland);
             let mut app = App {
                 config_path,
