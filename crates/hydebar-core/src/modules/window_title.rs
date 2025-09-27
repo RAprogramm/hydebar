@@ -1,22 +1,20 @@
 use crate::{
-    app,
+    ModuleContext, ModuleEventSender, app,
     config::{WindowTitleConfig, WindowTitleMode},
+    event_bus::ModuleEvent,
     utils::truncate_text,
 };
 use hydebar_proto::ports::hyprland::{HyprlandPort, HyprlandWindowEvent};
-use iced::{Element, Subscription, stream::channel, widget::text};
+use iced::Element;
+use iced::widget::text;
 use log::error;
-use std::{
-    any::TypeId,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
-use tokio::time::sleep;
+use std::{sync::Arc, time::Duration};
+use tokio::{task::JoinHandle, time::sleep};
 use tokio_stream::StreamExt;
 
 const WINDOW_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 
 fn get_window(port: &dyn HyprlandPort, config: &WindowTitleConfig) -> Option<String> {
     match port.active_window() {
@@ -35,6 +33,8 @@ fn get_window(port: &dyn HyprlandPort, config: &WindowTitleConfig) -> Option<Str
 pub struct WindowTitle {
     hyprland: Arc<dyn HyprlandPort>,
     value: Option<String>,
+    sender: Option<ModuleEventSender<Message>>,
+    task: Option<JoinHandle<()>>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +49,8 @@ impl WindowTitle {
         Self {
             hyprland,
             value: init,
+            sender: None,
+            task: None,
         }
     }
 }
@@ -113,6 +115,54 @@ impl Module for WindowTitle {
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        _: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.sender = Some(ctx.module_sender(ModuleEvent::WindowTitle));
+
+        if let Some(handle) = self.task.take() {
+            handle.abort();
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            let hyprland = Arc::clone(&self.hyprland);
+            self.task = Some(ctx.runtime_handle().spawn(async move {
+                loop {
+                    match hyprland.window_events() {
+                        Ok(mut stream) => {
+                            while let Some(event) = stream.next().await {
+                                match event {
+                                    Ok(
+                                        HyprlandWindowEvent::ActiveWindowChanged
+                                        | HyprlandWindowEvent::WindowClosed
+                                        | HyprlandWindowEvent::WorkspaceFocusChanged,
+                                    ) => {
+                                        if let Err(err) = sender.try_send(Message::TitleChanged) {
+                                            error!("failed to publish window title update: {err}");
+                                        }
+                                    }
+                                    Err(err) => {
+                                        error!("window event stream error: {err}");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("failed to start window event stream: {err}");
+                        }
+                    }
+
+                    sleep(WINDOW_EVENT_RETRY_DELAY).await;
+                }
+            }));
+        }
+
+        Ok(())
+    }
+
     fn view(
         &self,
         _: Self::ViewData<'_>,
@@ -128,61 +178,5 @@ impl Module for WindowTitle {
         })
     }
 
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        let id = TypeId::of::<Self>();
-        let hyprland = Arc::clone(&self.hyprland);
-
-        Some(
-            Subscription::run_with_id(
-                id,
-                channel(10, move |output| {
-                    let hyprland = Arc::clone(&hyprland);
-                    let output = Arc::new(RwLock::new(output));
-                    async move {
-                        loop {
-                            match hyprland.window_events() {
-                                Ok(mut stream) => {
-                                    while let Some(event) = stream.next().await {
-                                        match event {
-                                            Ok(
-                                                HyprlandWindowEvent::ActiveWindowChanged
-                                                | HyprlandWindowEvent::WindowClosed
-                                                | HyprlandWindowEvent::WorkspaceFocusChanged,
-                                            ) => {
-                                                if let Ok(mut guard) = output.write() {
-                                                    if let Err(err) = guard.try_send(Message::TitleChanged) {
-                                                        error!(
-                                                            "failed to enqueue title change notification: {err}"
-                                                        );
-                                                    }
-                                                } else {
-                                                    error!(
-                                                        "failed to acquire lock for title change notification"
-                                                    );
-                                                }
-                                            }
-                                            Err(err) => {
-                                                error!(
-                                                    "window event stream error, restarting listener: {err}"
-                                                );
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    error!(
-                                        "failed to start window event stream, retrying: {err}"
-                                    );
-                                }
-                            }
-
-                            sleep(WINDOW_EVENT_RETRY_DELAY).await;
-                        }
-                    }
-                }),
-            )
-            .map(app::Message::WindowTitle),
-        )
-    }
+    // No iced subscription required; updates are dispatched via the module event sender.
 }

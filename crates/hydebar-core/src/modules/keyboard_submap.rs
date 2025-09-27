@@ -1,21 +1,20 @@
 use hydebar_proto::ports::hyprland::{HyprlandKeyboardEvent, HyprlandKeyboardState, HyprlandPort};
-use iced::{Element, Subscription, stream::channel, widget::text};
+use iced::Element;
+use iced::widget::text;
 use log::error;
-use std::{
-    any::TypeId,
-    sync::{Arc, RwLock},
-    time::Duration,
-};
-use tokio::time::sleep;
+use std::{sync::Arc, time::Duration};
+use tokio::{task::JoinHandle, time::sleep};
 use tokio_stream::StreamExt;
 
-use crate::app;
+use crate::{ModuleContext, ModuleEventSender, app, event_bus::ModuleEvent};
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
 
 pub struct KeyboardSubmap {
     hyprland: Arc<dyn HyprlandPort>,
     submap: String,
+    sender: Option<ModuleEventSender<Message>>,
+    task: Option<JoinHandle<()>>,
 }
 
 const SUBMAP_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
@@ -35,6 +34,8 @@ impl KeyboardSubmap {
         Self {
             hyprland,
             submap: initial_submap,
+            sender: None,
+            task: None,
         }
     }
 }
@@ -63,6 +64,54 @@ impl Module for KeyboardSubmap {
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        _: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.sender = Some(ctx.module_sender(ModuleEvent::KeyboardSubmap));
+
+        if let Some(handle) = self.task.take() {
+            handle.abort();
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            let hyprland = Arc::clone(&self.hyprland);
+            self.task = Some(ctx.runtime_handle().spawn(async move {
+                loop {
+                    match hyprland.keyboard_events() {
+                        Ok(mut stream) => {
+                            while let Some(event) = stream.next().await {
+                                match event {
+                                    Ok(HyprlandKeyboardEvent::SubmapChanged(submap)) => {
+                                        let payload = submap.unwrap_or_default();
+                                        if let Err(err) =
+                                            sender.try_send(Message::SubmapChanged(payload))
+                                        {
+                                            error!("failed to publish submap update: {err}");
+                                        }
+                                    }
+                                    Ok(_) => {}
+                                    Err(err) => {
+                                        error!("keyboard submap stream error: {err}");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("failed to start keyboard submap stream: {err}");
+                        }
+                    }
+
+                    sleep(SUBMAP_EVENT_RETRY_DELAY).await;
+                }
+            }));
+        }
+
+        Ok(())
+    }
+
     fn view(
         &self,
         _: Self::ViewData<'_>,
@@ -74,70 +123,7 @@ impl Module for KeyboardSubmap {
         }
     }
 
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        let id = TypeId::of::<Self>();
-
-        let hyprland = Arc::clone(&self.hyprland);
-
-        Some(
-            Subscription::run_with_id(
-                id,
-                channel(10, move |output| {
-                    let hyprland = Arc::clone(&hyprland);
-                    let output = Arc::new(RwLock::new(output));
-
-                    async move {
-                        loop {
-                            match hyprland.keyboard_events() {
-                                Ok(mut stream) => {
-                                    while let Some(event) = stream.next().await {
-                                        match event {
-                                            Ok(HyprlandKeyboardEvent::SubmapChanged(submap)) => {
-                                                let payload = submap.unwrap_or_default();
-                                                match output.write() {
-                                                    Ok(mut guard) => {
-                                                        if let Err(err) = guard
-                                                            .try_send(Message::SubmapChanged(
-                                                                payload,
-                                                            ))
-                                                        {
-                                                            error!(
-                                                                "failed to enqueue submap update: {err}"
-                                                            );
-                                                        }
-                                                    }
-                                                    Err(_) => {
-                                                        error!(
-                                                            "failed to acquire lock for submap update"
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                            Ok(_) => {}
-                                            Err(err) => {
-                                                error!(
-                                                    "keyboard event stream error, restarting submap listener: {err}"
-                                                );
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    error!(
-                                        "failed to start keyboard submap stream, retrying: {err}"
-                                    );
-                                }
-                            }
-
-                            sleep(SUBMAP_EVENT_RETRY_DELAY).await;
-                        }
-                    }
-                }),
-            )
-            .map(app::Message::KeyboardSubmap),
-        )
-    }
+    // No iced subscription required; updates are dispatched via the module event sender.
 }
 
 #[cfg(test)]
