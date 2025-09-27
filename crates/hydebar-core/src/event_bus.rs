@@ -97,7 +97,7 @@ impl EventBusInner {
 /// let error = EventBusError::QueueFull { capacity: 4 };
 /// assert!(matches!(error, EventBusError::QueueFull { .. }));
 /// ```
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum EventBusError {
     /// The queue reached its configured capacity.
     #[error("event queue is full (capacity: {capacity})")]
