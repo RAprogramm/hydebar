@@ -17,3 +17,5 @@ pub mod style;
 #[cfg(test)]
 pub mod test_utils;
 pub mod utils;
+
+pub use module_context::{ModuleContext, ModuleEventSender};
