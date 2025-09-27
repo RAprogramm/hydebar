@@ -525,7 +525,10 @@ impl App {
                 self.window_title.update(message, &self.config.window_title);
                 Task::none()
             }
-            Message::SystemInfo(message) => self.system_info.update(message),
+            Message::SystemInfo(message) => {
+                self.system_info.update(message);
+                Task::none()
+            }
             Message::KeyboardLayout(message) => {
                 self.keyboard_layout.update(message);
                 Task::none()

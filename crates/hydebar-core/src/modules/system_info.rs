@@ -1,19 +1,26 @@
 use crate::{
-    app,
+    ModuleContext, ModuleEventSender, app,
     components::icons::{Icons, icon},
     config::{SystemIndicator, SystemModuleConfig},
+    event_bus::ModuleEvent,
     menu::MenuType,
 };
 use iced::{
-    Alignment, Element, Length, Subscription, Task, Theme,
-    time::every,
+    Alignment, Element, Length, Theme,
     widget::{Column, Row, column, container, horizontal_rule, row, text},
 };
 use itertools::Itertools;
+use log::error;
 use std::time::{Duration, Instant};
 use sysinfo::{Components, Disks, Networks, System};
+use tokio::{
+    task::JoinHandle,
+    time::{MissedTickBehavior, interval},
+};
 
-use super::{Module, OnModulePress};
+use super::{Module, ModuleError, OnModulePress};
+
+const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
 struct NetworkData {
     ip: String,
@@ -123,6 +130,8 @@ pub struct SystemInfo {
     disks: Disks,
     networks: Networks,
     data: SystemInfoData,
+    sender: Option<ModuleEventSender<Message>>,
+    polling_task: Option<JoinHandle<()>>,
 }
 
 impl Default for SystemInfo {
@@ -144,6 +153,8 @@ impl Default for SystemInfo {
             disks,
             data,
             networks,
+            sender: None,
+            polling_task: None,
         }
     }
 }
@@ -154,7 +165,7 @@ pub enum Message {
 }
 
 impl SystemInfo {
-    pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
+    pub fn update(&mut self, message: Message) {
         match message {
             Message::Update => {
                 self.data = get_system_info(
@@ -166,8 +177,6 @@ impl SystemInfo {
                         self.data.network.as_ref().map(|n| n.last_check),
                     ),
                 );
-
-                Task::none()
             }
         }
     }
@@ -298,6 +307,39 @@ impl Module for SystemInfo {
     type ViewData<'a> = &'a SystemModuleConfig;
     type RegistrationData<'a> = ();
 
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        _: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.sender = Some(ctx.module_sender(ModuleEvent::SystemInfo));
+
+        if let Some(task) = self.polling_task.take() {
+            task.abort();
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            let handle = ctx.runtime_handle().spawn(async move {
+                let mut ticker = interval(REFRESH_INTERVAL);
+                ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
+                // Discard the immediate first tick to align with the configured interval.
+                let _ = ticker.tick().await;
+
+                loop {
+                    ticker.tick().await;
+
+                    if let Err(err) = sender.try_send(Message::Update) {
+                        error!("failed to publish system info refresh: {err}");
+                    }
+                }
+            });
+
+            self.polling_task = Some(handle);
+        }
+
+        Ok(())
+    }
+
     fn view(
         &self,
         config: Self::ViewData<'_>,
@@ -404,8 +446,74 @@ impl Module for SystemInfo {
             Some(OnModulePress::ToggleMenu(MenuType::SystemInfo)),
         ))
     }
+}
 
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        Some(every(Duration::from_secs(5)).map(|_| app::Message::SystemInfo(Message::Update)))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        event_bus::{BusEvent, EventBus},
+        modules::Module,
+    };
+    use std::num::NonZeroUsize;
+    use tokio::{task::yield_now, time::advance};
+
+    fn module_context() -> (ModuleContext, EventBus) {
+        let bus = EventBus::new(NonZeroUsize::new(16).expect("non-zero capacity"));
+        let ctx = ModuleContext::new(bus.sender(), tokio::runtime::Handle::current());
+
+        (ctx, bus)
+    }
+
+    fn expect_system_info_update(event: Option<BusEvent>) {
+        match event {
+            Some(BusEvent::Module(ModuleEvent::SystemInfo(Message::Update))) => {}
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn schedules_periodic_refreshes() {
+        let (ctx, bus) = module_context();
+        let mut module = SystemInfo::default();
+        let mut receiver = bus.receiver();
+
+        module.register(&ctx, ()).expect("register system info");
+        yield_now().await;
+
+        assert!(receiver.try_recv().expect("initial queue state").is_none());
+
+        advance(REFRESH_INTERVAL).await;
+        yield_now().await;
+
+        let event = receiver.try_recv().expect("queued refresh after interval");
+        expect_system_info_update(event);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn re_register_aborts_previous_task() {
+        let (ctx, bus) = module_context();
+        let mut module = SystemInfo::default();
+        let mut receiver = bus.receiver();
+
+        module.register(&ctx, ()).expect("register system info");
+        yield_now().await;
+
+        advance(REFRESH_INTERVAL).await;
+        yield_now().await;
+
+        let first = receiver.try_recv().expect("first refresh after interval");
+        expect_system_info_update(first);
+        assert!(receiver.try_recv().expect("drain first interval").is_none());
+
+        module.register(&ctx, ()).expect("re-register system info");
+        yield_now().await;
+
+        advance(REFRESH_INTERVAL).await;
+        yield_now().await;
+
+        let second = receiver.try_recv().expect("refresh after re-registration");
+        expect_system_info_update(second);
+        assert!(receiver.try_recv().expect("no duplicate refresh").is_none());
     }
 }
