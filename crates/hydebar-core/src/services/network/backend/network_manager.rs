@@ -1,9 +1,9 @@
-use crate::services::{
-    bluetooth::BluetoothService,
-    network::{NetworkBackend, NetworkData, NetworkEvent},
+use super::DeviceType;
+use crate::services::bluetooth::BluetoothService;
+use crate::services::network::{
+    AccessPoint, ActiveConnectionInfo, ConnectivityState, DeviceState, KnownConnection,
+    NetworkBackend, NetworkData, NetworkEvent, Vpn,
 };
-
-use super::{AccessPoint, ActiveConnectionInfo, KnownConnection, Vpn};
 use iced::futures::{
     Stream, StreamExt,
     stream::{BoxStream, select_all},
@@ -20,8 +20,8 @@ use zbus::{
 #[derive(Clone)]
 pub struct NetworkDbus<'a>(NetworkManagerProxy<'a>);
 
-impl super::NetworkBackend for NetworkDbus<'_> {
-    async fn initialize_data(&self) -> anyhow::Result<super::NetworkData> {
+impl NetworkBackend for NetworkDbus<'_> {
+    async fn initialize_data(&self) -> anyhow::Result<NetworkData> {
         let nm = self;
 
         // airplane mode
@@ -220,7 +220,7 @@ impl<'a> NetworkDbus<'a> {
 impl<'a> NetworkDbus<'a> {
     pub async fn subscribe_events(
         &'a self,
-    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<super::NetworkEvent>> + 'a> {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<NetworkEvent>> + 'a> {
         type EventStream<'s> = BoxStream<'s, anyhow::Result<NetworkEvent>>;
 
         let conn = self.0.inner().connection();
@@ -759,158 +759,6 @@ impl NetworkSettingsDbus<'_> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeviceType {
-    Ethernet,
-    Wifi,
-    Bluetooth,
-    TunTap,
-    WireGuard,
-    Generic,
-    Other,
-    #[default]
-    Unknown,
-}
-
-impl From<u32> for DeviceType {
-    fn from(device_type: u32) -> DeviceType {
-        match device_type {
-            1 => DeviceType::Ethernet,
-            2 => DeviceType::Wifi,
-            5 => DeviceType::Bluetooth,
-            14 => DeviceType::Generic,
-            16 => DeviceType::TunTap,
-            29 => DeviceType::WireGuard,
-            3..=32 => DeviceType::Other,
-            _ => DeviceType::Unknown,
-        }
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-pub enum ActiveConnectionState {
-    #[default]
-    Unknown,
-    Activating,
-    Activated,
-    Deactivating,
-    Deactivated,
-}
-
-impl From<u32> for ActiveConnectionState {
-    fn from(device_state: u32) -> Self {
-        match device_state {
-            1 => ActiveConnectionState::Activating,
-            2 => ActiveConnectionState::Activated,
-            3 => ActiveConnectionState::Deactivating,
-            4 => ActiveConnectionState::Deactivated,
-            _ => ActiveConnectionState::Unknown,
-        }
-    }
-}
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConnectivityState {
-    None,
-    Portal,
-    Loss,
-    Full,
-    #[default]
-    Unknown,
-}
-
-impl From<u32> for ConnectivityState {
-    fn from(state: u32) -> ConnectivityState {
-        match state {
-            1 => ConnectivityState::None,
-            2 => ConnectivityState::Portal,
-            3 => ConnectivityState::Loss,
-            4 => ConnectivityState::Full,
-            _ => ConnectivityState::Unknown,
-        }
-    }
-}
-
-// Used by iwd
-impl From<String> for ConnectivityState {
-    fn from(state: String) -> ConnectivityState {
-        match state.as_str() {
-            "inactive" | "disconnected" => ConnectivityState::None,
-            "portal" => ConnectivityState::Portal,
-            "failed" => ConnectivityState::Loss,
-            "connected" => ConnectivityState::Full,
-            _ => ConnectivityState::Unknown, // scanning, connecting
-        }
-    }
-}
-
-impl From<Vec<ConnectivityState>> for ConnectivityState {
-    fn from(states: Vec<ConnectivityState>) -> ConnectivityState {
-        if states.is_empty() {
-            return ConnectivityState::Unknown;
-        }
-
-        let mut state = states[0];
-        for s in states.iter().skip(1) {
-            if Into::<u32>::into(*s) >= state.into() {
-                state = *s;
-            }
-        }
-
-        state
-    }
-}
-
-impl From<ConnectivityState> for u32 {
-    fn from(val: ConnectivityState) -> Self {
-        match val {
-            ConnectivityState::None => 1,
-            ConnectivityState::Portal => 2,
-            ConnectivityState::Loss => 3,
-            ConnectivityState::Full => 4,
-            _ => 0,
-        }
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeviceState {
-    Unmanaged,
-    Unavailable,
-    Disconnected,
-    Prepare,
-    Config,
-    NeedAuth,
-    IpConfig,
-    IpCheck,
-    Secondaries,
-    Activated,
-    Deactivating,
-    Failed,
-    #[default]
-    Unknown,
-}
-
-impl From<u32> for DeviceState {
-    fn from(device_state: u32) -> Self {
-        match device_state {
-            10 => DeviceState::Unmanaged,
-            20 => DeviceState::Unavailable,
-            30 => DeviceState::Disconnected,
-            40 => DeviceState::Prepare,
-            50 => DeviceState::Config,
-            60 => DeviceState::NeedAuth,
-            70 => DeviceState::IpConfig,
-            80 => DeviceState::IpCheck,
-            90 => DeviceState::Secondaries,
-            100 => DeviceState::Activated,
-            110 => DeviceState::Deactivating,
-            120 => DeviceState::Failed,
-            _ => DeviceState::Unknown,
-        }
-    }
-}
-
 #[proxy(
     interface = "org.freedesktop.NetworkManager",
     default_service = "org.freedesktop.NetworkManager",
@@ -1084,4 +932,28 @@ trait ConnectionSettings {
     fn update(&self, settings: HashMap<String, HashMap<String, OwnedValue>>) -> Result<()>;
 
     fn get_settings(&self) -> Result<HashMap<String, HashMap<String, OwnedValue>>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::network::ConnectivityState;
+
+    #[test]
+    fn device_type_from_u32_maps_known_values() {
+        assert_eq!(DeviceType::from(2), DeviceType::Wifi);
+        assert_eq!(DeviceType::from(29), DeviceType::WireGuard);
+        assert_eq!(DeviceType::from(42), DeviceType::Other);
+    }
+
+    #[test]
+    fn connectivity_state_from_vec_prefers_highest_state() {
+        let states = vec![
+            ConnectivityState::Portal,
+            ConnectivityState::Loss,
+            ConnectivityState::Full,
+        ];
+
+        assert_eq!(ConnectivityState::from(states), ConnectivityState::Full);
+    }
 }

@@ -22,14 +22,15 @@ use uuid::Uuid;
 //info!("{:?}",n.inner().introspect().await?); => can use this to generate proxy implementations
 
 use crate::services::bluetooth::BluetoothService;
+use crate::services::network::{
+    AccessPoint, ActiveConnectionInfo, ConnectivityState, DeviceState, KnownConnection,
+    NetworkBackend, NetworkData, NetworkEvent,
+};
 
-use zbus::interface;
-
-use super::dbus::DeviceState;
-use super::{AccessPoint, ActiveConnectionInfo, KnownConnection, NetworkBackend, NetworkEvent};
 use iced::futures::future::join_all;
 use iced::futures::stream::select_all;
 use iced::futures::{Stream, StreamExt};
+use zbus::interface;
 
 use log::{debug, info, warn};
 use std::ops::Deref;
@@ -58,8 +59,8 @@ impl<'a> Deref for IwdDbus<'a> {
 }
 
 #[allow(unused_variables)]
-impl super::NetworkBackend for IwdDbus<'_> {
-    async fn initialize_data(&self) -> anyhow::Result<super::NetworkData> {
+impl NetworkBackend for IwdDbus<'_> {
+    async fn initialize_data(&self) -> anyhow::Result<NetworkData> {
         let nm = self;
 
         // airplane mode
@@ -90,7 +91,7 @@ impl super::NetworkBackend for IwdDbus<'_> {
             .filter_map(|v| v.ok())
             .any(|v| v);
 
-        Ok(super::NetworkData {
+        Ok(NetworkData {
             wifi_present,
             active_connections,
             wifi_enabled,
@@ -99,8 +100,8 @@ impl super::NetworkBackend for IwdDbus<'_> {
                 .connectivity()
                 .await?
                 .into_iter()
-                .map(super::ConnectivityState::from)
-                .collect::<Vec<super::ConnectivityState>>()
+                .map(ConnectivityState::from)
+                .collect::<Vec<ConnectivityState>>()
                 .into(),
             wireless_access_points,
             known_connections,
@@ -299,6 +300,40 @@ impl PWAgent {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::TryFrom;
+    use zbus::zvariant::OwnedObjectPath;
+
+    #[tokio::test]
+    async fn pw_agent_returns_password_when_available() {
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut agent = PWAgent { password_rx: rx };
+        let path = OwnedObjectPath::try_from("/").expect("valid object path");
+
+        assert!(agent.request_passphrase(path.clone()).await.is_err());
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        tx.send("secret".to_string()).expect("send password");
+        let mut agent = PWAgent { password_rx: rx };
+        let path = OwnedObjectPath::try_from("/").expect("valid object path");
+        let value = agent
+            .request_passphrase(path)
+            .await
+            .expect("password available");
+        assert_eq!(value, "secret");
+    }
+
+    #[test]
+    fn signal_agent_emits_levels() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let agent = SignalAgent { tx };
+        agent.changed(42);
+        assert_eq!(rx.try_recv().expect("signal level"), 42);
+    }
+}
+
 #[allow(dead_code, unused_variables)]
 impl IwdDbus<'_> {
     /// Connect to the system bus and the IWD service
@@ -429,8 +464,8 @@ impl IwdDbus<'_> {
                                     .await
                                     .unwrap_or_default()
                                     .into_iter()
-                                    .map(super::ConnectivityState::from)
-                                    .collect::<Vec<super::ConnectivityState>>()
+                                    .map(ConnectivityState::from)
+                                    .collect::<Vec<ConnectivityState>>()
                                     .into(),
                             ),
                             NetworkEvent::ActiveConnections(
