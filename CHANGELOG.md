@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.6.3] - 2025-09-28
+
+### Changed
+
+- Extract the PipeWire runtime and webcam watchers into dedicated modules, wiring
+  the privacy service through injectable traits for improved testability.
+- Reuse a shared privacy event publisher abstraction across the service and new
+  components while keeping data/state structures in the core module.
+
+### Added
+
+- Unit tests covering privacy updates from both PipeWire node events and
+  inotify-driven webcam notifications.
+
 
 ## [0.6.3] - 2025-09-28
 
