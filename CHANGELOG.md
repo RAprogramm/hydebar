@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2025-09-27
+
+### Changed
+
+- Run custom module listeners on the shared runtime handle, caching module
+  event senders from `ModuleContext` and aborting previous tasks when
+  re-registering definitions.
+- Publish custom module updates through `ModuleEvent::Custom` conversions,
+  replacing the iced channel bridge and surfacing bus failures as `ModuleError`
+  values.
+
+### Added
+
+- Unit tests covering error propagation from the custom module listener and
+  validating that runtime-spawned tasks shut down cleanly on configuration
+  changes.
+
 ## [0.6.0] - 2025-09-27
 
 ### Changed
