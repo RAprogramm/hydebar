@@ -1,17 +1,16 @@
-use std::{any::TypeId, process::Stdio, sync::Arc};
+use std::{process::Stdio, sync::Arc};
 
 use crate::{
-    ModuleContext,
+    ModuleContext, ModuleEventSender,
     app::{self},
     components::icons::{Icons, icon, icon_raw},
     config::CustomModuleDef,
+    event_bus::ModuleEvent,
     services::ServiceEvent,
 };
-use iced::futures::channel::mpsc::Sender;
 use iced::widget::canvas;
 use iced::{
     Element, Length, Subscription, Theme,
-    stream::channel,
     widget::{Stack, row, text},
 };
 use iced::{
@@ -21,22 +20,24 @@ use iced::{
         container,
     },
 };
-use log::{error, info, warn};
+use log::{error, info};
 use masterror::Error;
 use serde::Deserialize;
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines},
     process::Command,
-    task::yield_now,
+    task::JoinHandle,
 };
 
 use super::{Module, ModuleError, OnModulePress};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct Custom {
     data: CustomListenData,
     last_error: Option<CustomCommandError>,
     registration: Option<CustomRegistration>,
+    sender: Option<ModuleEventSender<Message>>,
+    listener_task: Option<JoinHandle<()>>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +47,12 @@ struct CustomRegistration {
 }
 
 impl Custom {
+    fn abort_listener(&mut self) {
+        if let Some(handle) = self.listener_task.take() {
+            handle.abort();
+        }
+    }
+
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::Event(ServiceEvent::Update(data)) => {
@@ -57,6 +64,12 @@ impl Custom {
             }
             Message::Event(ServiceEvent::Init(_)) => {}
         }
+    }
+}
+
+impl Drop for Custom {
+    fn drop(&mut self) {
+        self.abort_listener();
     }
 }
 
@@ -140,80 +153,48 @@ fn truncate_snippet(line: &str) -> String {
     truncated
 }
 
-#[derive(Debug)]
-enum SendQueueError {
-    Full(Box<app::Message>),
-    Closed,
+#[derive(Debug, Clone, thiserror::Error)]
+enum CustomListenerError {
+    #[error(transparent)]
+    Command(CustomCommandError),
+    #[error(transparent)]
+    Module(ModuleError),
 }
 
-trait CustomUpdateSender {
-    fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError>;
-}
-
-impl CustomUpdateSender for Sender<app::Message> {
-    fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError> {
-        Sender::try_send(self, message).map_err(|error| {
-            if error.is_full() {
-                SendQueueError::Full(Box::new(error.into_inner()))
-            } else {
-                let _ = error.into_inner();
-                SendQueueError::Closed
-            }
-        })
-    }
-}
-
-async fn send_event<S: CustomUpdateSender + Send>(
-    sender: &mut S,
-    module_name: &str,
+fn send_event(
+    sender: &ModuleEventSender<Message>,
     event: ServiceEvent<CustomCommandService>,
-) -> Result<(), CustomCommandError> {
-    let mut message = app::Message::CustomUpdate(module_name.to_owned(), Message::Event(event));
-
-    loop {
-        match sender.try_send(message) {
-            Ok(()) => return Ok(()),
-            Err(SendQueueError::Full(pending_message)) => {
-                warn!("Custom module output channel full; yielding before retrying");
-                message = *pending_message;
-                yield_now().await;
-            }
-            Err(SendQueueError::Closed) => {
-                return Err(CustomCommandError::ChannelClosed);
-            }
-        }
-    }
+) -> Result<(), ModuleError> {
+    sender
+        .try_send(Message::Event(event))
+        .map_err(ModuleError::from)
 }
 
-async fn forward_custom_updates<R, S>(
+async fn forward_custom_updates<R>(
     reader: &mut Lines<R>,
     module_name: &str,
-    sender: &mut S,
-) -> Result<(), CustomCommandError>
+    sender: &ModuleEventSender<Message>,
+) -> Result<(), CustomListenerError>
 where
     R: AsyncBufRead + Unpin,
-    S: CustomUpdateSender + Send,
 {
     while let Some(line) = reader
         .next_line()
         .await
-        .map_err(|err| CustomCommandError::Read(Arc::new(err)))?
+        .map_err(|err| CustomListenerError::Command(CustomCommandError::Read(Arc::new(err))))?
     {
         match serde_json::from_str::<CustomListenData>(&line) {
             Ok(event) => {
-                send_event(sender, module_name, ServiceEvent::Update(event)).await?;
+                send_event(sender, ServiceEvent::Update(event))
+                    .map_err(CustomListenerError::Module)?;
             }
             Err(err) => {
                 let parse_error = CustomCommandError::Parse(truncate_snippet(&line), Arc::new(err));
                 error!(
                     "Custom module '{module_name}' failed to parse JSON output: {parse_error:?}"
                 );
-                send_event(
-                    sender,
-                    module_name,
-                    ServiceEvent::Error(parse_error.clone()),
-                )
-                .await?;
+                send_event(sender, ServiceEvent::Error(parse_error.clone()))
+                    .map_err(CustomListenerError::Module)?;
             }
         }
     }
@@ -254,9 +235,12 @@ impl Module for Custom {
 
     fn register(
         &mut self,
-        _: &ModuleContext,
+        ctx: &ModuleContext,
         config: Self::RegistrationData<'_>,
     ) -> Result<(), ModuleError> {
+        self.abort_listener();
+        self.sender = None;
+        self.last_error = None;
         self.registration = config.and_then(|definition| {
             definition
                 .listen_cmd
@@ -266,6 +250,51 @@ impl Module for Custom {
                     listen_command: Arc::from(command.as_str()),
                 })
         });
+
+        let Some(registration) = self.registration.clone() else {
+            return Ok(());
+        };
+
+        let module_name_for_sender = Arc::clone(&registration.name);
+        let sender = ctx.module_sender(move |message| ModuleEvent::Custom {
+            name: Arc::clone(&module_name_for_sender),
+            message,
+        });
+
+        self.sender = Some(sender.clone());
+        let module_name_for_task = Arc::clone(&registration.name);
+        let listen_command = Arc::clone(&registration.listen_command);
+        let error_sender = sender.clone();
+        let runtime_handle = ctx.runtime_handle().clone();
+
+        self.listener_task = Some(runtime_handle.spawn(async move {
+            match run_custom_listener(module_name_for_task.clone(), listen_command, sender).await {
+                Ok(()) => {}
+                Err(CustomListenerError::Command(error)) => {
+                    error!(
+                        "Custom module '{}' listener terminated with error: {error:?}",
+                        module_name_for_task
+                    );
+
+                    if !matches!(error, CustomCommandError::ChannelClosed) {
+                        if let Err(send_error) =
+                            send_event(&error_sender, ServiceEvent::Error(error.clone()))
+                        {
+                            error!(
+                                "Custom module '{}' failed to publish error notification: {send_error}",
+                                module_name_for_task
+                            );
+                        }
+                    }
+                }
+                Err(CustomListenerError::Module(error)) => {
+                    error!(
+                        "Custom module '{}' failed to publish event: {error}",
+                        module_name_for_task
+                    );
+                }
+            }
+        }));
 
         Ok(())
     }
@@ -349,64 +378,27 @@ impl Module for Custom {
             ))),
         ))
     }
-
-    fn subscription(&self) -> Option<Subscription<app::Message>> {
-        let registration = self.registration.as_ref()?;
-        let id = TypeId::of::<Self>();
-        let identifier = format!("{id:?}-{}", registration.name);
-        let module_name = Arc::clone(&registration.name);
-        let listen_command = Arc::clone(&registration.listen_command);
-
-        Some(Subscription::run_with_id(
-            identifier,
-            channel(10, move |mut output| {
-                let module_name = Arc::clone(&module_name);
-                let listen_command = Arc::clone(&listen_command);
-
-                async move {
-                    let module_label = module_name.as_ref();
-                    if let Err(error) =
-                        run_custom_listener(module_label, listen_command.as_ref(), &mut output)
-                            .await
-                    {
-                        error!(
-                            "Custom module '{module_label}' listener terminated with error: {error:?}"
-                        );
-                        if !matches!(error, CustomCommandError::ChannelClosed) {
-                            let _ = send_event(
-                                &mut output,
-                                module_label,
-                                ServiceEvent::Error(error.clone()),
-                            )
-                            .await;
-                        }
-                    }
-                }
-            }),
-        ))
-    }
 }
 
-async fn run_custom_listener<S: CustomUpdateSender + Send>(
-    module_name: &str,
-    command: &str,
-    sender: &mut S,
-) -> Result<(), CustomCommandError> {
+async fn run_custom_listener(
+    module_name: Arc<str>,
+    command: Arc<str>,
+    sender: ModuleEventSender<Message>,
+) -> Result<(), CustomListenerError> {
     let mut child = Command::new("bash")
         .arg("-c")
-        .arg(command)
+        .arg(command.as_ref())
         .stdout(Stdio::piped())
         .spawn()
-        .map_err(|err| CustomCommandError::Spawn(Arc::new(err)))?;
+        .map_err(|err| CustomListenerError::Command(CustomCommandError::Spawn(Arc::new(err))))?;
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or(CustomCommandError::MissingStdout)?;
+    let stdout = child.stdout.take().ok_or(CustomListenerError::Command(
+        CustomCommandError::MissingStdout,
+    ))?;
 
     let mut reader = BufReader::new(stdout).lines();
 
-    forward_custom_updates(&mut reader, module_name, sender).await?;
+    forward_custom_updates(&mut reader, module_name.as_ref(), &sender).await?;
 
     match child.wait().await {
         Ok(status) => {
@@ -414,104 +406,18 @@ async fn run_custom_listener<S: CustomUpdateSender + Send>(
             if status.success() {
                 Ok(())
             } else {
-                Err(CustomCommandError::NonZeroExit {
-                    status: status.code(),
-                })
+                Err(CustomListenerError::Command(
+                    CustomCommandError::NonZeroExit {
+                        status: status.code(),
+                    },
+                ))
             }
         }
-        Err(err) => Err(CustomCommandError::Wait(Arc::new(err))),
+        Err(err) => Err(CustomListenerError::Command(CustomCommandError::Wait(
+            Arc::new(err),
+        ))),
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use iced::futures::channel::mpsc;
-    use std::time::Duration;
-    use tokio::{
-        io::{self, AsyncWriteExt},
-        time::timeout,
-    };
-
-    #[derive(Default)]
-    struct RecordingSender {
-        messages: Vec<app::Message>,
-    }
-
-    impl CustomUpdateSender for RecordingSender {
-        fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError> {
-            self.messages.push(message);
-            Ok(())
-        }
-    }
-
-    struct ClosedSender {
-        sender: Sender<app::Message>,
-    }
-
-    impl ClosedSender {
-        fn new() -> Self {
-            let (sender, receiver) = mpsc::channel(1);
-            drop(receiver);
-            ClosedSender { sender }
-        }
-    }
-
-    impl Default for ClosedSender {
-        fn default() -> Self {
-            ClosedSender::new()
-        }
-    }
-
-    impl CustomUpdateSender for ClosedSender {
-        fn try_send(&mut self, message: app::Message) -> Result<(), SendQueueError> {
-            Sender::try_send(&mut self.sender, message).map_err(|error| {
-                if error.is_full() {
-                    SendQueueError::Full(Box::new(error.into_inner()))
-                } else {
-                    let _ = error.into_inner();
-                    SendQueueError::Closed
-                }
-            })
-        }
-    }
-
-    #[tokio::test]
-    async fn handles_early_exit_and_closed_channel() {
-        let (mut writer, reader) = io::duplex(64);
-        timeout(Duration::from_secs(1), async {
-            writer
-                .write_all(br#"{"alt":"value","text":"ok"}\n"#)
-                .await
-                .expect("write output");
-            writer.shutdown().await.expect("shutdown writer");
-        })
-        .await
-        .expect("writer future completed");
-
-        let mut closed_sender = ClosedSender::default();
-        let mut lines = BufReader::new(reader).lines();
-        let result = timeout(
-            Duration::from_secs(1),
-            forward_custom_updates(&mut lines, "test", &mut closed_sender),
-        )
-        .await
-        .expect("forward future completed");
-        assert!(matches!(result, Err(CustomCommandError::ChannelClosed)));
-
-        let (writer, reader) = io::duplex(64);
-        drop(writer);
-
-        let mut recording_sender = RecordingSender::default();
-        let mut lines = BufReader::new(reader).lines();
-        let result = timeout(
-            Duration::from_secs(1),
-            forward_custom_updates(&mut lines, "test", &mut recording_sender),
-        )
-        .await
-        .expect("forward future completed");
-
-        assert!(result.is_ok());
-        assert!(recording_sender.messages.is_empty());
-    }
-}
+mod tests;
