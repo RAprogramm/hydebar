@@ -1,0 +1,130 @@
+use super::{Config, ModuleDef, ModuleName};
+use std::collections::HashSet;
+use thiserror::Error;
+
+/// Errors returned when validating a [`Config`].
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ConfigValidationError {
+    /// Duplicate custom module definitions were found.
+    #[error("duplicate custom module definition for '{name}'")]
+    DuplicateCustomModule { name: String },
+
+    /// A module references a custom module definition that does not exist.
+    #[error("custom module '{name}' referenced in layout but not defined")]
+    MissingCustomModule { name: String },
+}
+
+impl Config {
+    /// Validates the configuration, ensuring module definitions are consistent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigValidationError`] if duplicate custom modules are defined or if
+    /// the module layout references undefined custom modules.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hydebar_proto::config::Config;
+    ///
+    /// let config = Config::default();
+    /// assert!(config.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), ConfigValidationError> {
+        let mut seen_custom_modules = HashSet::new();
+
+        for module in &self.custom_modules {
+            if !seen_custom_modules.insert(module.name.clone()) {
+                return Err(ConfigValidationError::DuplicateCustomModule {
+                    name: module.name.clone(),
+                });
+            }
+        }
+
+        let ensure_custom_module_exists = |name: &str| {
+            if !seen_custom_modules.contains(name) {
+                return Err(ConfigValidationError::MissingCustomModule {
+                    name: name.to_owned(),
+                });
+            }
+
+            Ok(())
+        };
+
+        for module_def in self
+            .modules
+            .left
+            .iter()
+            .chain(self.modules.center.iter())
+            .chain(self.modules.right.iter())
+        {
+            match module_def {
+                ModuleDef::Single(ModuleName::Custom(name)) => {
+                    ensure_custom_module_exists(name)?;
+                }
+                ModuleDef::Group(group) => {
+                    for module in group {
+                        if let ModuleName::Custom(name) = module {
+                            ensure_custom_module_exists(name)?;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::CustomModuleDef;
+    use super::*;
+
+    fn custom_module(name: &str) -> CustomModuleDef {
+        CustomModuleDef {
+            name: name.to_owned(),
+            command: String::from("true"),
+            icon: None,
+            listen_cmd: None,
+            icons: None,
+            alert: None,
+        }
+    }
+
+    #[test]
+    fn validate_accepts_default_config() {
+        let config = Config::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_duplicate_custom_modules() {
+        let mut config = Config::default();
+        config.custom_modules = vec![custom_module("foo"), custom_module("foo")];
+
+        let error = config
+            .validate()
+            .expect_err("expected duplicate module error");
+        assert!(matches!(
+            error,
+            ConfigValidationError::DuplicateCustomModule { ref name } if name == "foo"
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_missing_custom_module_reference() {
+        let mut config = Config::default();
+        config.custom_modules = vec![custom_module("foo")];
+        config.modules.left = vec![ModuleDef::Single(ModuleName::Custom("bar".to_owned()))];
+
+        let error = config
+            .validate()
+            .expect_err("expected missing module error");
+        assert!(matches!(
+            error,
+            ConfigValidationError::MissingCustomModule { ref name } if name == "bar"
+        ));
+    }
+}
