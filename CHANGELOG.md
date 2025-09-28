@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2025-09-28
+
+### Changed
+
+- Split the settings module into focused `state`, `commands`, `view`, and
+  `event_forwarders` submodules, turning the top-level orchestrator into a thin
+  re-export layer while preserving existing behaviour.
+
+### Added
+
+- Unit tests covering settings command spawning fallbacks, view builders, and
+  event forwarders to guard the new module boundaries.
+
 ## [0.6.1] - 2025-09-27
 
 ### Changed
