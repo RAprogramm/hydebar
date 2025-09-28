@@ -2265,7 +2265,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-app"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "clap",
  "flexi_logger",
@@ -2279,7 +2279,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-core"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2314,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-gui"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "flexi_logger",
  "hydebar-core",
@@ -2326,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "hydebar-proto"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "hex_color",
  "iced",

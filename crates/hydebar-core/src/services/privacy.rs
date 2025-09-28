@@ -1,45 +1,28 @@
 use super::{ReadOnlyService, ServiceEvent};
 pub mod error;
+pub mod inotify;
+pub mod pipewire;
+pub mod publisher;
 
-use self::error::PrivacyError;
+pub use error::PrivacyError;
+pub use publisher::PrivacyEventPublisher;
+
+use self::{
+    inotify::{WebcamEventSource, WebcamWatcher},
+    pipewire::{PipewireEventSource, PipewireListener},
+};
 use iced::{
     Subscription,
-    futures::{FutureExt, Stream, StreamExt, channel::mpsc::Sender, select, stream::pending},
+    futures::{FutureExt, Stream, StreamExt, select, stream::pending},
     stream::channel,
 };
-use inotify::{EventMask, Inotify, WatchMask};
 use log::{debug, error, info, warn};
-use pipewire::{context::ContextRc, core::CoreRc, main_loop::MainLoopRc};
-use std::{any::TypeId, fs, future::Future, ops::Deref, path::Path, pin::Pin, thread};
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
-    oneshot,
-};
+use std::{any::TypeId, fs, ops::Deref, path::Path, pin::Pin};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 const WEBCAM_DEVICE_PATH: &str = "/dev/video0";
 
-type PrivacyStream = Pin<Box<dyn Stream<Item = PrivacyEvent> + Send>>;
-
-/// Sink used to publish privacy service events to interested consumers.
-pub trait PrivacyEventPublisher {
-    type SendFuture<'a>: Future<Output = Result<(), PrivacyError>> + Send + 'a
-    where
-        Self: 'a;
-
-    fn send(&mut self, event: ServiceEvent<PrivacyService>) -> Self::SendFuture<'_>;
-}
-
-impl PrivacyEventPublisher for Sender<ServiceEvent<PrivacyService>> {
-    type SendFuture<'a> = Pin<Box<dyn Future<Output = Result<(), PrivacyError>> + Send + 'a>>;
-
-    fn send(&mut self, event: ServiceEvent<PrivacyService>) -> Self::SendFuture<'_> {
-        Box::pin(async move {
-            self.send(event)
-                .await
-                .map_err(|err| PrivacyError::channel(err.to_string()))
-        })
-    }
-}
+pub(crate) type PrivacyStream = Pin<Box<dyn Stream<Item = PrivacyEvent> + Send>>;
 
 /// Media class reported by PipeWire for an application node.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -81,7 +64,7 @@ impl PrivacyData {
 
     /// Returns `true` when an audio input node is active.
     pub fn microphone_access(&self) -> bool {
-        self.nodes.iter().any(|n| n.media == Media::Audio)
+        self.nodes.iter().any(|node| node.media == Media::Audio)
     }
 
     /// Returns `true` while the webcam device is reported as in use.
@@ -91,7 +74,7 @@ impl PrivacyData {
 
     /// Returns `true` when a video capture node (typically screen sharing) is active.
     pub fn screenshare_access(&self) -> bool {
-        self.nodes.iter().any(|n| n.media == Media::Video)
+        self.nodes.iter().any(|node| node.media == Media::Video)
     }
 }
 
@@ -110,157 +93,6 @@ impl Deref for PrivacyService {
 }
 
 impl PrivacyService {
-    async fn create_pipewire_listener() -> Result<UnboundedReceiver<PrivacyEvent>, PrivacyError> {
-        let (tx, rx) = unbounded_channel::<PrivacyEvent>();
-        let (init_tx, init_rx) = oneshot::channel::<Result<(), PrivacyError>>();
-
-        let builder = thread::Builder::new().name("privacy-pipewire".into());
-        builder
-            .spawn(move || {
-                struct PipewireRuntime {
-                    mainloop: MainLoopRc,
-                    _context: ContextRc,
-                    _core: CoreRc,
-                    _listener: pipewire::registry::Listener,
-                }
-
-                impl PipewireRuntime {
-                    fn new(tx: UnboundedSender<PrivacyEvent>) -> Result<Self, PrivacyError> {
-                        let mainloop = MainLoopRc::new(None)
-                            .map_err(|err| PrivacyError::pipewire_mainloop(err.to_string()))?;
-                        let context = ContextRc::new(&mainloop, None)
-                            .map_err(|err| PrivacyError::pipewire_context(err.to_string()))?;
-                        let core = context
-                            .connect_rc(None)
-                            .map_err(|err| PrivacyError::pipewire_core(err.to_string()))?;
-                        let registry = core
-                            .get_registry_rc()
-                            .map_err(|err| PrivacyError::pipewire_registry(err.to_string()))?;
-                        let remove_tx = tx.clone();
-                        let listener = registry
-                            .add_listener_local()
-                            .global({
-                                let tx = tx.clone();
-                                move |global| {
-                                    if let Some(props) = global.props {
-                                        if let Some(media) = props.get("media.class").filter(|v| {
-                                            *v == "Stream/Input/Video" || *v == "Stream/Input/Audio"
-                                        }) {
-                                            debug!("New global: {global:?}");
-                                            let event = PrivacyEvent::AddNode(ApplicationNode {
-                                                id: global.id,
-                                                media: if media == "Stream/Input/Video" {
-                                                    Media::Video
-                                                } else {
-                                                    Media::Audio
-                                                },
-                                            });
-                                            if let Err(err) = tx.send(event) {
-                                                warn!(
-                                                    "Failed to forward PipeWire add event: {err}"
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                            })
-                            .global_remove(move |id| {
-                                debug!("Remove global: {id}");
-                                if let Err(err) = remove_tx.send(PrivacyEvent::RemoveNode(id)) {
-                                    warn!("Failed to forward PipeWire remove event: {err}");
-                                }
-                            })
-                            .register();
-
-                        Ok(Self {
-                            mainloop,
-                            _context: context,
-                            _core: core,
-                            _listener: listener,
-                        })
-                    }
-
-                    fn run(self) {
-                        self.mainloop.run();
-                    }
-                }
-
-                match PipewireRuntime::new(tx) {
-                    Ok(runtime) => {
-                        if init_tx.send(Ok(())).is_err() {
-                            warn!("PipeWire initialisation receiver dropped before completion");
-                            return;
-                        }
-                        runtime.run();
-                        warn!("PipeWire mainloop exited");
-                    }
-                    Err(err) => {
-                        error!("Failed to initialise PipeWire: {err}");
-                        if init_tx.send(Err(err.clone())).is_err() {
-                            warn!("Unable to report PipeWire initialisation failure: {err}");
-                        }
-                    }
-                }
-            })
-            .map_err(|err| {
-                PrivacyError::channel(format!("failed to spawn PipeWire listener thread: {err}"))
-            })?;
-
-        match init_rx.await {
-            Ok(Ok(())) => Ok(rx),
-            Ok(Err(err)) => Err(err),
-            Err(_) => Err(PrivacyError::channel(
-                "failed to receive PipeWire initialisation result",
-            )),
-        }
-    }
-
-    async fn webcam_listener() -> Result<PrivacyStream, PrivacyError> {
-        let inotify = Inotify::init().map_err(|err| PrivacyError::inotify_init(err.to_string()))?;
-        match inotify.watches().add(
-            WEBCAM_DEVICE_PATH,
-            WatchMask::CLOSE_WRITE
-                | WatchMask::CLOSE_NOWRITE
-                | WatchMask::DELETE_SELF
-                | WatchMask::OPEN
-                | WatchMask::ATTRIB,
-        ) {
-            Ok(_) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                return Err(PrivacyError::WebcamUnavailable);
-            }
-            Err(err) => {
-                return Err(PrivacyError::inotify_watch(err.to_string()));
-            }
-        }
-
-        let buffer = [0; 512];
-        let stream = inotify
-            .into_event_stream(buffer)
-            .map_err(|err| PrivacyError::inotify_init(err.to_string()))?
-            .filter_map(|event| async move {
-                match event {
-                    Ok(event) => {
-                        debug!("Webcam event: {event:?}");
-                        match event.mask {
-                            EventMask::OPEN => Some(PrivacyEvent::WebcamOpen),
-                            EventMask::CLOSE_WRITE | EventMask::CLOSE_NOWRITE => {
-                                Some(PrivacyEvent::WebcamClose)
-                            }
-                            _ => None,
-                        }
-                    }
-                    Err(err) => {
-                        warn!("Failed to read webcam event: {err}");
-                        None
-                    }
-                }
-            })
-            .boxed();
-
-        Ok(stream)
-    }
-
     async fn emit_event<P>(publisher: &mut P, event: ServiceEvent<Self>) -> Result<(), PrivacyError>
     where
         P: PrivacyEventPublisher,
@@ -275,32 +107,26 @@ impl PrivacyService {
     where
         P: PrivacyEventPublisher,
     {
-        Self::start_listening_with_factories(
-            state,
-            publisher,
-            Self::create_pipewire_listener,
-            Self::webcam_listener,
-        )
-        .await
+        let pipewire = PipewireListener::default();
+        let webcam = WebcamWatcher::new(Path::new(WEBCAM_DEVICE_PATH));
+        Self::start_listening_with_sources(state, publisher, &pipewire, &webcam).await
     }
 
-    async fn start_listening_with_factories<PF, PFut, WF, WFut, Pub>(
+    async fn start_listening_with_sources<P, Pipewire, Webcam>(
         state: State,
-        publisher: &mut Pub,
-        mut pipewire_factory: PF,
-        mut webcam_factory: WF,
+        publisher: &mut P,
+        pipewire_source: &Pipewire,
+        webcam_source: &Webcam,
     ) -> Result<State, PrivacyError>
     where
-        PF: FnMut() -> PFut,
-        PFut: Future<Output = Result<UnboundedReceiver<PrivacyEvent>, PrivacyError>> + Send,
-        WF: FnMut() -> WFut,
-        WFut: Future<Output = Result<PrivacyStream, PrivacyError>> + Send,
-        Pub: PrivacyEventPublisher,
+        P: PrivacyEventPublisher,
+        Pipewire: PipewireEventSource,
+        Webcam: WebcamEventSource,
     {
         match state {
             State::Init => {
-                let pipewire = pipewire_factory().await?;
-                let webcam = match webcam_factory().await {
+                let pipewire = pipewire_source.subscribe().await?;
+                let webcam = match webcam_source.subscribe().await {
                     Ok(stream) => stream,
                     Err(err @ PrivacyError::WebcamUnavailable) => {
                         warn!("{err}");
@@ -356,24 +182,6 @@ impl PrivacyService {
             }
         }
     }
-
-    #[cfg(test)]
-    async fn start_listening_with<Pub, PF, PFut, WF, WFut>(
-        state: State,
-        publisher: &mut Pub,
-        pipewire_factory: PF,
-        webcam_factory: WF,
-    ) -> Result<State, PrivacyError>
-    where
-        Pub: PrivacyEventPublisher,
-        PF: FnMut() -> PFut,
-        PFut: Future<Output = Result<UnboundedReceiver<PrivacyEvent>, PrivacyError>> + Send,
-        WF: FnMut() -> WFut,
-        WFut: Future<Output = Result<PrivacyStream, PrivacyError>> + Send,
-    {
-        Self::start_listening_with_factories(state, publisher, pipewire_factory, webcam_factory)
-            .await
-    }
 }
 
 pub(crate) enum State {
@@ -407,7 +215,7 @@ impl ReadOnlyService for PrivacyService {
                 self.data.nodes.push(node);
             }
             PrivacyEvent::RemoveNode(id) => {
-                self.data.nodes.retain(|n| n.id != id);
+                self.data.nodes.retain(|node| node.id != id);
             }
             PrivacyEvent::WebcamOpen => {
                 self.data.webcam_access += 1;
@@ -459,12 +267,10 @@ fn is_device_in_use(target: &str) -> i32 {
         for entry in entries.flatten() {
             let pid_path = entry.path();
 
-            // Skip non-numeric directories (not process folders)
             if !pid_path.join("fd").exists() {
                 continue;
             }
 
-            // Check file descriptors in each process folder
             if let Ok(fd_entries) = fs::read_dir(pid_path.join("fd")) {
                 for fd_entry in fd_entries.flatten() {
                     if let Ok(link_path) = fs::read_link(fd_entry.path()) {
@@ -482,37 +288,118 @@ fn is_device_in_use(target: &str) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{PrivacyEvent, PrivacyService, ServiceEvent, State, error::PrivacyError};
-    use iced::futures::{StreamExt, channel::mpsc, stream::pending};
+    use super::{
+        ApplicationNode, Media, PrivacyEvent, PrivacyService, ServiceEvent, State,
+        error::PrivacyError,
+    };
+    use crate::services::privacy::{inotify::WebcamEventSource, pipewire::PipewireEventSource};
+    use iced::futures::{StreamExt, channel::mpsc, future, stream};
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::{Arc, Mutex},
+    };
     use tokio::sync::mpsc::unbounded_channel;
+
+    #[derive(Default)]
+    struct TestPipewireSource {
+        receiver:
+            Mutex<Option<Result<tokio::sync::mpsc::UnboundedReceiver<PrivacyEvent>, PrivacyError>>>,
+    }
+
+    impl TestPipewireSource {
+        fn new(receiver: tokio::sync::mpsc::UnboundedReceiver<PrivacyEvent>) -> Self {
+            Self {
+                receiver: Mutex::new(Some(Ok(receiver))),
+            }
+        }
+
+        fn failing(error: PrivacyError) -> Self {
+            Self {
+                receiver: Mutex::new(Some(Err(error))),
+            }
+        }
+    }
+
+    impl PipewireEventSource for TestPipewireSource {
+        type Future<'a>
+            = Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            tokio::sync::mpsc::UnboundedReceiver<PrivacyEvent>,
+                            PrivacyError,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        >
+        where
+            Self: 'a;
+
+        fn subscribe(&self) -> Self::Future<'_> {
+            let result = self
+                .receiver
+                .lock()
+                .expect("pipewire receiver mutex poisoned")
+                .take()
+                .unwrap_or_else(|| Err(PrivacyError::channel("pipewire factory reused")));
+            Box::pin(async move { result })
+        }
+    }
+
+    #[derive(Default, Clone)]
+    struct TestWebcamSource {
+        stream: Arc<Mutex<Option<Result<super::PrivacyStream, PrivacyError>>>>,
+    }
+
+    impl TestWebcamSource {
+        fn new(stream: super::PrivacyStream) -> Self {
+            Self {
+                stream: Arc::new(Mutex::new(Some(Ok(stream)))),
+            }
+        }
+
+        fn failing(error: PrivacyError) -> Self {
+            Self {
+                stream: Arc::new(Mutex::new(Some(Err(error)))),
+            }
+        }
+    }
+
+    impl WebcamEventSource for TestWebcamSource {
+        type Future<'a>
+            = Pin<Box<dyn Future<Output = Result<super::PrivacyStream, PrivacyError>> + Send + 'a>>
+        where
+            Self: 'a;
+
+        fn subscribe(&self) -> Self::Future<'_> {
+            let result = self
+                .stream
+                .lock()
+                .expect("webcam stream mutex poisoned")
+                .take()
+                .unwrap_or_else(|| Err(PrivacyError::channel("webcam factory reused")));
+            Box::pin(async move { result })
+        }
+    }
 
     #[tokio::test]
     async fn init_succeeds_with_all_listeners() {
         let (pipewire_tx, pipewire_rx) = unbounded_channel();
         drop(pipewire_tx);
-        let mut pipewire_rx = Some(pipewire_rx);
-        let pipewire_factory = move || {
-            let receiver = pipewire_rx
-                .take()
-                .expect("pipewire factory should only be called once");
-            async move { Ok(receiver) }
-        };
+        let pipewire_source = TestPipewireSource::new(pipewire_rx);
 
-        let mut webcam_stream = Some(pending::<PrivacyEvent>().boxed());
-        let webcam_factory = move || {
-            let stream = webcam_stream
-                .take()
-                .expect("webcam factory should only be called once");
-            async move { Ok(stream) }
-        };
+        let webcam_stream = stream::pending::<PrivacyEvent>().boxed();
+        let webcam_source = TestWebcamSource::new(webcam_stream);
 
         let (mut output_tx, mut output_rx) = mpsc::channel(10);
         let state = State::Init;
-        let state = PrivacyService::start_listening_with(
+        let state = PrivacyService::start_listening_with_sources(
             state,
             &mut output_tx,
-            pipewire_factory,
-            webcam_factory,
+            &pipewire_source,
+            &webcam_source,
         )
         .await
         .expect("initialisation should succeed");
@@ -524,15 +411,15 @@ mod tests {
 
     #[tokio::test]
     async fn init_reports_pipewire_failure() {
-        let pipewire_factory = || async { Err(PrivacyError::pipewire_mainloop("boom")) };
-        let webcam_factory = || async { Ok(pending::<PrivacyEvent>().boxed()) };
+        let pipewire_source = TestPipewireSource::failing(PrivacyError::pipewire_mainloop("boom"));
+        let webcam_source = TestWebcamSource::new(stream::pending::<PrivacyEvent>().boxed());
         let (mut output_tx, _output_rx) = mpsc::channel(1);
 
-        let result = PrivacyService::start_listening_with(
+        let result = PrivacyService::start_listening_with_sources(
             State::Init,
             &mut output_tx,
-            pipewire_factory,
-            webcam_factory,
+            &pipewire_source,
+            &webcam_source,
         )
         .await;
         assert!(matches!(result, Err(PrivacyError::PipewireMainloop { .. })));
@@ -542,21 +429,15 @@ mod tests {
     async fn init_falls_back_when_webcam_missing() {
         let (pipewire_tx, pipewire_rx) = unbounded_channel();
         drop(pipewire_tx);
-        let mut pipewire_rx = Some(pipewire_rx);
-        let pipewire_factory = move || {
-            let receiver = pipewire_rx
-                .take()
-                .expect("pipewire factory should only be called once");
-            async move { Ok(receiver) }
-        };
+        let pipewire_source = TestPipewireSource::new(pipewire_rx);
 
-        let webcam_factory = || async { Err(PrivacyError::WebcamUnavailable) };
+        let webcam_source = TestWebcamSource::failing(PrivacyError::WebcamUnavailable);
         let (mut output_tx, mut output_rx) = mpsc::channel(2);
-        let state = PrivacyService::start_listening_with(
+        let state = PrivacyService::start_listening_with_sources(
             State::Init,
             &mut output_tx,
-            pipewire_factory,
-            webcam_factory,
+            &pipewire_source,
+            &webcam_source,
         )
         .await
         .expect("initialisation should succeed with webcam fallback");
@@ -570,25 +451,109 @@ mod tests {
     async fn init_fails_when_output_channel_closed() {
         let (pipewire_tx, pipewire_rx) = unbounded_channel();
         drop(pipewire_tx);
-        let mut pipewire_rx = Some(pipewire_rx);
-        let pipewire_factory = move || {
-            let receiver = pipewire_rx
-                .take()
-                .expect("pipewire factory should only be called once");
-            async move { Ok(receiver) }
-        };
+        let pipewire_source = TestPipewireSource::new(pipewire_rx);
 
-        let webcam_factory = || async { Ok(pending::<PrivacyEvent>().boxed()) };
+        let webcam_source = TestWebcamSource::new(stream::pending::<PrivacyEvent>().boxed());
         let (mut output_tx, output_rx) = mpsc::channel::<ServiceEvent<PrivacyService>>(1);
         drop(output_rx);
 
-        let result = PrivacyService::start_listening_with(
+        let result = PrivacyService::start_listening_with_sources(
             State::Init,
             &mut output_tx,
-            pipewire_factory,
-            webcam_factory,
+            &pipewire_source,
+            &webcam_source,
         )
         .await;
         assert!(matches!(result, Err(PrivacyError::Channel { .. })));
+    }
+
+    #[tokio::test]
+    async fn pipewire_updates_are_forwarded() {
+        let (pipewire_tx, pipewire_rx) = unbounded_channel();
+        let pipewire_source = TestPipewireSource::new(pipewire_rx);
+        let webcam_source = TestWebcamSource::new(stream::pending::<PrivacyEvent>().boxed());
+        let (mut output_tx, mut output_rx) = mpsc::channel(4);
+
+        let state = PrivacyService::start_listening_with_sources(
+            State::Init,
+            &mut output_tx,
+            &pipewire_source,
+            &webcam_source,
+        )
+        .await
+        .expect("initialisation should succeed");
+
+        let mut state = match state {
+            State::Active { pipewire, webcam } => State::Active { pipewire, webcam },
+            State::Init => panic!("expected active state"),
+        };
+
+        pipewire_tx
+            .send(PrivacyEvent::AddNode(ApplicationNode {
+                id: 1,
+                media: Media::Audio,
+            }))
+            .expect("send to pipewire receiver");
+
+        state = PrivacyService::start_listening_with_sources(
+            state,
+            &mut output_tx,
+            &pipewire_source,
+            &webcam_source,
+        )
+        .await
+        .expect("processing should succeed");
+
+        // Skip the initial init event.
+        let _ = output_rx.next().await;
+        let update = output_rx.next().await;
+        assert!(matches!(
+            update,
+            Some(ServiceEvent::Update(PrivacyEvent::AddNode(_)))
+        ));
+    }
+
+    #[tokio::test]
+    async fn webcam_updates_are_forwarded() {
+        let (pipewire_tx, pipewire_rx) = unbounded_channel();
+        drop(pipewire_tx);
+        let pipewire_source = TestPipewireSource::new(pipewire_rx);
+
+        let webcam_stream = stream::once(future::ready(PrivacyEvent::WebcamOpen))
+            .chain(stream::pending())
+            .boxed();
+        let webcam_source = TestWebcamSource::new(webcam_stream);
+        let (mut output_tx, mut output_rx) = mpsc::channel(4);
+
+        let state = PrivacyService::start_listening_with_sources(
+            State::Init,
+            &mut output_tx,
+            &pipewire_source,
+            &webcam_source,
+        )
+        .await
+        .expect("initialisation should succeed");
+
+        let mut state = match state {
+            State::Active { pipewire, webcam } => State::Active { pipewire, webcam },
+            State::Init => panic!("expected active state"),
+        };
+
+        state = PrivacyService::start_listening_with_sources(
+            state,
+            &mut output_tx,
+            &pipewire_source,
+            &webcam_source,
+        )
+        .await
+        .expect("processing should succeed");
+
+        // Skip the initial init event.
+        let _ = output_rx.next().await;
+        let update = output_rx.next().await;
+        assert!(matches!(
+            update,
+            Some(ServiceEvent::Update(PrivacyEvent::WebcamOpen))
+        ));
     }
 }
