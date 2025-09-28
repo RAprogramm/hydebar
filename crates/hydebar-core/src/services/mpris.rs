@@ -1,79 +1,29 @@
 use super::{ReadOnlyService, Service, ServiceEvent};
 use crate::modules::ModuleError;
-use dbus::MprisPlayerProxy;
-use futures::{Future, Stream, StreamExt, future::join_all, stream::SelectAll};
+use commands::{MprisPlayerCommand, PlayerCommand, execute_player_command, module_error};
+use data::{MprisPlayerData, MprisPlayerEvent, MprisPlayerMetadata, PlaybackStatus};
+use futures::StreamExt;
 use iced::{Subscription, Task};
 use log::{debug, error, info};
-use std::{collections::HashMap, fmt::Display, ops::Deref, pin::Pin, sync::Arc};
+use std::{future::Future, ops::Deref, pin::Pin};
 use tokio::task::yield_now;
-use zbus::{fdo::DBusProxy, zvariant::OwnedValue};
+use zbus::Connection;
 
+mod commands;
+pub mod data;
 mod dbus;
+mod ipc;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlaybackStatus {
-    #[default]
-    Playing,
-    Paused,
-    Stopped,
-}
-impl From<String> for PlaybackStatus {
-    fn from(playback_status: String) -> PlaybackStatus {
-        match playback_status.as_str() {
-            "Playing" => PlaybackStatus::Playing,
-            "Paused" => PlaybackStatus::Paused,
-            "Stopped" => PlaybackStatus::Stopped,
-            _ => PlaybackStatus::Playing,
-        }
-    }
-}
+pub use commands::{MprisPlayerCommand, PlayerCommand};
+pub use data::{MprisPlayerData, MprisPlayerEvent, MprisPlayerMetadata, PlaybackStatus};
 
-#[derive(Debug, Clone)]
-pub struct MprisPlayerData {
-    pub service: String,
-    pub metadata: Option<MprisPlayerMetadata>,
-    pub volume: Option<f64>,
-    pub state: PlaybackStatus,
-    proxy: MprisPlayerProxy<'static>,
-}
+use ipc::{IpcEvent, build_event_stream, collect_players};
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct MprisPlayerMetadata {
-    pub artists: Option<Vec<String>>,
-    pub title: Option<String>,
-}
-
-impl Display for MprisPlayerMetadata {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let t = match (self.artists.clone(), self.title.clone()) {
-            (None, None) => String::new(),
-            (None, Some(t)) => t,
-            (Some(a), None) => a.join(", "),
-            (Some(a), Some(t)) => format!("{} - {}", a.join(", "), t),
-        };
-        write!(f, "{t}")
-    }
-}
-
-impl From<HashMap<String, OwnedValue>> for MprisPlayerMetadata {
-    fn from(value: HashMap<String, OwnedValue>) -> Self {
-        let artists = match value.get("xesam:artist") {
-            Some(v) => v.clone().try_into().ok(),
-            None => None,
-        };
-        let title = match value.get("xesam:title") {
-            Some(v) => v.clone().try_into().ok(),
-            None => None,
-        };
-
-        Self { artists, title }
-    }
-}
-
+/// Service storing the currently discovered MPRIS players and their cached state.
 #[derive(Debug, Clone)]
 pub struct MprisPlayerService {
     data: Vec<MprisPlayerData>,
-    conn: zbus::Connection,
+    conn: Connection,
 }
 
 impl Deref for MprisPlayerService {
@@ -84,25 +34,22 @@ impl Deref for MprisPlayerService {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum MprisPlayerEvent {
-    Refresh(Vec<MprisPlayerData>),
-    Metadata(String, Option<MprisPlayerMetadata>),
-    Volume(String, Option<f64>),
-    State(String, PlaybackStatus),
-}
-
+/// Publishes events emitted by the MPRIS service.
 pub(crate) trait MprisEventPublisher {
+    /// Sends a [`ServiceEvent`] to consumers.
     fn send(
         &mut self,
         event: ServiceEvent<MprisPlayerService>,
     ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError>> + Send + '_>>;
 }
 
+/// Internal state machine for the MPRIS listener runtime.
 #[derive(Debug, Clone)]
 pub(crate) enum ListenerState {
+    /// No connection has been established yet.
     Init,
-    Active(zbus::Connection),
+    /// The service is actively listening for events on the provided connection.
+    Active(Connection),
 }
 
 impl ReadOnlyService for MprisPlayerService {
@@ -113,21 +60,18 @@ impl ReadOnlyService for MprisPlayerService {
         match event {
             MprisPlayerEvent::Refresh(data) => self.data = data,
             MprisPlayerEvent::Metadata(service, metadata) => {
-                let s = self.data.iter_mut().find(|d| d.service == service);
-                if let Some(s) = s {
-                    s.metadata = metadata;
+                if let Some(entry) = self.data.iter_mut().find(|d| d.service == service) {
+                    entry.metadata = metadata;
                 }
             }
             MprisPlayerEvent::Volume(service, volume) => {
-                let s = self.data.iter_mut().find(|d| d.service == service);
-                if let Some(s) = s {
-                    s.volume = volume;
+                if let Some(entry) = self.data.iter_mut().find(|d| d.service == service) {
+                    entry.volume = volume;
                 }
             }
             MprisPlayerEvent::State(service, state) => {
-                let s = self.data.iter_mut().find(|d| d.service == service);
-                if let Some(s) = s {
-                    s.state = state;
+                if let Some(entry) = self.data.iter_mut().find(|d| d.service == service) {
+                    entry.state = state;
                 }
             }
         }
@@ -138,188 +82,8 @@ impl ReadOnlyService for MprisPlayerService {
     }
 }
 
-const MPRIS_PLAYER_SERVICE_PREFIX: &str = "org.mpris.MediaPlayer2.";
-
-#[derive(Debug)]
-enum Event {
-    NameOwner,
-    Metadata(String, Option<MprisPlayerMetadata>),
-    Volume(String, Option<f64>),
-    State(String, PlaybackStatus),
-}
-
-fn module_error(context: &str, err: impl Display) -> ModuleError {
-    ModuleError::registration(format!("{context}: {err}"))
-}
-
 impl MprisPlayerService {
-    async fn initialize_data(conn: &zbus::Connection) -> anyhow::Result<Vec<MprisPlayerData>> {
-        let dbus = DBusProxy::new(conn).await?;
-        let names: Vec<String> = dbus
-            .list_names()
-            .await?
-            .iter()
-            .filter_map(|a| {
-                if a.starts_with(MPRIS_PLAYER_SERVICE_PREFIX) {
-                    Some(a.to_string())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        debug!("Found MPRIS player services: {names:?}");
-
-        Ok(Self::get_mpris_player_data(conn, &names).await)
-    }
-
-    async fn get_mpris_player_data(
-        conn: &zbus::Connection,
-        names: &[String],
-    ) -> Vec<MprisPlayerData> {
-        join_all(names.iter().map(|s| async {
-            match MprisPlayerProxy::new(conn, s.to_string()).await {
-                Ok(proxy) => {
-                    let metadata = proxy
-                        .metadata()
-                        .await
-                        .map_or(None, |m| Some(MprisPlayerMetadata::from(m)));
-
-                    let volume = proxy.volume().await.map(|v| v * 100.0).ok();
-                    let state = proxy
-                        .playback_status()
-                        .await
-                        .map(PlaybackStatus::from)
-                        .unwrap_or_default();
-
-                    Some(MprisPlayerData {
-                        service: s.to_string(),
-                        metadata,
-                        volume,
-                        state,
-                        proxy,
-                    })
-                }
-                Err(_) => None,
-            }
-        }))
-        .await
-        .into_iter()
-        .flatten()
-        .collect()
-    }
-
-    async fn events(conn: &zbus::Connection) -> anyhow::Result<impl Stream<Item = Event> + Send> {
-        let dbus = DBusProxy::new(conn).await?;
-        let data = Self::initialize_data(conn).await?;
-
-        let mut combined = SelectAll::new();
-
-        combined.push(
-            dbus.receive_name_owner_changed()
-                .await?
-                .filter_map(|s| async move {
-                    match s.args() {
-                        Ok(a) => a
-                            .name
-                            .starts_with(MPRIS_PLAYER_SERVICE_PREFIX)
-                            .then_some(Event::NameOwner),
-                        Err(_) => None,
-                    }
-                })
-                .boxed(),
-        );
-
-        for s in data.iter() {
-            let cache = Arc::new(s.metadata.clone());
-
-            combined.push(
-                s.proxy
-                    .receive_metadata_changed()
-                    .await
-                    .filter_map({
-                        let cache = cache.clone();
-                        let service = s.service.clone();
-
-                        move |m| {
-                            let cache = cache.clone();
-                            let service = service.clone();
-
-                            async move {
-                                let new_metadata =
-                                    m.get().await.map(MprisPlayerMetadata::from).ok();
-                                if &new_metadata == cache.as_ref() {
-                                    None
-                                } else {
-                                    debug!("Metadata changed: {new_metadata:?}");
-
-                                    Some(Event::Metadata(service, new_metadata))
-                                }
-                            }
-                        }
-                    })
-                    .boxed(),
-            );
-        }
-
-        for s in data.iter() {
-            let volume = s.volume;
-
-            combined.push(
-                s.proxy
-                    .receive_volume_changed()
-                    .await
-                    .filter_map({
-                        let service = s.service.clone();
-                        move |v| {
-                            let service = service.clone();
-                            async move {
-                                let new_volume = v.get().await.ok();
-                                if volume == new_volume {
-                                    None
-                                } else {
-                                    debug!("Volume changed: {new_volume:?}");
-
-                                    Some(Event::Volume(service, new_volume))
-                                }
-                            }
-                        }
-                    })
-                    .boxed(),
-            );
-        }
-
-        for s in data.iter() {
-            let state = s.state;
-
-            combined.push(
-                s.proxy
-                    .receive_playback_status_changed()
-                    .await
-                    .filter_map({
-                        let service = s.service.clone();
-                        move |v| {
-                            let service = service.clone();
-                            async move {
-                                let new_state =
-                                    v.get().await.map(PlaybackStatus::from).unwrap_or_default();
-                                if state == new_state {
-                                    None
-                                } else {
-                                    debug!("PlaybackStatus changed: {new_state:?}");
-
-                                    Some(Event::State(service, new_state))
-                                }
-                            }
-                        }
-                    })
-                    .boxed(),
-            );
-        }
-
-        Ok(combined)
-    }
-
+    /// Starts or resumes the MPRIS listener depending on the provided `state`.
     pub(crate) async fn start_listening<P>(
         state: ListenerState,
         publisher: &mut P,
@@ -345,11 +109,11 @@ impl MprisPlayerService {
     {
         match state {
             ListenerState::Init => {
-                let conn = zbus::Connection::session()
+                let conn = Connection::session()
                     .await
                     .map_err(|err| module_error("failed to connect to session bus", err))?;
 
-                match Self::initialize_data(&conn).await {
+                match collect_players(&conn).await {
                     Ok(data) => {
                         info!("MPRIS player service initialized");
 
@@ -371,7 +135,7 @@ impl MprisPlayerService {
                     }
                 }
             }
-            ListenerState::Active(conn) => match Self::events(&conn).await {
+            ListenerState::Active(conn) => match build_event_stream(&conn).await {
                 Ok(events) => {
                     let mut chunks = events.ready_chunks(10);
 
@@ -382,11 +146,11 @@ impl MprisPlayerService {
 
                         for event in chunk {
                             match event {
-                                Event::NameOwner => {
+                                IpcEvent::NameOwner => {
                                     debug!("MPRIS player service name owner changed");
                                     need_refresh = true;
                                 }
-                                Event::Metadata(service, metadata) => {
+                                IpcEvent::Metadata(service, metadata) => {
                                     debug!(
                                         "MPRIS player service {service} metadata changed: {metadata:?}"
                                     );
@@ -396,7 +160,7 @@ impl MprisPlayerService {
                                         )))
                                         .await?;
                                 }
-                                Event::Volume(service, volume) => {
+                                IpcEvent::Volume(service, volume) => {
                                     debug!(
                                         "MPRIS player service {service} volume changed: {volume:?}"
                                     );
@@ -406,7 +170,7 @@ impl MprisPlayerService {
                                         )))
                                         .await?;
                                 }
-                                Event::State(service, state) => {
+                                IpcEvent::State(service, state) => {
                                     debug!(
                                         "MPRIS player service {service} playback status changed: {state:?}"
                                     );
@@ -420,7 +184,7 @@ impl MprisPlayerService {
                         }
 
                         if need_refresh {
-                            match Self::initialize_data(&conn).await {
+                            match collect_players(&conn).await {
                                 Ok(data) => {
                                     debug!("Refreshing MPRIS player data");
                                     publisher
@@ -453,6 +217,7 @@ impl MprisPlayerService {
         }
     }
 
+    /// Executes a command against the currently cached player list.
     pub(crate) async fn execute_command(
         service: Option<MprisPlayerService>,
         command: MprisPlayerCommand,
@@ -465,62 +230,8 @@ impl MprisPlayerService {
         let service = service
             .ok_or_else(|| ModuleError::registration("MPRIS player service is not initialised"))?;
 
-        let names: Vec<String> = service.data.iter().map(|d| d.service.clone()).collect();
-        let player = service
-            .data
-            .iter()
-            .find(|d| d.service == command.service_name)
-            .ok_or_else(|| {
-                ModuleError::registration(format!(
-                    "unknown MPRIS service '{}'",
-                    command.service_name
-                ))
-            })?;
-
-        let proxy = player.proxy.clone();
-        match command.command {
-            PlayerCommand::Prev => {
-                proxy
-                    .previous()
-                    .await
-                    .map_err(|err| module_error("failed to execute previous command", err))?;
-            }
-            PlayerCommand::PlayPause => {
-                proxy
-                    .play_pause()
-                    .await
-                    .map_err(|err| module_error("failed to execute play/pause command", err))?;
-            }
-            PlayerCommand::Next => {
-                proxy
-                    .next()
-                    .await
-                    .map_err(|err| module_error("failed to execute next command", err))?;
-            }
-            PlayerCommand::Volume(v) => {
-                proxy
-                    .set_volume(v / 100.0)
-                    .await
-                    .map_err(|err| module_error("failed to execute volume command", err))?;
-            }
-        }
-
-        Ok(Self::get_mpris_player_data(&service.conn, &names).await)
+        execute_player_command(&service.conn, &service.data, command).await
     }
-}
-
-#[derive(Debug)]
-pub struct MprisPlayerCommand {
-    pub service_name: String,
-    pub command: PlayerCommand,
-}
-
-#[derive(Debug)]
-pub enum PlayerCommand {
-    Prev,
-    PlayPause,
-    Next,
-    Volume(f64),
 }
 
 impl Service for MprisPlayerService {

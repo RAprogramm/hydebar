@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2025-09-28
+
+### Changed
+
+- Extracted the MPRIS service into dedicated `data`, `ipc`, and `commands`
+  modules, leaving the top-level orchestrator to re-export the data types and
+  delegate to the new helpers while keeping the service wiring intact.
+- Reworked the MPRIS command execution path to route through a proxy executor
+  trait, reducing coupling to the service state and centralising error
+  translation.
+
+### Added
+
+- Targeted unit coverage for the IPC helpers and command utilities alongside
+  documentation examples for the newly public data types to guard the module
+  boundaries.
+
 ## [0.6.2] - 2025-09-28
 
 ### Changed
