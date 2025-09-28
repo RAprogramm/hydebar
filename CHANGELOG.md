@@ -24,6 +24,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documentation examples for the newly public data types to guard the module
   boundaries.
 
+### Changed
+
+- Extracted configuration appearance, module layout, validation, and serde helper
+  logic into dedicated submodules, leaving `config.rs` as the facade while
+  preserving existing APIs.
+
+### Added
+
+- Unit tests covering appearance defaults, serde helpers, module layout
+  deserialization, and configuration validation to guard the new structure.
+- Reorganized the Hyprland client adapter into focused `config`, `sync_ops`,
+  and `listeners` modules, keeping the facade slim while re-exporting the
+  public surface.
+- Centralized retry and backoff utilities for synchronous requests and event
+  listeners to reuse.
+
+### Added
+
+- Unit tests covering the new retry delay helpers and listener backoff guard
+  paths.
+
 ## [0.6.2] - 2025-09-28
 
 ### Changed
