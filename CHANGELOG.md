@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.6.4] - 2025-09-29
+
+### Changed
+
+- Extracted the outputs state management into dedicated `state`, `wayland`,
+  and `config` helpers, keeping `outputs.rs` as a façade while improving
+  testability and separation of concerns for layer-surface bookkeeping and
+  configuration filtering.
+
+### Added
+
+- Unit coverage validating menu toggling and synchronisation behaviours of the
+  outputs collection after the refactor.
+
 ## [0.6.3] - 2025-09-28
 
 ### Changed
