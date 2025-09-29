@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.6.6] - 2025-10-01
+
+### Changed
+
+- Split the style façade into dedicated `theme`, `buttons`, and `menus` modules,
+  keeping `style.rs` as a thin re-export layer while preserving public imports.
+
+### Added
+
+- Unit tests covering the theme palette construction, button style closures, and
+  menu styling helpers to guard opacity, radius, and hover behaviours.
 ## [0.6.5] - 2025-09-30
 
 ### Changed

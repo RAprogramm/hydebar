@@ -1,16 +1,15 @@
 use crate::app::{self};
 use crate::config::{AppearanceStyle, Position};
 use crate::position_button::ButtonUIRef;
-use crate::style::backdrop_color;
+use crate::style::{menu_backdrop_style, menu_container_style};
 use iced::alignment::{Horizontal, Vertical};
 use iced::platform_specific::shell::commands::layer_surface::{
     KeyboardInteractivity, Layer, set_keyboard_interactivity, set_layer,
 };
-use iced::widget::container::Style;
 use iced::widget::mouse_area;
 use iced::window::Id;
 use iced::{self, Element, Task, Theme, widget::container};
-use iced::{Border, Length, Padding};
+use iced::{Length, Padding};
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum MenuType {
@@ -159,20 +158,7 @@ pub fn menu_wrapper(
                     .width(Length::Shrink)
                     .max_width(menu_size.size())
                     .padding(16)
-                    .style(move |theme: &Theme| Style {
-                        background: Some(theme.palette().background.scale_alpha(opacity).into()),
-                        border: Border {
-                            color: theme
-                                .extended_palette()
-                                .secondary
-                                .base
-                                .color
-                                .scale_alpha(opacity),
-                            width: 1.,
-                            radius: 16.0.into(),
-                        },
-                        ..Default::default()
-                    }),
+                    .style(menu_container_style(opacity)),
             )
             .on_release(app::Message::None),
         )
@@ -207,10 +193,7 @@ pub fn menu_wrapper(
         })
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_| Style {
-            background: Some(backdrop_color(menu_backdrop).into()),
-            ..Default::default()
-        }),
+        .style(menu_backdrop_style(menu_backdrop)),
     )
     .on_release(app::Message::CloseMenu(id))
     .into()
