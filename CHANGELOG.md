@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.6.7] - 2025-10-02
+
+### Changed
+
+- Split the tray service into dedicated `icon` and `watcher` helpers while
+  keeping `tray.rs` focused on `TrayService` types and trait implementations.
+- Updated the watcher state machine to use typed errors and helper modules,
+  preserving the façade imports used by menu consumers.
+
+### Added
+
+- Unit tests covering icon lookup fallback logic and watcher error handling to
+  ensure resilient behaviour when themes or D-Bus signals fail.
 ## [0.6.6] - 2025-10-01
 
 ### Changed

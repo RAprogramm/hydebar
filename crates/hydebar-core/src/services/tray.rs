@@ -1,42 +1,16 @@
 use super::{ReadOnlyService, Service, ServiceEvent};
-use dbus::{
-    DBusMenuProxy, Layout, StatusNotifierItemProxy, StatusNotifierWatcher,
-    StatusNotifierWatcherProxy,
-};
-use freedesktop_icons::lookup;
+use dbus::{DBusMenuProxy, Layout, StatusNotifierItemProxy};
 use iced::{
     Task,
-    futures::{Stream, StreamExt, stream::select_all, stream_select},
     widget::{image, svg},
 };
-use linicon_theme::get_icon_theme;
-use log::{debug, error, info, trace};
+use log::{debug, error};
 use std::{future::Future, ops::Deref, pin::Pin};
-use tokio::future::pending;
 
 pub mod dbus;
 
-fn get_icon_from_name(icon_name: &str) -> Option<TrayIcon> {
-    debug!("get icon from name {icon_name}");
-
-    let lookup = lookup(icon_name).with_cache();
-
-    let icon_path = match get_icon_theme() {
-        Some(theme) => {
-            debug!("icon theme found {theme}");
-            lookup.with_theme(&theme).find()
-        }
-        None => lookup.find(),
-    };
-
-    icon_path.map(|path| {
-        if path.extension().is_some_and(|ext| ext == "svg") {
-            TrayIcon::Svg(svg::Handle::from_path(path))
-        } else {
-            TrayIcon::Image(image::Handle::from_path(path))
-        }
-    })
-}
+mod icon;
+mod watcher;
 
 #[derive(Debug, Clone)]
 pub enum TrayIcon {
@@ -83,30 +57,14 @@ impl StatusNotifierItem {
         let icon = match icon_pixmap {
             Ok(icons) => {
                 debug!("icon_pixmap {icons:?}");
-                icons
-                    .into_iter()
-                    .max_by_key(|i| {
-                        trace!("tray icon w {}, h {}", i.width, i.height);
-                        (i.width, i.height)
-                    })
-                    .map(|mut i| {
-                        // Convert ARGB to RGBA
-                        for pixel in i.bytes.chunks_exact_mut(4) {
-                            pixel.rotate_left(1);
-                        }
-                        TrayIcon::Image(image::Handle::from_rgba(
-                            i.width as u32,
-                            i.height as u32,
-                            i.bytes,
-                        ))
-                    })
+                icon::icon_from_pixmaps(icons)
             }
             Err(_) => item_proxy
                 .icon_name()
                 .await
                 .ok()
                 .as_deref()
-                .and_then(get_icon_from_name),
+                .and_then(icon::icon_from_name),
         };
 
         let menu_path = item_proxy.menu().await?;
@@ -152,251 +110,27 @@ impl Deref for TrayService {
     }
 }
 
-enum State {
-    Init,
-    Active(zbus::Connection),
-    Error,
-}
-
 impl TrayService {
-    async fn initialize_data(conn: &zbus::Connection) -> anyhow::Result<TrayData> {
-        debug!("initializing tray data");
-        let proxy = StatusNotifierWatcherProxy::new(conn).await?;
-
-        let items = proxy.registered_status_notifier_items().await?;
-
-        let mut status_items = Vec::with_capacity(items.len());
-        for item in items {
-            let item = StatusNotifierItem::new(conn, item).await?;
-            status_items.push(item);
-        }
-
-        debug!("created items: {status_items:?}");
-
-        Ok(TrayData(status_items))
-    }
-
-    async fn events(
-        conn: &zbus::Connection,
-    ) -> anyhow::Result<impl Stream<Item = TrayEvent> + use<>> {
-        let watcher = StatusNotifierWatcherProxy::new(conn).await?;
-
-        let registered = watcher
-            .receive_status_notifier_item_registered()
-            .await?
-            .filter_map({
-                let conn = conn.clone();
-                move |e| {
-                    let conn = conn.clone();
-                    async move {
-                        debug!("registered {e:?}");
-                        match e.args() {
-                            Ok(args) => {
-                                let item =
-                                    StatusNotifierItem::new(&conn, args.service.to_string()).await;
-
-                                item.map(TrayEvent::Registered).ok()
-                            }
-                            _ => None,
-                        }
-                    }
-                }
-            })
-            .boxed();
-        let unregistered = watcher
-            .receive_status_notifier_item_unregistered()
-            .await?
-            .filter_map(|e| async move {
-                debug!("unregistered {e:?}");
-
-                match e.args() {
-                    Ok(args) => Some(TrayEvent::Unregistered(args.service.to_string())),
-                    _ => None,
-                }
-            })
-            .boxed();
-
-        let items = watcher.registered_status_notifier_items().await?;
-        let mut icon_pixel_change = Vec::with_capacity(items.len());
-        let mut icon_name_change = Vec::with_capacity(items.len());
-        let mut menu_layout_change = Vec::with_capacity(items.len());
-
-        for name in items {
-            let item = StatusNotifierItem::new(conn, name.to_string()).await?;
-
-            icon_pixel_change.push(
-                item.item_proxy
-                    .receive_icon_pixmap_changed()
-                    .await
-                    .filter_map({
-                        let name = name.clone();
-                        move |icon| {
-                            let name = name.clone();
-                            async move {
-                                icon.get().await.ok().and_then(|icon| {
-                                    icon.into_iter()
-                                        .max_by_key(|i| {
-                                            trace!("tray icon w {}, h {}", i.width, i.height);
-                                            (i.width, i.height)
-                                        })
-                                        .map(|mut i| {
-                                            // Convert ARGB to RGBA
-                                            for pixel in i.bytes.chunks_exact_mut(4) {
-                                                pixel.rotate_left(1);
-                                            }
-                                            TrayEvent::IconChanged(
-                                                name.to_owned(),
-                                                TrayIcon::Image(image::Handle::from_rgba(
-                                                    i.width as u32,
-                                                    i.height as u32,
-                                                    i.bytes,
-                                                )),
-                                            )
-                                        })
-                                })
-                            }
-                        }
-                    })
-                    .boxed(),
-            );
-
-            icon_name_change.push(
-                item.item_proxy
-                    .receive_icon_name_changed()
-                    .await
-                    .filter_map({
-                        let name = name.clone();
-                        move |icon_name| {
-                            let name = name.clone();
-                            async move {
-                                icon_name
-                                    .get()
-                                    .await
-                                    .ok()
-                                    .as_deref()
-                                    .and_then(get_icon_from_name)
-                                    .map(|icon| TrayEvent::IconChanged(name.to_owned(), icon))
-                            }
-                        }
-                    })
-                    .boxed(),
-            );
-
-            let layout_updated = item.menu_proxy.receive_layout_updated().await;
-            if let Ok(layout_updated) = layout_updated {
-                menu_layout_change.push(
-                    layout_updated
-                        .filter_map({
-                            let name = name.clone();
-                            let menu_proxy = item.menu_proxy.clone();
-                            move |_| {
-                                debug!("layout update event name {}", &name);
-
-                                let name = name.clone();
-                                let menu_proxy = menu_proxy.clone();
-                                async move {
-                                    menu_proxy.get_layout(0, -1, &[]).await.ok().map(
-                                        |(_, layout)| {
-                                            TrayEvent::MenuLayoutChanged(name.to_owned(), layout)
-                                        },
-                                    )
-                                }
-                            }
-                        })
-                        .boxed(),
-                );
-            }
-        }
-
-        Ok(stream_select!(
-            registered,
-            unregistered,
-            select_all(icon_pixel_change),
-            select_all(icon_name_change),
-            select_all(menu_layout_change)
-        )
-        .boxed())
-    }
-
-    pub async fn start_listening<F, Fut>(mut publisher: F)
+    /// Start listening for tray events using the underlying D-Bus watcher.
+    ///
+    /// The provided `publisher` receives service lifecycle events as they are
+    /// produced by the watcher loop.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use hydebar_core::services::{ServiceEvent, tray::TrayService};
+    ///
+    /// async fn listen() {
+    ///     TrayService::start_listening(|_event: ServiceEvent<TrayService>| async {}).await;
+    /// }
+    /// ```
+    pub async fn start_listening<F, Fut>(publisher: F)
     where
         F: FnMut(ServiceEvent<Self>) -> Fut + Send,
         Fut: Future<Output = ()> + Send,
     {
-        let mut state = State::Init;
-
-        loop {
-            state = Self::drive_state(state, &mut publisher).await;
-        }
-    }
-
-    async fn drive_state<F, Fut>(state: State, publisher: &mut F) -> State
-    where
-        F: FnMut(ServiceEvent<Self>) -> Fut + Send,
-        Fut: Future<Output = ()> + Send,
-    {
-        match state {
-            State::Init => match StatusNotifierWatcher::start_server().await {
-                Ok(conn) => {
-                    let data = TrayService::initialize_data(&conn).await;
-
-                    match data {
-                        Ok(data) => {
-                            info!("Tray service initialized");
-
-                            publisher(ServiceEvent::Init(TrayService {
-                                data,
-                                _conn: conn.clone(),
-                            }))
-                            .await;
-
-                            State::Active(conn)
-                        }
-                        Err(err) => {
-                            error!("Failed to initialize tray service: {err}");
-
-                            State::Error
-                        }
-                    }
-                }
-                Err(err) => {
-                    error!("Failed to connect to system bus: {err}");
-
-                    State::Error
-                }
-            },
-            State::Active(conn) => {
-                info!("Listening for tray events");
-
-                match TrayService::events(&conn).await {
-                    Ok(mut events) => {
-                        while let Some(event) = events.next().await {
-                            debug!("tray data {event:?}");
-
-                            let reload_events = matches!(event, TrayEvent::Registered(_));
-
-                            publisher(ServiceEvent::Update(event)).await;
-
-                            if reload_events {
-                                break;
-                            }
-                        }
-
-                        State::Active(conn)
-                    }
-                    Err(err) => {
-                        error!("Failed to listen for tray events: {err}");
-                        State::Error
-                    }
-                }
-            }
-            State::Error => {
-                error!("Tray service error");
-
-                pending::<()>().await;
-                State::Error
-            }
-        }
+        watcher::start_listening(publisher).await;
     }
 
     pub async fn menu_voice_selected(
