@@ -7,6 +7,8 @@ use crate::{
     },
     style::ghost_button_style,
 };
+
+pub use crate::services::bluetooth::BluetoothState;
 use iced::{
     Element, Length, Theme,
     widget::{Column, Row, button, column, container, horizontal_rule, row, text},
