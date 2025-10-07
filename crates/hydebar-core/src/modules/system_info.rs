@@ -6,7 +6,8 @@ pub use data::{NetworkData, SystemInfoData, SystemInfoSampler};
 pub use runtime::REFRESH_INTERVAL;
 pub use view::{build_indicator_view, build_menu_view, indicator_elements};
 
-use crate::{ event_bus::ModuleEvent};
+use crate::{ModuleContext, event_bus::ModuleEvent};
+use hydebar_proto::config::SystemModuleConfig;
 use iced::Element;
 
 use super::{Module, ModuleError, OnModulePress};

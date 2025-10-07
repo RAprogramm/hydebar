@@ -12,7 +12,7 @@ pub use manager::{
 };
 pub use watch::{ConfigEvent, subscription};
 
-use hydebar_proto::config::{Config, DEFAULT_CONFIG_FILE_PATH};
+use hydebar_proto::config::DEFAULT_CONFIG_FILE_PATH;
 use log::{info, warn};
 use shellexpand::full;
 use masterror::AppError;

@@ -23,10 +23,12 @@ use iced::{
 pub(super) trait SettingsViewExt {
     type ViewData<'a>;
 
-    fn settings_view(
+    fn settings_view<M>(
         &self,
         data: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)>;
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
+    where
+        M: 'static + From<Message>;
 
     fn menu_view(
         &self,
@@ -40,10 +42,13 @@ pub(super) trait SettingsViewExt {
 impl SettingsViewExt for Settings {
     type ViewData<'a> = ();
 
-    fn settings_view(
+    fn settings_view<M>(
         &self,
         _: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
+    where
+        M: 'static + From<Message>,
+    {
         Some((
             Row::new()
                 .push_maybe(

@@ -89,7 +89,7 @@ impl Settings {
         config: &SettingsModuleConfig,
         outputs: &mut Outputs,
         main_config: &crate::config::Config,
-    ) -> Task<crate::app::Message> {
+    )  {
         match message {
             Message::ToggleMenu(id, button_ui_ref) => {
                 self.sub_menu = None;
@@ -100,7 +100,6 @@ impl Settings {
                 AudioMessage::Event(event) => match event {
                     ServiceEvent::Init(service) => {
                         self.audio = Some(service);
-                        Task::none()
                     }
                     ServiceEvent::Update(data) => {
                         if let Some(audio) = self.audio.as_mut() {
@@ -114,41 +113,32 @@ impl Settings {
                                 self.sub_menu = None;
                             }
                         }
-                        Task::none()
                     }
-                    ServiceEvent::Error(_) => Task::none(),
                 },
                 AudioMessage::ToggleSinkMute => {
                     let _spawned = self.spawn_audio_command(AudioCommand::ToggleSinkMute);
-                    Task::none()
                 }
                 AudioMessage::SinkVolumeChanged(value) => {
                     let _spawned = self.spawn_audio_command(AudioCommand::SinkVolume(value));
-                    Task::none()
                 }
                 AudioMessage::DefaultSinkChanged(name, port) => {
                     let _spawned = self.spawn_audio_command(AudioCommand::DefaultSink(name, port));
-                    Task::none()
                 }
                 AudioMessage::ToggleSourceMute => {
                     let _spawned = self.spawn_audio_command(AudioCommand::ToggleSourceMute);
-                    Task::none()
                 }
                 AudioMessage::SourceVolumeChanged(value) => {
                     let _spawned = self.spawn_audio_command(AudioCommand::SourceVolume(value));
-                    Task::none()
                 }
                 AudioMessage::DefaultSourceChanged(name, port) => {
                     let _spawned =
                         self.spawn_audio_command(AudioCommand::DefaultSource(name, port));
-                    Task::none()
                 }
                 AudioMessage::SinksMore(id) => {
                     if let Some(cmd) = &config.audio_sinks_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
                         outputs.close_menu(id, main_config)
                     } else {
-                        Task::none()
                     }
                 }
                 AudioMessage::SourcesMore(id) => {
@@ -156,7 +146,6 @@ impl Settings {
                         crate::utils::launcher::execute_command(cmd.to_string());
                         outputs.close_menu(id, main_config)
                     } else {
-                        Task::none()
                     }
                 }
             },
@@ -164,38 +153,30 @@ impl Settings {
                 UPowerMessage::Event(event) => match event {
                     ServiceEvent::Init(service) => {
                         self.upower = Some(service);
-                        Task::none()
                     }
                     ServiceEvent::Update(data) => {
                         if let Some(upower) = self.upower.as_mut() {
                             upower.update(data);
                         }
-                        Task::none()
                     }
-                    ServiceEvent::Error(_) => Task::none(),
                 },
                 UPowerMessage::TogglePowerProfile => {
                     let _spawned = self.spawn_upower_command(PowerProfileCommand::Toggle);
-                    Task::none()
                 }
             },
             Message::Network(msg) => match msg {
                 NetworkMessage::Event(event) => match event {
                     ServiceEvent::Init(service) => {
                         self.network = Some(service);
-                        Task::none()
                     }
                     ServiceEvent::Update(NetworkEvent::RequestPasswordForSSID(ssid)) => {
                         self.password_dialog = Some((ssid, String::new()));
-                        Task::none()
                     }
                     ServiceEvent::Update(data) => {
                         if let Some(network) = self.network.as_mut() {
                             network.update(data);
                         }
-                        Task::none()
                     }
-                    _ => Task::none(),
                 },
                 NetworkMessage::ToggleAirplaneMode => {
                     if self.sub_menu == Some(SubMenu::Wifi) {
@@ -203,7 +184,6 @@ impl Settings {
                     }
 
                     let _spawned = self.spawn_network_command(NetworkCommand::ToggleAirplaneMode);
-                    Task::none()
                 }
                 NetworkMessage::ToggleWiFi => {
                     if self.sub_menu == Some(SubMenu::Wifi) {
@@ -211,12 +191,10 @@ impl Settings {
                     }
 
                     let _spawned = self.spawn_network_command(NetworkCommand::ToggleWiFi);
-                    Task::none()
                 }
                 NetworkMessage::SelectAccessPoint(ac) => {
                     let _spawned =
                         self.spawn_network_command(NetworkCommand::SelectAccessPoint((ac, None)));
-                    Task::none()
                 }
                 NetworkMessage::RequestWiFiPassword(id, ssid) => {
                     info!("Requesting password for {ssid}");
@@ -225,14 +203,12 @@ impl Settings {
                 }
                 NetworkMessage::ScanNearByWiFi => {
                     let _spawned = self.spawn_network_command(NetworkCommand::ScanNearByWiFi);
-                    Task::none()
                 }
                 NetworkMessage::WiFiMore(id) => {
                     if let Some(cmd) = &config.wifi_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
                         outputs.close_menu(id, main_config)
                     } else {
-                        Task::none()
                     }
                 }
                 NetworkMessage::VpnMore(id) => {
@@ -240,27 +216,22 @@ impl Settings {
                         crate::utils::launcher::execute_command(cmd.to_string());
                         outputs.close_menu(id, main_config)
                     } else {
-                        Task::none()
                     }
                 }
                 NetworkMessage::ToggleVpn(vpn) => {
                     let _spawned = self.spawn_network_command(NetworkCommand::ToggleVpn(vpn));
-                    Task::none()
                 }
             },
             Message::Bluetooth(msg) => match msg {
                 BluetoothMessage::Event(event) => match event {
                     ServiceEvent::Init(service) => {
                         self.bluetooth = Some(service);
-                        Task::none()
                     }
                     ServiceEvent::Update(data) => {
                         if let Some(bluetooth) = self.bluetooth.as_mut() {
                             bluetooth.update(data);
                         }
-                        Task::none()
                     }
-                    _ => Task::none(),
                 },
                 BluetoothMessage::Toggle => match self.bluetooth.as_mut() {
                     Some(_) => {
@@ -269,16 +240,13 @@ impl Settings {
                         }
 
                         let _spawned = self.spawn_bluetooth_command(BluetoothCommand::Toggle);
-                        Task::none()
                     }
-                    _ => Task::none(),
                 },
                 BluetoothMessage::More(id) => {
                     if let Some(cmd) = &config.bluetooth_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
                         outputs.close_menu(id, main_config)
                     } else {
-                        Task::none()
                     }
                 }
             },
@@ -286,19 +254,15 @@ impl Settings {
                 BrightnessMessage::Event(event) => match event {
                     ServiceEvent::Init(service) => {
                         self.brightness = Some(service);
-                        Task::none()
                     }
                     ServiceEvent::Update(data) => {
                         if let Some(brightness) = self.brightness.as_mut() {
                             brightness.update(data);
                         }
-                        Task::none()
                     }
-                    _ => Task::none(),
                 },
                 BrightnessMessage::Change(value) => {
                     let _spawned = self.spawn_brightness_command(BrightnessCommand::Set(value));
-                    Task::none()
                 }
             },
             Message::ToggleSubMenu(menu_type) => {
@@ -312,23 +276,19 @@ impl Settings {
                     }
                 }
 
-                Task::none()
             }
             Message::ToggleInhibitIdle => {
                 if let Some(idle_inhibitor) = &mut self.idle_inhibitor {
                     idle_inhibitor.toggle();
                 }
-                Task::none()
             }
             Message::Lock => {
                 if let Some(lock_cmd) = &config.lock_cmd {
                     crate::utils::launcher::execute_command(lock_cmd.to_string());
                 }
-                Task::none()
             }
             Message::Power(msg) => {
                 msg.update();
-                Task::none()
             }
             Message::PasswordDialog(msg) => match msg {
                 password_dialog::Message::PasswordChanged(password) => {
@@ -336,7 +296,6 @@ impl Settings {
                         *current_password = password;
                     }
 
-                    Task::none()
                 }
                 password_dialog::Message::DialogConfirmed(id) => {
                     if let Some((ssid, password)) = self.password_dialog.take() {

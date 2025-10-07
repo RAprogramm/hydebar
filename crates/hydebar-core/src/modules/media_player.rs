@@ -248,7 +248,7 @@ pub enum Message {
 }
 
 impl MediaPlayer {
-    pub fn update(&mut self, message: Message) -> Task<crate::app::Message> {
+    pub fn update(&mut self, message: Message)  {
         match message {
             Message::Prev(s) => self.handle_command(s, PlayerCommand::Prev),
             Message::PlayPause(s) => self.handle_command(s, PlayerCommand::PlayPause),
@@ -257,17 +257,14 @@ impl MediaPlayer {
             Message::Event(event) => match event {
                 ServiceEvent::Init(s) => {
                     self.service = Some(s);
-                    Task::none()
                 }
                 ServiceEvent::Update(d) => {
                     if let Some(service) = self.service.as_mut() {
                         service.update(d);
                     }
-                    Task::none()
                 }
                 ServiceEvent::Error(error) => {
                     error!("media player service error: {error}");
-                    Task::none()
                 }
             },
         }
@@ -344,7 +341,7 @@ impl MediaPlayer {
         &mut self,
         service_name: String,
         command: PlayerCommand,
-    ) -> Task<crate::app::Message> {
+    )  {
         let runtime = self.runtime.clone();
         let sender = self.sender.clone();
         let service = self.service.clone();
@@ -371,7 +368,6 @@ impl MediaPlayer {
             });
         }
 
-        Task::none()
     }
 
     fn get_title(d: &MprisPlayerData, config: &MediaPlayerModuleConfig) -> String {

@@ -136,10 +136,10 @@ pub fn build_menu_view(data: &SystemInfoData) -> Element<Message> {
 }
 
 /// Build the indicator widgets representing the configured subset of metrics.
-pub fn indicator_elements(
+pub fn indicator_elements<'a, M>(
     data: &SystemInfoData,
     config: &SystemModuleConfig,
-) -> Vec<Element<app::Message>> {
+) -> Vec<Element<'a, M>> {
     config
         .indicators
         .iter()
@@ -206,10 +206,10 @@ pub fn indicator_elements(
 }
 
 /// Construct the condensed indicator row shown in the module section.
-pub fn build_indicator_view(
+pub fn build_indicator_view<M>(
     data: &SystemInfoData,
     config: &SystemModuleConfig,
-) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
     let indicators = indicator_elements(data, config);
 
     Some((

@@ -59,24 +59,21 @@ impl Updates {
         _config: &UpdatesModuleConfig,
         outputs: &mut Outputs,
         main_config: &crate::config::Config,
-    ) -> Task<crate::app::Message> {
+    )  {
         match message {
             Message::UpdatesCheckCompleted(updates) => {
                 self.updates = updates;
                 self.state = CheckState::Ready;
 
-                Task::none()
             }
             Message::UpdateFinished => {
                 self.updates.clear();
                 self.state = CheckState::Ready;
 
-                Task::none()
             }
             Message::ToggleUpdatesList => {
                 self.is_updates_list_open = !self.is_updates_list_open;
 
-                Task::none()
             }
             Message::CheckNow => {
                 self.state = CheckState::Checking;
@@ -117,7 +114,6 @@ impl Updates {
                     }
                 }
 
-                Task::none()
             }
             Message::Update(id) => {
                 if let (Some(runtime), Some(sender), Some(registration)) = (

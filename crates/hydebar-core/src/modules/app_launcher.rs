@@ -28,7 +28,7 @@ impl<M> Module<M> for AppLauncher {
         if config.is_some() {
             Some((
                 icon(Icons::AppLauncher).into(),
-                Some(OnModulePress::Action(Box::new(Message::OpenLauncher))),
+                None, // Action handled in GUI layer
             ))
         } else {
             None

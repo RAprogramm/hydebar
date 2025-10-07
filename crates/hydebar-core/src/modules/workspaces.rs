@@ -281,13 +281,16 @@ impl<M> Module<M> for Workspaces {
     }
 
     fn view(
-        &'_ self,
+        &self,
         (outputs, id, config, workspace_colors, special_workspace_colors): Self::ViewData<'_>,
-    ) -> Option<(Element<'_,Message>, Option<OnModulePress<M>>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
+    where
+        M: 'static + From<Message>,
+    {
         let monitor_name = outputs.get_monitor_name(id);
 
         Some((
-            Into::<Element<Message>>::into(
+            Into::<Element<M>>::into(
                 Row::with_children(
                     self.workspaces
                         .iter()
@@ -354,7 +357,7 @@ impl<M> Module<M> for Workspaces {
                 .padding([2, 0])
                 .spacing(4),
             )
-            .map(app::Message::Workspaces),
+            .map(M::from),
             None,
         ))
     }

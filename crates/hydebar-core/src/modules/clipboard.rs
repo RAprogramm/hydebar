@@ -28,7 +28,7 @@ impl<M> Module<M> for Clipboard {
         if config.is_some() {
             Some((
                 icon(Icons::Clipboard).into(),
-                Some(OnModulePress::Action(Box::new(app::Message::OpenClipboard))),
+                None, // Action handled in GUI layer
             ))
         } else {
             None

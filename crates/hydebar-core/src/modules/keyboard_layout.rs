@@ -148,9 +148,7 @@ impl<M> Module<M> for KeyboardLayout {
             };
             Some((
                 text(active).into(),
-                Some(OnModulePress::Action(Box::new(
-                    app::Message::KeyboardLayout(Message::ChangeLayout),
-                ))),
+                None, // Action handled in GUI layer
             ))
         }
     }

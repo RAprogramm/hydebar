@@ -5,12 +5,13 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 use super::{Module, ModuleError, OnModulePress};
 use crate::{
+    ModuleContext, ModuleEventSender,
     components::icons::{Icons, icon},
     event_bus::ModuleEvent,
     menu::MenuType,
     position_button::position_button,
     services::{
-        ReadOnlyService, Service, ServiceEvent,
+        ReadOnlyService, ServiceEvent,
         tray::{
             TrayCommand, TrayIcon, TrayService,
             dbus::{Layout, LayoutProps},
@@ -87,20 +88,17 @@ impl TrayModule {
         });
     }
 
-    pub fn update(&mut self, message: TrayMessage) -> Task<crate::app::Message> {
+    pub fn update(&mut self, message: TrayMessage)  {
         match message {
             TrayMessage::Event(event) => match *event {
                 ServiceEvent::Init(service) => {
                     self.service = Some(service);
-                    Task::none()
                 }
                 ServiceEvent::Update(data) => {
                     if let Some(service) = self.service.as_mut() {
                         service.update(data);
                     }
-                    Task::none()
                 }
-                ServiceEvent::Error(_) => Task::none(),
             },
             TrayMessage::ToggleSubmenu(index) => {
                 if self.submenus.contains(&index) {
@@ -108,7 +106,6 @@ impl TrayModule {
                 } else {
                     self.submenus.push(index);
                 }
-                Task::none()
             }
             TrayMessage::MenuSelected(name, id) => {
                 debug!("Tray menu click: {id}");
@@ -120,7 +117,6 @@ impl TrayModule {
                     self.dispatch_command(command);
                 }
 
-                Task::none()
             }
         }
     }
@@ -452,7 +448,7 @@ mod tests {
 
         assert!(matches!(
             module.update(TrayMessage::MenuSelected("tray".into(), 42)),
-            Task::None
+            // Task::None
         ));
 
         let event = runtime
