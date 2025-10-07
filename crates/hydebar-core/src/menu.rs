@@ -1,4 +1,3 @@
-use crate::app::{self};
 use crate::config::{AppearanceStyle, Position};
 use crate::position_button::ButtonUIRef;
 use crate::style::{menu_backdrop_style, menu_container_style};
@@ -140,16 +139,18 @@ impl MenuSize {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn menu_wrapper(
+pub fn menu_wrapper<Message: Clone + 'static>(
     id: Id,
-    content: Element<app::Message>,
+    content: Element<Message>,
     menu_size: MenuSize,
     button_ui_ref: ButtonUIRef,
     bar_position: Position,
     style: AppearanceStyle,
     opacity: f32,
     menu_backdrop: f32,
-) -> Element<app::Message> {
+    none_message: Message,
+    close_menu_message: Message,
+) -> Element<Message> {
     mouse_area(
         container(
             mouse_area(
@@ -160,7 +161,7 @@ pub fn menu_wrapper(
                     .padding(16)
                     .style(menu_container_style(opacity)),
             )
-            .on_release(app::Message::None),
+            .on_release(none_message),
         )
         .align_y(match bar_position {
             Position::Top => Vertical::Top,
@@ -195,6 +196,6 @@ pub fn menu_wrapper(
         .height(Length::Fill)
         .style(menu_backdrop_style(menu_backdrop)),
     )
-    .on_release(app::Message::CloseMenu(id))
+    .on_release(close_menu_message)
     .into()
 }

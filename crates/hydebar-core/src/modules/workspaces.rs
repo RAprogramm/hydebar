@@ -1,6 +1,6 @@
 use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    ModuleContext, ModuleEventSender, app,
+    ModuleContext, ModuleEventSender,
     config::{AppearanceColor, WorkspaceVisibilityMode, WorkspacesModuleConfig},
     event_bus::ModuleEvent,
     outputs::Outputs,
@@ -283,7 +283,7 @@ impl Module for Workspaces {
     fn view(
         &'_ self,
         (outputs, id, config, workspace_colors, special_workspace_colors): Self::ViewData<'_>,
-    ) -> Option<(Element<'_, app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'_,Message>, Option<OnModulePress>)> {
         let monitor_name = outputs.get_monitor_name(id);
 
         Some((

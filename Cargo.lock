@@ -2278,6 +2278,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "freedesktop-icons",
+ "futures",
  "hydebar-proto",
  "hyprland",
  "iced",

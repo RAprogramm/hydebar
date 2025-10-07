@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::{task::JoinHandle, time::sleep};
 use tokio_stream::StreamExt;
 
-use crate::{ModuleContext, ModuleEventSender, app, event_bus::ModuleEvent};
+use crate::{ event_bus::ModuleEvent};
 
 use super::{Module, ModuleError, OnModulePress};
 

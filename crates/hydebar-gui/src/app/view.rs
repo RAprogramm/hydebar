@@ -156,6 +156,8 @@ impl App {
                     self.config.appearance.style,
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
+                    Message::None,
+                    Message::CloseMenu(id),
                 ),
                 Some((MenuType::Tray(name), button_ui_ref)) => menu_wrapper(
                     id,
@@ -168,6 +170,8 @@ impl App {
                     self.config.appearance.style,
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
+                    Message::None,
+                    Message::CloseMenu(id),
                 ),
                 Some((MenuType::Settings, button_ui_ref)) => menu_wrapper(
                     id,
@@ -185,6 +189,8 @@ impl App {
                     self.config.appearance.style,
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
+                    Message::None,
+                    Message::CloseMenu(id),
                 ),
                 Some((MenuType::MediaPlayer, button_ui_ref)) => menu_wrapper(
                     id,
@@ -200,6 +206,8 @@ impl App {
                     self.config.appearance.style,
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
+                    Message::None,
+                    Message::CloseMenu(id),
                 ),
                 Some((MenuType::SystemInfo, button_ui_ref)) => menu_wrapper(
                     id,
@@ -210,6 +218,8 @@ impl App {
                     self.config.appearance.style,
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
+                    Message::None,
+                    Message::CloseMenu(id),
                 ),
                 None => Row::new().into(),
             },

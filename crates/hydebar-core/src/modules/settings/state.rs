@@ -13,7 +13,7 @@ use super::{
     view::SettingsViewExt,
 };
 use crate::{
-    ModuleContext, ModuleEventSender, app,
+    ModuleContext, ModuleEventSender,
     config::SettingsModuleConfig,
     event_bus::ModuleEvent,
     menu::MenuType,

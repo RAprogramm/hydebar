@@ -1,6 +1,5 @@
 use crate::{
     ModuleContext,
-    app::{self, Message},
     components::icons::{Icons, icon},
 };
 use iced::Element;

@@ -1,6 +1,7 @@
 use flexi_logger::LogSpecification;
 
 mod centerbox;
+mod views;
 
 pub mod app;
 

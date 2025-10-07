@@ -5,7 +5,7 @@ use log::{error, warn};
 use tokio::{runtime::Handle, task::JoinHandle, time::sleep};
 
 use crate::{
-    ModuleContext, ModuleEventSender, app, config::UpdatesModuleConfig, event_bus::ModuleEvent,
+    ModuleContext, ModuleEventSender, config::UpdatesModuleConfig, event_bus::ModuleEvent,
     menu::MenuType, outputs::Outputs,
 };
 

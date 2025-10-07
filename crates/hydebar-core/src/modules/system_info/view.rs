@@ -29,7 +29,7 @@ fn indicator_info_element<'a, V>(
     unit: &str,
     threshold: Option<(V, V)>,
     prefix: Option<&str>,
-) -> Element<'a, app::Message>
+) -> Element<'a,Message>
 where
     V: std::fmt::Display + PartialOrd + Copy + 'a,
 {

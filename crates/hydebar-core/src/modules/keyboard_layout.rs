@@ -7,7 +7,7 @@ use tokio::{task::JoinHandle, time::sleep};
 use tokio_stream::StreamExt;
 
 use crate::{
-    ModuleContext, ModuleEventSender, app, config::KeyboardLayoutModuleConfig,
+    ModuleContext, ModuleEventSender, config::KeyboardLayoutModuleConfig,
     event_bus::ModuleEvent,
 };
 

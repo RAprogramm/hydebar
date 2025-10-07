@@ -1,6 +1,6 @@
 use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    ModuleContext, ModuleEventSender, app,
+    ModuleContext, ModuleEventSender,
     components::icons::{Icons, icon},
     event_bus::ModuleEvent,
     services::{

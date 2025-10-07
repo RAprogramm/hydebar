@@ -8,7 +8,7 @@ use iced::{
 };
 
 use crate::{
-    components::icons::{Icons, icon},
+    components::icons::{Icons, icon as icon_component},
     style::ghost_button_style,
 };
 
@@ -36,7 +36,7 @@ pub(super) fn icon(state: &CheckState, update_count: usize) -> Element<'static, 
         _ => Icons::UpdatesAvailable,
     };
 
-    let mut content = row!(container(icon(icon)))
+    let mut content = row!(container(icon_component(icon)))
         .align_y(Alignment::Center)
         .spacing(4);
 
@@ -115,7 +115,7 @@ fn check_now_button(updates: &Updates, opacity: f32) -> iced::widget::Button<'st
     let mut content = row!(text("Check now").width(Length::Fill));
 
     if matches!(updates.state(), CheckState::Checking) {
-        content = content.push(icon(Icons::Refresh));
+        content = content.push(icon_component(Icons::Refresh));
     }
 
     button(content)

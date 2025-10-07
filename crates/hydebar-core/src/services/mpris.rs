@@ -1,7 +1,6 @@
 use super::{ReadOnlyService, Service, ServiceEvent};
 use crate::modules::ModuleError;
-use commands::{MprisPlayerCommand, PlayerCommand, execute_player_command, module_error};
-use data::{MprisPlayerData, MprisPlayerEvent, MprisPlayerMetadata, PlaybackStatus};
+use commands::{execute_player_command, module_error};
 use futures::StreamExt;
 use iced::{Subscription, Task};
 use log::{debug, error, info};

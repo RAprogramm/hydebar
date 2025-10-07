@@ -2,7 +2,6 @@ use std::{process::Stdio, sync::Arc};
 
 use crate::{
     ModuleContext, ModuleEventSender,
-    app::{self},
     components::icons::{Icons, icon, icon_raw},
     config::CustomModuleDef,
     event_bus::ModuleEvent,

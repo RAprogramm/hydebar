@@ -1,23 +1,63 @@
-use crate::{ModuleContext, ModuleEventSender, app, event_bus::ModuleEvent};
-
-use super::{Module, ModuleError, OnModulePress};
+use crate::{ModuleContext, ModuleEventSender, event_bus::ModuleEvent};
 use chrono::{DateTime, Local};
-use iced::{Element, widget::text};
 use log::error;
 use std::time::Duration;
 use tokio::{task::JoinHandle, time::interval};
 
+/// Clock data for rendering
+#[derive(Debug, Clone)]
+pub struct ClockData {
+    pub current_time: DateTime<Local>,
+}
+
+impl ClockData {
+    pub fn new() -> Self {
+        Self {
+            current_time: Local::now(),
+        }
+    }
+
+    pub fn update(&mut self) {
+        self.current_time = Local::now();
+    }
+
+    /// Format the time according to chrono format string
+    pub fn format(&self, format: &str) -> String {
+        self.current_time.format(format).to_string()
+    }
+}
+
+impl Default for ClockData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Events emitted by the clock module
+#[derive(Debug, Clone)]
+pub enum ClockEvent {
+    Tick(DateTime<Local>),
+}
+
+/// Message type for GUI communication
+#[derive(Debug, Clone)]
+pub enum Message {
+    Update,
+}
+
+/// Clock module - business logic only, no GUI!
+#[derive(Debug)]
 pub struct Clock {
-    date: DateTime<Local>,
+    data: ClockData,
     tick_interval: Duration,
-    sender: Option<ModuleEventSender<Message>>,
+    sender: Option<ModuleEventSender<ClockEvent>>,
     task: Option<JoinHandle<()>>,
 }
 
 impl Default for Clock {
     fn default() -> Self {
         Self {
-            date: Local::now(),
+            data: ClockData::new(),
             tick_interval: Duration::from_secs(5),
             sender: None,
             task: None,
@@ -25,28 +65,63 @@ impl Default for Clock {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    Update,
-}
-
 impl Clock {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get current clock data for rendering
+    pub fn data(&self) -> &ClockData {
+        &self.data
+    }
+
+    /// Initialize with module context and time format
+    pub fn register(&mut self, ctx: &ModuleContext, format: &str) {
+        self.tick_interval = Self::determine_interval(format);
+        self.data.update();
+        self.sender = Some(ctx.module_sender(ModuleEvent::Clock));
+
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+
+        if let Some(sender) = self.sender.clone() {
+            let interval_duration = self.tick_interval;
+            let mut update_sender = ctx.module_sender::<Message>(ModuleEvent::Clock);
+
+            self.task = Some(ctx.runtime_handle().spawn(async move {
+                let mut ticker = interval(interval_duration);
+
+                loop {
+                    ticker.tick().await;
+
+                    if let Err(err) = update_sender.try_send(Message::Update) {
+                        error!("Failed to publish clock tick: {err}");
+                    }
+                }
+            }));
+        }
+    }
+
+    /// Update clock state from GUI message
     pub fn update(&mut self, message: Message) {
         match message {
             Message::Update => {
-                self.date = Local::now();
+                self.data.update();
+
+                if let Some(sender) = &self.sender {
+                    if let Err(e) = sender.try_send(ClockEvent::Tick(self.data.current_time)) {
+                        error!("Failed to emit clock event: {}", e);
+                    }
+                }
             }
         }
     }
 
+    /// Determine tick interval based on format string
     fn determine_interval(format: &str) -> Duration {
         const SECOND_SPECIFIERS: [&str; 6] = [
-            "%S",  // Seconds (00-60)
-            "%T",  // Hour:Minute:Second
-            "%X",  // Locale time representation with seconds
-            "%r",  // 12-hour clock time with seconds
-            "%:z", // UTC offset with seconds
-            "%s",  // Unix timestamp (seconds since epoch)
+            "%S", "%T", "%X", "%r", "%:z", "%s",
         ];
 
         if SECOND_SPECIFIERS
@@ -60,44 +135,27 @@ impl Clock {
     }
 }
 
-impl Module for Clock {
-    type ViewData<'a> = &'a str;
-    type RegistrationData<'a> = &'a str;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    fn register(
-        &mut self,
-        ctx: &ModuleContext,
-        format: Self::RegistrationData<'_>,
-    ) -> Result<(), ModuleError> {
-        self.tick_interval = Self::determine_interval(format);
-        self.date = Local::now();
-        self.sender = Some(ctx.module_sender(ModuleEvent::Clock));
-
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
-
-        if let Some(sender) = self.sender.clone() {
-            let interval_duration = self.tick_interval;
-            self.task = Some(ctx.runtime_handle().spawn(async move {
-                let mut ticker = interval(interval_duration);
-
-                loop {
-                    ticker.tick().await;
-
-                    if let Err(err) = sender.try_send(Message::Update) {
-                        error!("failed to publish clock tick: {err}");
-                    }
-                }
-            }));
-        }
-
-        Ok(())
+    #[test]
+    fn clock_data_format() {
+        let data = ClockData::new();
+        let formatted = data.format("%H:%M");
+        assert!(formatted.contains(':'));
+        assert_eq!(formatted.len(), 5);
     }
-    fn view(
-        &self,
-        format: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
-        Some((text(self.date.format(format).to_string()).into(), None))
+
+    #[test]
+    fn determine_interval_with_seconds() {
+        let interval = Clock::determine_interval("%H:%M:%S");
+        assert_eq!(interval, Duration::from_secs(1));
+    }
+
+    #[test]
+    fn determine_interval_without_seconds() {
+        let interval = Clock::determine_interval("%H:%M");
+        assert_eq!(interval, Duration::from_secs(5));
     }
 }

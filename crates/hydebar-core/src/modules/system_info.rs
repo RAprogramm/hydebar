@@ -6,7 +6,7 @@ pub use data::{NetworkData, SystemInfoData, SystemInfoSampler};
 pub use runtime::REFRESH_INTERVAL;
 pub use view::{build_indicator_view, build_menu_view, indicator_elements};
 
-use crate::{ModuleContext, app, config::SystemModuleConfig, event_bus::ModuleEvent};
+use crate::{ event_bus::ModuleEvent};
 use iced::Element;
 
 use super::{Module, ModuleError, OnModulePress};

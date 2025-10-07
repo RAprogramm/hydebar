@@ -1,5 +1,5 @@
 use crate::{
-    ModuleContext, ModuleEventSender, app,
+    ModuleContext, ModuleEventSender,
     config::{WindowTitleConfig, WindowTitleMode},
     event_bus::ModuleEvent,
     utils::truncate_text,
