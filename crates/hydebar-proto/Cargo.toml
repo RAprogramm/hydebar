@@ -7,8 +7,8 @@ rust-version.workspace = true
 [dependencies]
 hex_color.workspace = true
 iced.workspace = true
+masterror.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_with.workspace = true
-thiserror.workspace = true
 tokio-stream.workspace = true

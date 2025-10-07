@@ -19,7 +19,7 @@ use log::{debug, error};
 use std::panic;
 use std::path::PathBuf;
 use std::{backtrace::Backtrace, borrow::Cow, num::NonZeroUsize, sync::Arc};
-use thiserror::Error;
+use masterror::AppError;
 use tokio::runtime::Handle;
 
 const ICON_FONT: &[u8] = include_bytes!("../../assets/SymbolsNerdFont-Regular.ttf");

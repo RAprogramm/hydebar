@@ -1,6 +1,6 @@
 use super::{Config, ModuleDef, ModuleName};
 use std::collections::HashSet;
-use thiserror::Error;
+use masterror::AppError;
 
 /// Errors returned when validating a [`Config`].
 #[derive(Debug, Clone, PartialEq, Eq, Error)]

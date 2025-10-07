@@ -9,7 +9,7 @@ pub type HyprlandEventStream<E> =
 /// Error type returned by [`HyprlandPort`] operations.
 ///
 /// Each error variant stores the logical operation name to aid diagnostics.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum HyprlandError {
     /// The requested operation timed out before it could complete.
     #[error("operation `{operation}` timed out after {timeout:?}")]

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 use hydebar_proto::config::{Config, ConfigValidationError, CustomModuleDef, ModuleName};
-use thiserror::Error;
+use masterror::AppError;
 
 /// Represents the effect a configuration update has on the running system.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

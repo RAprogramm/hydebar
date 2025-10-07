@@ -5,7 +5,7 @@ use tokio::process;
 use super::state::Update;
 
 /// Errors that can occur while executing an update-related shell command.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub(super) enum CommandError {
     /// Failed to spawn the command.
     #[error("failed to execute command")]

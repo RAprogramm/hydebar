@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin};
 use anyhow::Error;
 use iced::futures::{Stream, StreamExt, stream::select_all, stream_select};
 use log::{debug, error, info};
-use thiserror::Error;
+use masterror::AppError;
 use tokio::future::pending;
 
 use crate::services::ServiceEvent;

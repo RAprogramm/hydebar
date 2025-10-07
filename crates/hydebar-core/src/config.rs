@@ -15,7 +15,7 @@ pub use watch::{ConfigEvent, subscription};
 use hydebar_proto::config::{Config, DEFAULT_CONFIG_FILE_PATH};
 use log::{info, warn};
 use shellexpand::full;
-use thiserror::Error;
+use masterror::AppError;
 
 #[derive(Debug, Error)]
 pub enum ConfigLoadError {

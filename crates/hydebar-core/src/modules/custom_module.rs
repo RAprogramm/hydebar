@@ -152,7 +152,7 @@ fn truncate_snippet(line: &str) -> String {
     truncated
 }
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone)]
 enum CustomListenerError {
     #[error(transparent)]
     Command(CustomCommandError),
