@@ -1,18 +1,30 @@
 use super::{Config, ModuleDef, ModuleName};
 use std::collections::HashSet;
-use masterror::AppError;
 
 /// Errors returned when validating a [`Config`].
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigValidationError {
     /// Duplicate custom module definitions were found.
-    #[error("duplicate custom module definition for '{name}'")]
     DuplicateCustomModule { name: String },
 
     /// A module references a custom module definition that does not exist.
-    #[error("custom module '{name}' referenced in layout but not defined")]
     MissingCustomModule { name: String },
 }
+
+impl std::fmt::Display for ConfigValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuplicateCustomModule { name } => {
+                write!(f, "duplicate custom module definition for '{}'", name)
+            }
+            Self::MissingCustomModule { name } => {
+                write!(f, "custom module '{}' referenced in layout but not defined", name)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigValidationError {}
 
 impl Config {
     /// Validates the configuration, ensuring module definitions are consistent.

@@ -4,24 +4,41 @@ use masterror::Error;
 use zbus::Error as ZbusError;
 
 /// Error type emitted by the brightness service.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BrightnessError {
     /// Filesystem interaction failed while reading or writing brightness data.
-    #[error("failed to access backlight filesystem: {context}")]
     Filesystem { context: Arc<str> },
 
     /// Parsing the brightness level from sysfs failed.
-    #[error("failed to parse brightness value: {context}")]
     Parse { context: Arc<str> },
 
     /// DBus call to the system brightness controller failed.
-    #[error("failed to interact with system bus: {context}")]
     DBus { context: Arc<str> },
 
     /// No usable backlight device was detected on the system.
-    #[error("no backlight devices found")]
     MissingDevice,
 }
+
+impl std::fmt::Display for BrightnessError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Filesystem { context } => {
+                write!(f, "failed to access backlight filesystem: {}", context)
+            }
+            Self::Parse { context } => {
+                write!(f, "failed to parse brightness value: {}", context)
+            }
+            Self::DBus { context } => {
+                write!(f, "failed to interact with system bus: {}", context)
+            }
+            Self::MissingDevice => {
+                write!(f, "no backlight devices found")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BrightnessError {}
 
 impl BrightnessError {
     fn arc_from(value: impl Into<String>) -> Arc<str> {

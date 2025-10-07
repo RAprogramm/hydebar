@@ -30,10 +30,9 @@ use tokio::process::Command;
 /// Ok(())
 /// # }
 /// ```
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LauncherError {
     /// The command could not be spawned by the operating system.
-    #[error("failed to spawn `{command}`: {context}")]
     Spawn {
         /// The attempted command string.
         command: Arc<str>,
@@ -41,7 +40,6 @@ pub enum LauncherError {
         context: Arc<str>,
     },
     /// The command executed but returned a non-zero exit status.
-    #[error("command `{command}` exited with status {status}")]
     NonZeroExit {
         /// The attempted command string.
         command: Arc<str>,
@@ -49,6 +47,21 @@ pub enum LauncherError {
         status: ExitStatus,
     },
 }
+
+impl std::fmt::Display for LauncherError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spawn { command, context } => {
+                write!(f, "failed to spawn `{}`: {}", command, context)
+            }
+            Self::NonZeroExit { command, status } => {
+                write!(f, "command `{}` exited with status {}", command, status)
+            }
+        }
+    }
+}
+
+impl std::error::Error for LauncherError {}
 
 impl LauncherError {
     fn spawn_error(command: Arc<str>, error: std::io::Error) -> Self {

@@ -97,22 +97,41 @@ impl crate::services::ReadOnlyService for CustomCommandService {
     }
 }
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Clone)]
 pub enum CustomCommandError {
-    #[error("failed to spawn custom module listener process: {0}")]
     Spawn(Arc<std::io::Error>),
-    #[error("custom module listener did not expose stdout")]
     MissingStdout,
-    #[error("failed to read line from custom module output: {0}")]
     Read(Arc<std::io::Error>),
-    #[error("failed to parse custom module output: {0} ({1})")]
-    Parse(String, #[source] Arc<serde_json::Error>),
-    #[error("failed to wait for custom module process: {0}")]
+    Parse(String, Arc<serde_json::Error>),
     Wait(Arc<std::io::Error>),
-    #[error("custom module process exited unsuccessfully ({status:?})")]
     NonZeroExit { status: Option<i32> },
-    #[error("custom module updates channel closed")]
     ChannelClosed,
+}
+
+impl std::fmt::Display for CustomCommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spawn(err) => write!(f, "failed to spawn custom module listener process: {}", err),
+            Self::MissingStdout => write!(f, "custom module listener did not expose stdout"),
+            Self::Read(err) => write!(f, "failed to read line from custom module output: {}", err),
+            Self::Parse(snippet, err) => write!(f, "failed to parse custom module output: {} ({})", snippet, err),
+            Self::Wait(err) => write!(f, "failed to wait for custom module process: {}", err),
+            Self::NonZeroExit { status } => write!(f, "custom module process exited unsuccessfully ({:?})", status),
+            Self::ChannelClosed => write!(f, "custom module updates channel closed"),
+        }
+    }
+}
+
+impl std::error::Error for CustomCommandError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Spawn(err) => Some(err.as_ref()),
+            Self::Read(err) => Some(err.as_ref()),
+            Self::Parse(_, err) => Some(err.as_ref()),
+            Self::Wait(err) => Some(err.as_ref()),
+            _ => None,
+        }
+    }
 }
 
 impl CustomCommandError {
@@ -154,10 +173,26 @@ fn truncate_snippet(line: &str) -> String {
 
 #[derive(Debug, Clone)]
 enum CustomListenerError {
-    #[error(transparent)]
     Command(CustomCommandError),
-    #[error(transparent)]
     Module(ModuleError),
+}
+
+impl std::fmt::Display for CustomListenerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Command(err) => write!(f, "{}", err),
+            Self::Module(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::error::Error for CustomListenerError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Command(err) => Some(err),
+            Self::Module(err) => Some(err),
+        }
+    }
 }
 
 fn send_event(

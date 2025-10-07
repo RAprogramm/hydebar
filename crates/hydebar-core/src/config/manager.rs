@@ -43,23 +43,51 @@ pub struct ConfigApplied {
 }
 
 /// Describes failures that occurred while attempting to refresh the configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigUpdateError {
     /// Reading the configuration file from disk failed.
-    #[error("failed to read config at {path:?}: {context}")]
     Read { path: PathBuf, context: String },
     /// Parsing TOML content failed.
-    #[error("failed to parse config at {path:?}: {context}")]
     Parse { path: PathBuf, context: String },
     /// Validation detected a logical inconsistency.
-    #[error(transparent)]
-    Validation(#[from] ConfigValidationError),
+    Validation(ConfigValidationError),
     /// The configuration file was removed.
-    #[error("configuration file removed")]
     Removed,
     /// Updating the configuration state failed for an internal reason.
-    #[error("failed to update configuration state: {context}")]
     State { context: String },
+}
+
+impl std::fmt::Display for ConfigUpdateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read { path, context } => {
+                write!(f, "failed to read config at {:?}: {}", path, context)
+            }
+            Self::Parse { path, context } => {
+                write!(f, "failed to parse config at {:?}: {}", path, context)
+            }
+            Self::Validation(err) => write!(f, "{}", err),
+            Self::Removed => write!(f, "configuration file removed"),
+            Self::State { context } => {
+                write!(f, "failed to update configuration state: {}", context)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigUpdateError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Validation(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<ConfigValidationError> for ConfigUpdateError {
+    fn from(err: ConfigValidationError) -> Self {
+        Self::Validation(err)
+    }
 }
 
 impl ConfigUpdateError {
@@ -97,12 +125,21 @@ pub struct ConfigDegradation {
 }
 
 /// Errors produced by [`ConfigManager`].
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum ConfigManagerError {
     /// The internal configuration state lock was poisoned.
-    #[error("config state lock poisoned")]
     Poisoned,
 }
+
+impl std::fmt::Display for ConfigManagerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Poisoned => write!(f, "config state lock poisoned"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigManagerError {}
 
 /// Tracks and manages the last known valid configuration.
 #[derive(Debug)]

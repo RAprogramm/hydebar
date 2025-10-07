@@ -72,7 +72,7 @@ impl ModuleError {
 ///
 /// NOTE: This trait is being phased out in favor of clean architecture.
 /// New modules should follow the Battery pattern: separate data/logic (core) from rendering (gui).
-pub trait Module {
+pub trait Module<Message> {
     type ViewData<'a>;
     type RegistrationData<'a>;
 
@@ -83,5 +83,17 @@ pub trait Module {
     ) -> Result<(), ModuleError> {
         let _ = (ctx, data);
         Ok(())
+    }
+
+    fn view(
+        &self,
+        data: Self::ViewData<'_>,
+    ) -> Option<(iced::Element<'static, Message>, Option<OnModulePress<Message>>)> {
+        let _ = data;
+        None
+    }
+
+    fn subscription(&self) -> Option<iced::Subscription<Message>> {
+        None
     }
 }

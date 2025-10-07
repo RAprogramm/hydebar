@@ -8,14 +8,43 @@ use super::state::Update;
 #[derive(Debug)]
 pub(super) enum CommandError {
     /// Failed to spawn the command.
-    #[error("failed to execute command")]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
     /// The command exited with a non-zero status.
-    #[error("command exited with failure status: {0}")]
     Status(ExitStatus),
     /// The command produced output that was not valid UTF-8.
-    #[error("command output was not valid UTF-8")]
-    InvalidUtf8(#[from] std::string::FromUtf8Error),
+    InvalidUtf8(std::string::FromUtf8Error),
+}
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(_) => write!(f, "failed to execute command"),
+            Self::Status(status) => write!(f, "command exited with failure status: {}", status),
+            Self::InvalidUtf8(_) => write!(f, "command output was not valid UTF-8"),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            Self::InvalidUtf8(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for CommandError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl From<std::string::FromUtf8Error> for CommandError {
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        Self::InvalidUtf8(err)
+    }
 }
 
 impl CommandError {

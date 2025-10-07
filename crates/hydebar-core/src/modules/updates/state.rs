@@ -7,9 +7,10 @@ use tokio::{runtime::Handle, task::JoinHandle, time::sleep};
 use crate::{
     ModuleContext, ModuleEventSender, config::UpdatesModuleConfig, event_bus::ModuleEvent,
     menu::MenuType, outputs::Outputs,
+    modules::{Module, ModuleError, OnModulePress},
 };
 
-use super::{Module, ModuleError, OnModulePress, commands, view};
+use super::{commands, view};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Update {
@@ -161,7 +162,7 @@ impl Updates {
     }
 }
 
-impl Module for Updates {
+impl<M> Module<M> for Updates {
     type ViewData<'a> = &'a Option<UpdatesModuleConfig>;
     type RegistrationData<'a> = Option<&'a UpdatesModuleConfig>;
 
@@ -215,10 +216,13 @@ impl Module for Updates {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
+    where
+        M: 'static + From<Message>,
+    {
         if config.is_some() {
             Some((
-                view::icon(&self.state, self.updates.len()).map(app::Message::Updates),
+                view::icon(&self.state, self.updates.len()).map(M::from),
                 Some(OnModulePress::ToggleMenu(MenuType::Updates)),
             ))
         } else {

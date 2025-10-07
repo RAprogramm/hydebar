@@ -12,7 +12,6 @@ pub type HyprlandEventStream<E> =
 #[derive(Debug)]
 pub enum HyprlandError {
     /// The requested operation timed out before it could complete.
-    #[error("operation `{operation}` timed out after {timeout:?}")]
     Timeout {
         /// Logical operation identifier.
         operation: &'static str,
@@ -20,34 +19,60 @@ pub enum HyprlandError {
         timeout: Duration,
     },
     /// The backend failed to execute the requested operation.
-    #[error("operation `{operation}` failed: {source}")]
     Backend {
         /// Logical operation identifier.
         operation: &'static str,
         /// Source error reported by the backend implementation.
-        #[source]
         source: Box<dyn Error + Send + Sync>,
     },
     /// The async runtime required to perform the operation was unavailable.
-    #[error("operation `{operation}` unavailable because no async runtime is active")]
     RuntimeUnavailable {
         /// Logical operation identifier.
         operation: &'static str,
     },
     /// The requested operation is not supported by the underlying backend.
-    #[error("operation `{operation}` not supported by this Hyprland backend")]
     Unsupported {
         /// Logical operation identifier.
         operation: &'static str,
     },
     /// The operation failed with an explanatory message.
-    #[error("operation `{operation}` failed: {message}")]
     Message {
         /// Logical operation identifier.
         operation: &'static str,
         /// Human readable error description.
         message: String,
     },
+}
+
+impl fmt::Display for HyprlandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Timeout { operation, timeout } => {
+                write!(f, "operation `{}` timed out after {:?}", operation, timeout)
+            }
+            Self::Backend { operation, source } => {
+                write!(f, "operation `{}` failed: {}", operation, source)
+            }
+            Self::RuntimeUnavailable { operation } => {
+                write!(f, "operation `{}` unavailable because no async runtime is active", operation)
+            }
+            Self::Unsupported { operation } => {
+                write!(f, "operation `{}` not supported by this Hyprland backend", operation)
+            }
+            Self::Message { operation, message } => {
+                write!(f, "operation `{}` failed: {}", operation, message)
+            }
+        }
+    }
+}
+
+impl Error for HyprlandError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Backend { source, .. } => Some(source.as_ref()),
+            _ => None,
+        }
+    }
 }
 
 impl HyprlandError {

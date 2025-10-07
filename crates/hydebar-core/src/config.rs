@@ -17,40 +17,81 @@ use log::{info, warn};
 use shellexpand::full;
 use masterror::AppError;
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum ConfigLoadError {
-    #[error("failed to expand config path '{input}': {source}")]
     Expand {
         input: String,
-        #[source]
         source: shellexpand::LookupError<std::env::VarError>,
     },
-    #[error("config file does not exist: {path}")]
     Missing { path: PathBuf },
-    #[error("config path '{path}' has no parent directory")]
     MissingParent { path: PathBuf },
-    #[error("failed to create config directory '{path}': {source}")]
     CreateDir {
         path: PathBuf,
-        #[source]
         source: std::io::Error,
     },
 }
 
-#[derive(Debug, Error)]
+impl std::fmt::Display for ConfigLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Expand { input, source } => {
+                write!(f, "failed to expand config path '{}': {}", input, source)
+            }
+            Self::Missing { path } => {
+                write!(f, "config file does not exist: {}", path.display())
+            }
+            Self::MissingParent { path } => {
+                write!(f, "config path '{}' has no parent directory", path.display())
+            }
+            Self::CreateDir { path, source } => {
+                write!(f, "failed to create config directory '{}': {}", path.display(), source)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigLoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Expand { source, .. } => Some(source),
+            Self::CreateDir { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) enum ConfigReadError {
-    #[error("failed to read config file '{path}': {source}")]
     Read {
         path: PathBuf,
-        #[source]
         source: std::io::Error,
     },
-    #[error("failed to parse config file '{path}': {source}")]
     Parse {
         path: PathBuf,
-        #[source]
         source: toml::de::Error,
     },
+}
+
+impl std::fmt::Display for ConfigReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read { path, source } => {
+                write!(f, "failed to read config file '{}': {}", path.display(), source)
+            }
+            Self::Parse { path, source } => {
+                write!(f, "failed to parse config file '{}': {}", path.display(), source)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigReadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Read { source, .. } => Some(source),
+            Self::Parse { source, .. } => Some(source),
+        }
+    }
 }
 
 pub fn get_config(path: Option<PathBuf>) -> Result<(Config, PathBuf), ConfigLoadError> {

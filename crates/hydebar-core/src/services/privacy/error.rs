@@ -3,40 +3,65 @@ use std::sync::Arc;
 use masterror::Error;
 
 /// Error type emitted by the privacy service.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrivacyError {
     /// Failed to initialise the PipeWire main loop.
-    #[error("failed to initialise PipeWire main loop: {context}")]
     PipewireMainloop { context: Arc<str> },
 
     /// Failed to create the PipeWire context that owns the registry connection.
-    #[error("failed to create PipeWire context: {context}")]
     PipewireContext { context: Arc<str> },
 
     /// Failed to connect to the PipeWire core service.
-    #[error("failed to connect to PipeWire core: {context}")]
     PipewireCore { context: Arc<str> },
 
     /// Failed to access the PipeWire registry.
-    #[error("failed to access PipeWire registry: {context}")]
     PipewireRegistry { context: Arc<str> },
 
     /// Failed to initialise the inotify subsystem for webcam monitoring.
-    #[error("failed to initialise inotify: {context}")]
     InotifyInit { context: Arc<str> },
 
     /// Failed to register the webcam device with inotify.
-    #[error("failed to watch webcam device: {context}")]
     InotifyWatch { context: Arc<str> },
 
     /// Failed to communicate with the internal service channels.
-    #[error("privacy service channel error: {context}")]
     Channel { context: Arc<str> },
 
     /// The webcam device is not present on the system.
-    #[error("webcam device is unavailable")]
     WebcamUnavailable,
 }
+
+impl std::fmt::Display for PrivacyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PipewireMainloop { context } => {
+                write!(f, "failed to initialise PipeWire main loop: {}", context)
+            }
+            Self::PipewireContext { context } => {
+                write!(f, "failed to create PipeWire context: {}", context)
+            }
+            Self::PipewireCore { context } => {
+                write!(f, "failed to connect to PipeWire core: {}", context)
+            }
+            Self::PipewireRegistry { context } => {
+                write!(f, "failed to access PipeWire registry: {}", context)
+            }
+            Self::InotifyInit { context } => {
+                write!(f, "failed to initialise inotify: {}", context)
+            }
+            Self::InotifyWatch { context } => {
+                write!(f, "failed to watch webcam device: {}", context)
+            }
+            Self::Channel { context } => {
+                write!(f, "privacy service channel error: {}", context)
+            }
+            Self::WebcamUnavailable => {
+                write!(f, "webcam device is unavailable")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PrivacyError {}
 
 impl PrivacyError {
     fn arc_from(value: impl Into<String>) -> Arc<str> {

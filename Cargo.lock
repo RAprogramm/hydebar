@@ -2268,6 +2268,7 @@ dependencies = [
  "hydebar-proto",
  "iced",
  "log",
+ "masterror",
  "tokio",
 ]
 
@@ -2296,7 +2297,6 @@ dependencies = [
  "shellexpand",
  "sysinfo",
  "tempfile",
- "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "toml 0.9.7",
@@ -2325,10 +2325,10 @@ version = "0.6.7"
 dependencies = [
  "hex_color",
  "iced",
+ "masterror",
  "regex",
  "serde",
  "serde_with",
- "thiserror 2.0.16",
  "tokio-stream",
 ]
 
@@ -3153,13 +3153,15 @@ dependencies = [
 
 [[package]]
 name = "masterror"
-version = "0.21.1"
+version = "0.24.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82f296ad3e3174debcd8d740778cd9ee92d748810cdf68a091985027ab897004"
+checksum = "27ce242729b7655d355493d6afc4e29d097b9386acc912158bd7da5d34ac533a"
 dependencies = [
  "http",
+ "itoa",
  "masterror-derive",
  "masterror-template",
+ "ryu",
  "serde",
  "sha2",
  "toml 0.9.7",
@@ -3180,9 +3182,9 @@ dependencies = [
 
 [[package]]
 name = "masterror-template"
-version = "0.3.6"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55940293fa5d7fc9e7defaf45097b5d502f2d9be4083901f5c255258c5a2bfdd"
+checksum = "76cbb19c37caa0e505f0fb43a68184a4d22dc6e81daea40dd00fc24a356ffa9a"
 
 [[package]]
 name = "maybe-rayon"

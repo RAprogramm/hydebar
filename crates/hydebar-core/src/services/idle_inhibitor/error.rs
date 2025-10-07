@@ -15,20 +15,35 @@ use wayland_client::{ConnectError, DispatchError};
 /// let err = IdleInhibitorError::missing_idle_inhibit_manager();
 /// assert!(matches!(err, IdleInhibitorError::MissingGlobal { .. }));
 /// ```
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdleInhibitorError {
     /// Establishing a Wayland connection failed.
-    #[error("failed to connect to wayland compositor: {context}")]
     Connection { context: Arc<str> },
 
     /// A required Wayland global was not advertised by the compositor.
-    #[error("missing wayland global: {global}")]
     MissingGlobal { global: MissingGlobal },
 
     /// Dispatching Wayland events failed during a roundtrip.
-    #[error("failed to dispatch wayland events: {context}")]
     Dispatch { context: Arc<str> },
 }
+
+impl std::fmt::Display for IdleInhibitorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Connection { context } => {
+                write!(f, "failed to connect to wayland compositor: {}", context)
+            }
+            Self::MissingGlobal { global } => {
+                write!(f, "missing wayland global: {}", global)
+            }
+            Self::Dispatch { context } => {
+                write!(f, "failed to dispatch wayland events: {}", context)
+            }
+        }
+    }
+}
+
+impl std::error::Error for IdleInhibitorError {}
 
 impl IdleInhibitorError {
     fn arc_from(value: impl Into<String>) -> Arc<str> {
