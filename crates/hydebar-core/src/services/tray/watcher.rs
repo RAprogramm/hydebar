@@ -4,7 +4,7 @@ use anyhow::Error;
 use iced::futures::{Stream, StreamExt, stream::select_all, stream_select};
 use log::{debug, error, info};
 use masterror::AppError;
-use tokio::future::pending;
+use futures::future::pending;
 
 use crate::services::ServiceEvent;
 

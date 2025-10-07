@@ -4,8 +4,7 @@ use crate::{
     services::{
         ServiceEvent,
         network::{
-            AccessPoint, ActiveConnectionInfo, KnownConnection, NetworkData, NetworkService, Vpn,
-            dbus::ConnectivityState,
+            AccessPoint, ActiveConnectionInfo, ConnectivityState, KnownConnection, NetworkData, NetworkService, Vpn,
         },
     },
     style::{ghost_button_style, settings_button_style},

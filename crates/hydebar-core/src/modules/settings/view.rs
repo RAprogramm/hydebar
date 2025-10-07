@@ -4,7 +4,6 @@ use super::{
     state::{Message, Settings, SubMenu},
 };
 use crate::{
-    app,
     components::icons::{Icons, icon},
     config::{Position, SettingsModuleConfig},
     menu::MenuType,

@@ -98,6 +98,18 @@ impl EventBus {
         }
     }
 
+    pub fn sender(&self) -> EventSender {
+        EventSender {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    pub fn receiver(&self) -> EventReceiver {
+        EventReceiver {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
     pub fn publish(&self, event: BusEvent) -> Result<(), EventBusError> {
         let mut queue = self
             .inner
@@ -129,5 +141,52 @@ impl EventBus {
             .map_err(|_| EventBusError::Poisoned)?;
 
         Ok(queue.drain(..).collect())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EventSender {
+    inner: Arc<EventBusInner>,
+}
+
+impl EventSender {
+    pub fn try_send(&self, event: BusEvent) -> Result<(), EventBusError> {
+        let mut queue = self
+            .inner
+            .queue
+            .lock()
+            .map_err(|_| EventBusError::Poisoned)?;
+
+        if queue.len() >= self.inner.capacity {
+            return Err(EventBusError::QueueFull {
+                capacity: self.inner.capacity,
+            });
+        }
+
+        if let Some(last) = queue.back() {
+            if event.is_coalescable_with(last) {
+                return Ok(());
+            }
+        }
+
+        queue.push_back(event);
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct EventReceiver {
+    inner: Arc<EventBusInner>,
+}
+
+impl EventReceiver {
+    pub fn try_recv(&mut self) -> Result<Option<BusEvent>, EventBusError> {
+        let mut queue = self
+            .inner
+            .queue
+            .lock()
+            .map_err(|_| EventBusError::Poisoned)?;
+
+        Ok(queue.pop_front())
     }
 }

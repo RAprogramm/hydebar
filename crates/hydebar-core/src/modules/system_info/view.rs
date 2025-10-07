@@ -1,5 +1,4 @@
 use crate::{
-    app,
     components::icons::{Icons, icon},
     config::{SystemIndicator, SystemModuleConfig},
     menu::MenuType,

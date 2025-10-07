@@ -5,7 +5,6 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    ModuleContext, ModuleEventSender, app,
     components::icons::{Icons, icon},
     event_bus::ModuleEvent,
     menu::MenuType,
