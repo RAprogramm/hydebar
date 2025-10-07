@@ -2301,7 +2301,7 @@ dependencies = [
  "shellexpand",
  "sysinfo",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "toml 0.9.7",
@@ -2333,7 +2333,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_with",
- "thiserror 1.0.69",
+ "thiserror 2.0.16",
  "tokio-stream",
 ]
 
