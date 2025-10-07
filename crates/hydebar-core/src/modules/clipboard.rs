@@ -9,7 +9,7 @@ use super::{Module, ModuleError, OnModulePress};
 #[derive(Default, Debug, Clone)]
 pub struct Clipboard;
 
-impl Module for Clipboard {
+impl<M> Module<M> for Clipboard {
     type ViewData<'a> = &'a Option<String>;
     type RegistrationData<'a> = ();
 
@@ -24,7 +24,7 @@ impl Module for Clipboard {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         if config.is_some() {
             Some((
                 icon(Icons::Clipboard).into(),

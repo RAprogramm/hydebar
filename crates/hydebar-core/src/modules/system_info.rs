@@ -53,7 +53,7 @@ impl SystemInfo {
     }
 }
 
-impl Module for SystemInfo {
+impl<M> Module<M> for SystemInfo {
     type ViewData<'a> = &'a SystemModuleConfig;
     type RegistrationData<'a> = ();
 
@@ -71,7 +71,7 @@ impl Module for SystemInfo {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         view::build_indicator_view(&self.data, config)
     }
 }

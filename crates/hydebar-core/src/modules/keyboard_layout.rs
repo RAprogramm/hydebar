@@ -77,7 +77,7 @@ impl KeyboardLayout {
     }
 }
 
-impl Module for KeyboardLayout {
+impl<M> Module<M> for KeyboardLayout {
     type ViewData<'a> = &'a KeyboardLayoutModuleConfig;
     type RegistrationData<'a> = ();
 
@@ -138,7 +138,7 @@ impl Module for KeyboardLayout {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         if !self.multiple_layout {
             None
         } else {

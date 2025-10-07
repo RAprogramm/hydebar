@@ -78,7 +78,7 @@ impl Privacy {
     }
 }
 
-impl Module for Privacy {
+impl<M> Module<M> for Privacy {
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
@@ -127,7 +127,7 @@ impl Module for Privacy {
     fn view(
         &self,
         _: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         if let Some(service) = self.service.as_ref() {
             if !service.no_access() {
                 Some((

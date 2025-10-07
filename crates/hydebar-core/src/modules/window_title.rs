@@ -111,7 +111,7 @@ impl WindowTitle {
     }
 }
 
-impl Module for WindowTitle {
+impl<M> Module<M> for WindowTitle {
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
@@ -166,7 +166,7 @@ impl Module for WindowTitle {
     fn view(
         &self,
         _: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         self.value.as_ref().map(|value| {
             (
                 text(value)

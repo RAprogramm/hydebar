@@ -205,7 +205,7 @@ impl Workspaces {
     }
 }
 
-impl Module for Workspaces {
+impl<M> Module<M> for Workspaces {
     type ViewData<'a> = (
         &'a Outputs,
         Id,
@@ -283,7 +283,7 @@ impl Module for Workspaces {
     fn view(
         &'_ self,
         (outputs, id, config, workspace_colors, special_workspace_colors): Self::ViewData<'_>,
-    ) -> Option<(Element<'_,Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'_,Message>, Option<OnModulePress<M>>)> {
         let monitor_name = outputs.get_monitor_name(id);
 
         Some((

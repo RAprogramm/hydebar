@@ -213,7 +213,7 @@ impl TrayModule {
     }
 }
 
-impl Module for TrayModule {
+impl<M> Module<M> for TrayModule {
     type ViewData<'a> = (Id, f32);
     type RegistrationData<'a> = ();
 
@@ -233,7 +233,7 @@ impl Module for TrayModule {
     fn view(
         &self,
         (id, opacity): Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         self.service
             .as_ref()
             .filter(|s| !s.data.is_empty())

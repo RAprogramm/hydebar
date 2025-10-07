@@ -371,7 +371,7 @@ impl Settings {
     }
 }
 
-impl Module for Settings {
+impl<M> Module<M> for Settings {
     type ViewData<'a> = <Self as SettingsViewExt>::ViewData<'a>;
     type RegistrationData<'a> = ();
 
@@ -423,7 +423,7 @@ impl Module for Settings {
     fn view(
         &self,
         data: Self::ViewData<'_>,
-    ) -> Option<(iced::Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(iced::Element<'static, M>, Option<OnModulePress<M>>)> {
         self.settings_view(data)
     }
 }

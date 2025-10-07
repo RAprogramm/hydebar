@@ -263,7 +263,7 @@ impl<Message> Program<Message> for AlertIndicator {
     }
 }
 
-impl Module for Custom {
+impl<M> Module<M> for Custom {
     type ViewData<'a> = &'a CustomModuleDef;
     type RegistrationData<'a> = Option<&'a CustomModuleDef>;
 
@@ -336,7 +336,10 @@ impl Module for Custom {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
+    where
+        M: 'static + Clone,
+    {
         let mut icon_element = config
             .icon
             .as_ref()
@@ -405,12 +408,9 @@ impl Module for Custom {
             icon_with_alert
         };
 
-        Some((
-            row_content,
-            Some(OnModulePress::Action(Box::new(
-                app::Message::LaunchCommand(config.command.clone()),
-            ))),
-        ))
+        // NOTE: This returns None for action since we can't construct M in generic code.
+        // The GUI layer should handle command launching based on module configuration.
+        Some((row_content, None))
     }
 }
 

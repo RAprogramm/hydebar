@@ -60,7 +60,7 @@ impl KeyboardSubmap {
     }
 }
 
-impl Module for KeyboardSubmap {
+impl<M> Module<M> for KeyboardSubmap {
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
@@ -115,7 +115,7 @@ impl Module for KeyboardSubmap {
     fn view(
         &self,
         _: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         if self.submap.is_empty() {
             None
         } else {

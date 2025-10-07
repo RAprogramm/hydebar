@@ -382,7 +382,7 @@ impl MediaPlayer {
     }
 }
 
-impl Module for MediaPlayer {
+impl<M> Module<M> for MediaPlayer {
     type ViewData<'a> = &'a MediaPlayerModuleConfig;
     type RegistrationData<'a> = ();
 
@@ -435,7 +435,7 @@ impl Module for MediaPlayer {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<app::Message>, Option<OnModulePress>)> {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         self.service.as_ref().and_then(|s| match s.len() {
             0 => None,
             _ => Some((
