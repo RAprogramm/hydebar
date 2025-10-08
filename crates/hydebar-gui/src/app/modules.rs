@@ -248,6 +248,7 @@ impl App
             ModuleName::Settings => self.settings.view((),),
             ModuleName::MediaPlayer => self.media_player.view(&self.config.media_player,),
             ModuleName::Notifications => self.notifications.view((),),
+            ModuleName::Screenshot => self.screenshot.view((),),
         }
     }
 
@@ -285,6 +286,7 @@ impl App
             ModuleName::Settings => self.settings.subscription(),
             ModuleName::MediaPlayer => self.media_player.subscription(),
             ModuleName::Notifications => self.notifications.subscription(),
+            ModuleName::Screenshot => self.screenshot.subscription(),
         }
     }
 }
