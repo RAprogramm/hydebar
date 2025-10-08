@@ -119,6 +119,45 @@ impl Default for MenuAppearance
     }
 }
 
+/// Animation configuration.
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq,)]
+pub struct AnimationConfig
+{
+    #[serde(default = "default_animations_enabled")]
+    pub enabled:               bool,
+    #[serde(default = "default_menu_fade_duration_ms")]
+    pub menu_fade_duration_ms: u64,
+    #[serde(default = "default_hover_duration_ms")]
+    pub hover_duration_ms:     u64,
+}
+
+impl Default for AnimationConfig
+{
+    fn default() -> Self
+    {
+        Self {
+            enabled:               default_animations_enabled(),
+            menu_fade_duration_ms: default_menu_fade_duration_ms(),
+            hover_duration_ms:     default_hover_duration_ms(),
+        }
+    }
+}
+
+fn default_animations_enabled() -> bool
+{
+    true
+}
+
+fn default_menu_fade_duration_ms() -> u64
+{
+    200
+}
+
+fn default_hover_duration_ms() -> u64
+{
+    100
+}
+
 /// Top-level appearance configuration.
 #[derive(Deserialize, Clone, Debug, PartialEq,)]
 pub struct Appearance
@@ -133,6 +172,8 @@ pub struct Appearance
     pub opacity:                  f32,
     #[serde(default)]
     pub menu:                     MenuAppearance,
+    #[serde(default)]
+    pub animations:               AnimationConfig,
     #[serde(default = "default_background_color")]
     pub background_color:         AppearanceColor,
     #[serde(default = "default_primary_color")]
@@ -265,6 +306,7 @@ impl Default for Appearance
             style:                    AppearanceStyle::default(),
             opacity:                  default_opacity(),
             menu:                     MenuAppearance::default(),
+            animations:               AnimationConfig::default(),
             background_color:         default_background_color(),
             primary_color:            default_primary_color(),
             secondary_color:          default_secondary_color(),
@@ -335,5 +377,22 @@ mod tests
 
         let weak = color.get_weak_pair(fallback,).expect("weak pair",);
         assert_eq!(weak.text, fallback);
+    }
+
+    #[test]
+    fn animation_config_default_values()
+    {
+        let config = AnimationConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.menu_fade_duration_ms, 200);
+        assert_eq!(config.hover_duration_ms, 100);
+    }
+
+    #[test]
+    fn appearance_default_includes_animations()
+    {
+        let appearance = Appearance::default();
+        assert!(appearance.animations.enabled);
+        assert_eq!(appearance.animations.menu_fade_duration_ms, 200);
     }
 }
