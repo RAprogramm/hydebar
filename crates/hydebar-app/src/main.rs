@@ -5,7 +5,7 @@
 
 use clap::{Parser, command};
 use flexi_logger::{
-    Age, Cleanup, Criterion, FileSpec, LogSpecBuilder, LogSpecification, Logger, Naming,
+    Age, Cleanup, Criterion, FileSpec, LogSpecBuilder, Logger, Naming,
 };
 use hydebar_core::{
     adapters::hyprland_client::HyprlandClient,
@@ -19,7 +19,6 @@ use log::{debug, error};
 use std::panic;
 use std::path::PathBuf;
 use std::{backtrace::Backtrace, borrow::Cow, num::NonZeroUsize, sync::Arc};
-use masterror::AppError;
 use tokio::runtime::Handle;
 
 const ICON_FONT: &[u8] = include_bytes!("../../../assets/SymbolsNerdFont-Regular.ttf");
