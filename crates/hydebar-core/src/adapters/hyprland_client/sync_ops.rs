@@ -102,9 +102,10 @@ mod tests {
 
     #[test]
     fn execute_with_retry_eventually_succeeds() {
-        let counter = AtomicUsize::new(0);
-        let result = execute_with_retry(&base_config(), "retry", || {
-            let value = counter.fetch_add(1, Ordering::SeqCst);
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = Arc::clone(&counter);
+        let result = execute_with_retry(&base_config(), "retry", move || {
+            let value = counter_clone.fetch_add(1, Ordering::SeqCst);
             if value < 2 {
                 Err(HyprlandError::message("retry", "try again"))
             } else {
