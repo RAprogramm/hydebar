@@ -13,7 +13,7 @@ edition = "2024"
 rust-version = "1.90"
 
 [workspace.dependencies]
-iced = { git = "https://github.com/MalpenZibo/iced", features = [
+iced = { git = "https://github.com/pop-os/iced", features = [
     "tokio",
     "multi-window",
     "advanced",
