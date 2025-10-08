@@ -41,3 +41,5 @@ hex_color = "3"
 [features]
 # Enable test utilities for integration testing
 test-utils = []
+# Enable tests that are currently broken and need fixing
+enable-broken-tests = []
