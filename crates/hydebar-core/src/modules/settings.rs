@@ -17,4 +17,4 @@ pub use network::NetworkMessage;
 pub use power::PowerMessage;
 pub use state::{Message, Settings, SubMenu};
 pub use upower::UPowerMessage;
-pub use view::quick_setting_button;
+pub use view::{SettingsViewExt, quick_setting_button};

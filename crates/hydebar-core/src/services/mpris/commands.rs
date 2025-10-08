@@ -58,17 +58,17 @@ pub enum PlayerCommand {
 /// Trait describing how player actions are executed for a proxy implementation.
 pub(crate) trait PlayerCommandExecutor {
     /// Executes a [`PlayerCommand`] against the underlying proxy.
-    fn execute_command(
-        &self,
-        command: &PlayerCommand,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError>> + Send + '_>>;
+    fn execute_command<'a>(
+        &'a self,
+        command: &'a PlayerCommand,
+    ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError>> + Send + 'a>>;
 }
 
 impl PlayerCommandExecutor for MprisPlayerProxy<'static> {
-    fn execute_command(
-        &self,
-        command: &PlayerCommand,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError>> + Send + '_>> {
+    fn execute_command<'a>(
+        &'a self,
+        command: &'a PlayerCommand,
+    ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError>> + Send + 'a>> {
         Box::pin(async move {
             match command {
                 PlayerCommand::Prev => self

@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use hydebar_core::{
     HEIGHT,
     menu::{MenuSize, MenuType, menu_wrapper},
+    modules::settings::SettingsViewExt,
     outputs::HasOutput,
     style::{backdrop_color, darken_color, hydebar_theme},
 };

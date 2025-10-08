@@ -38,7 +38,6 @@ type CommandFactory =
     Arc<dyn Fn(Option<&TrayService>, TrayCommand) -> Option<TrayCommandFuture> + Send + Sync>;
 type TrayCommandFuture = Pin<Box<dyn Future<Output = ServiceEvent<TrayService>> + Send + 'static>>;
 
-#[derive(Debug)]
 pub struct TrayModule {
     pub service: Option<TrayService>,
     pub submenus: Vec<i32>,
@@ -47,6 +46,20 @@ pub struct TrayModule {
     listener_handles: Vec<JoinHandle<()>>,
     listener_spawner: ListenerSpawner,
     command_factory: CommandFactory,
+}
+
+impl std::fmt::Debug for TrayModule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrayModule")
+            .field("service", &self.service)
+            .field("submenus", &self.submenus)
+            .field("sender", &self.sender)
+            .field("runtime", &self.runtime)
+            .field("listener_handles", &format!("<{} handles>", self.listener_handles.len()))
+            .field("listener_spawner", &"<function>")
+            .field("command_factory", &"<function>")
+            .finish()
+    }
 }
 
 impl TrayModule {
@@ -98,6 +111,9 @@ impl TrayModule {
                     if let Some(service) = self.service.as_mut() {
                         service.update(data);
                     }
+                }
+                ServiceEvent::Error(_) => {
+                    error!("Tray service error occurred");
                 }
             },
             TrayMessage::ToggleSubmenu(index) => {
@@ -208,7 +224,10 @@ impl TrayModule {
     }
 }
 
-impl<M> Module<M> for TrayModule {
+impl<M> Module<M> for TrayModule
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = (Id, f32);
     type RegistrationData<'a> = ();
 

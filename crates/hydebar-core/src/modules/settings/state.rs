@@ -21,6 +21,7 @@ use crate::{
     outputs::Outputs,
     password_dialog,
     services::{
+        ReadOnlyService,
         ServiceEvent,
         audio::{AudioCommand, AudioService},
         bluetooth::{BluetoothCommand, BluetoothService},
@@ -36,11 +37,11 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 pub struct Settings {
     pub(super) audio: Option<AudioService>,
-    pub(super) brightness: Option<BrightnessService>,
+    pub brightness: Option<BrightnessService>,
     pub(super) network: Option<NetworkService>,
     pub(super) bluetooth: Option<BluetoothService>,
     pub(super) idle_inhibitor: Option<IdleInhibitorManager>,
-    pub(super) sub_menu: Option<SubMenu>,
+    pub sub_menu: Option<SubMenu>,
     pub(super) upower: Option<UPowerService>,
     pub(super) password_dialog: Option<(String, String)>,
     pub(super) sender: Option<ModuleEventSender<Message>>,
@@ -94,7 +95,7 @@ impl Settings {
             Message::ToggleMenu(id, button_ui_ref) => {
                 self.sub_menu = None;
                 self.password_dialog = None;
-                outputs.toggle_menu(id, MenuType::Settings, button_ui_ref, main_config)
+                outputs.toggle_menu::<Message>(id, MenuType::Settings, button_ui_ref, main_config);
             }
             Message::Audio(msg) => match msg {
                 AudioMessage::Event(event) => match event {
@@ -113,6 +114,9 @@ impl Settings {
                                 self.sub_menu = None;
                             }
                         }
+                    }
+                    ServiceEvent::Error(err) => {
+                        log::error!("Audio service error: {err:?}");
                     }
                 },
                 AudioMessage::ToggleSinkMute => {
@@ -137,14 +141,14 @@ impl Settings {
                 AudioMessage::SinksMore(id) => {
                     if let Some(cmd) = &config.audio_sinks_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
-                        outputs.close_menu(id, main_config)
+                        outputs.close_menu::<Message>(id, main_config);
                     } else {
                     }
                 }
                 AudioMessage::SourcesMore(id) => {
                     if let Some(cmd) = &config.audio_sources_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
-                        outputs.close_menu(id, main_config)
+                        outputs.close_menu::<Message>(id, main_config);
                     } else {
                     }
                 }
@@ -158,6 +162,9 @@ impl Settings {
                         if let Some(upower) = self.upower.as_mut() {
                             upower.update(data);
                         }
+                    }
+                    ServiceEvent::Error(err) => {
+                        log::error!("UPower service error: {err:?}");
                     }
                 },
                 UPowerMessage::TogglePowerProfile => {
@@ -176,6 +183,9 @@ impl Settings {
                         if let Some(network) = self.network.as_mut() {
                             network.update(data);
                         }
+                    }
+                    ServiceEvent::Error(err) => {
+                        log::error!("Network service error: {err:?}");
                     }
                 },
                 NetworkMessage::ToggleAirplaneMode => {
@@ -199,7 +209,7 @@ impl Settings {
                 NetworkMessage::RequestWiFiPassword(id, ssid) => {
                     info!("Requesting password for {ssid}");
                     self.password_dialog = Some((ssid, String::new()));
-                    outputs.request_keyboard(id, main_config.menu_keyboard_focus)
+                    outputs.request_keyboard::<Message>(id, main_config.menu_keyboard_focus);
                 }
                 NetworkMessage::ScanNearByWiFi => {
                     let _spawned = self.spawn_network_command(NetworkCommand::ScanNearByWiFi);
@@ -207,14 +217,14 @@ impl Settings {
                 NetworkMessage::WiFiMore(id) => {
                     if let Some(cmd) = &config.wifi_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
-                        outputs.close_menu(id, main_config)
+                        outputs.close_menu::<Message>(id, main_config);
                     } else {
                     }
                 }
                 NetworkMessage::VpnMore(id) => {
                     if let Some(cmd) = &config.vpn_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
-                        outputs.close_menu(id, main_config)
+                        outputs.close_menu::<Message>(id, main_config);
                     } else {
                     }
                 }
@@ -232,6 +242,9 @@ impl Settings {
                             bluetooth.update(data);
                         }
                     }
+                    ServiceEvent::Error(err) => {
+                        log::error!("Bluetooth service error: {err:?}");
+                    }
                 },
                 BluetoothMessage::Toggle => match self.bluetooth.as_mut() {
                     Some(_) => {
@@ -241,11 +254,14 @@ impl Settings {
 
                         let _spawned = self.spawn_bluetooth_command(BluetoothCommand::Toggle);
                     }
+                    None => {
+                        log::warn!("Bluetooth service not initialized");
+                    }
                 },
                 BluetoothMessage::More(id) => {
                     if let Some(cmd) = &config.bluetooth_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string());
-                        outputs.close_menu(id, main_config)
+                        outputs.close_menu::<Message>(id, main_config);
                     } else {
                     }
                 }
@@ -259,6 +275,9 @@ impl Settings {
                         if let Some(brightness) = self.brightness.as_mut() {
                             brightness.update(data);
                         }
+                    }
+                    ServiceEvent::Error(err) => {
+                        log::error!("Brightness service error: {err:?}");
                     }
                 },
                 BrightnessMessage::Change(value) => {
@@ -315,22 +334,25 @@ impl Settings {
                             }
                         }
 
-                        outputs.release_keyboard(id, main_config.menu_keyboard_focus)
+                        outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus);
                     } else {
-                        outputs.release_keyboard(id, main_config.menu_keyboard_focus)
+                        outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus);
                     }
                 }
                 password_dialog::Message::DialogCancelled(id) => {
                     self.password_dialog = None;
 
-                    outputs.release_keyboard(id, main_config.menu_keyboard_focus)
+                    outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus);
                 }
             },
         }
     }
 }
 
-impl<M> Module<M> for Settings {
+impl<M> Module<M> for Settings
+where
+    M: 'static + Clone + From<Message>,
+{
     type ViewData<'a> = <Self as SettingsViewExt>::ViewData<'a>;
     type RegistrationData<'a> = ();
 

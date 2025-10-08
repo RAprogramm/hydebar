@@ -74,7 +74,7 @@ impl ActiveConnectionInfo {
 }
 
 impl NetworkData {
-    pub fn get_connection_indicator<Message: 'static>(&self) -> Option<Element<Message>> {
+    pub fn get_connection_indicator<Message: 'static>(&self) -> Option<Element<'static, Message>> {
         if self.airplane_mode || !self.wifi_present {
             None
         } else {
@@ -109,7 +109,7 @@ impl NetworkData {
         }
     }
 
-    pub fn get_vpn_indicator<Message: 'static>(&self) -> Option<Element<Message>> {
+    pub fn get_vpn_indicator<Message: 'static>(&self) -> Option<Element<'static, Message>> {
         self.active_connections
             .iter()
             .find(|c| matches!(c, ActiveConnectionInfo::Vpn { .. }))

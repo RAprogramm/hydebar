@@ -51,7 +51,7 @@ fn build_updates_list(updates: &Updates, opacity: f32) -> Element<Message> {
     let mut elements = column!(
         button(row!(
             text(format!("{} Updates available", updates.updates().len())).width(Length::Fill),
-            icon(if updates.is_updates_list_open() {
+            icon_component(if updates.is_updates_list_open() {
                 Icons::MenuClosed
             } else {
                 Icons::MenuOpen
@@ -72,9 +72,9 @@ fn build_updates_list(updates: &Updates, opacity: f32) -> Element<Message> {
                         .iter()
                         .map(|update| build_update_entry(update))
                         .collect::<Vec<Element<'_, Message>>>(),
-                ))
+                )
                 .padding(Padding::ZERO.right(16))
-                .spacing(4),
+                .spacing(4)),
             )
             .padding([8, 0])
             .max_height(300),
@@ -99,11 +99,11 @@ fn build_update_entry(update: &super::state::Update) -> Element<Message> {
     .into()
 }
 
-fn action_button(
-    label: &str,
+fn action_button<'a>(
+    label: &'a str,
     message: Message,
     opacity: f32,
-) -> iced::widget::Button<'static, Message> {
+) -> iced::widget::Button<'a, Message> {
     button(label)
         .style(ghost_button_style(opacity))
         .padding([8, 8])

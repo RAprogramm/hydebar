@@ -71,33 +71,35 @@ impl AudioService {
                 }
             }
             AudioCommand::SinkVolume(volume) => {
-                if let Some(sink) = self
+                let command = self
                     .data
                     .sinks
                     .iter_mut()
                     .find(|sink| sink.name == self.data.server_info.default_sink)
-                {
-                    if let Some(volume) = sink.volume.scale_volume(volume as f64 / 100.0) {
-                        self.send_backend_command(BackendCommand::SinkVolume(
-                            sink.name.clone(),
-                            *volume,
-                        ));
-                    }
+                    .and_then(|sink| {
+                        sink.volume.scale_volume(volume as f64 / 100.0).map(|volume| {
+                            BackendCommand::SinkVolume(sink.name.clone(), *volume)
+                        })
+                    });
+
+                if let Some(command) = command {
+                    self.send_backend_command(command);
                 }
             }
             AudioCommand::SourceVolume(volume) => {
-                if let Some(source) = self
+                let command = self
                     .data
                     .sources
                     .iter_mut()
                     .find(|source| source.name == self.data.server_info.default_source)
-                {
-                    if let Some(volume) = source.volume.scale_volume(volume as f64 / 100.0) {
-                        self.send_backend_command(BackendCommand::SourceVolume(
-                            source.name.clone(),
-                            *volume,
-                        ));
-                    }
+                    .and_then(|source| {
+                        source.volume.scale_volume(volume as f64 / 100.0).map(|volume| {
+                            BackendCommand::SourceVolume(source.name.clone(), *volume)
+                        })
+                    });
+
+                if let Some(command) = command {
+                    self.send_backend_command(command);
                 }
             }
             AudioCommand::DefaultSink(name, port) => {

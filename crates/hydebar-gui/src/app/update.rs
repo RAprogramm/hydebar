@@ -95,12 +95,8 @@ impl App {
                 self.register_modules();
 
                 if impact.log_level_changed {
-                    if let Err(err) = self
-                        .logger
-                        .set_new_spec(get_log_spec(&self.config.log_level))
-                    {
-                        error!("failed to update log level: {err}");
-                    }
+                    self.logger
+                        .set_new_spec(get_log_spec(&self.config.log_level));
                 }
 
                 Task::batch(tasks)
@@ -129,8 +125,9 @@ impl App {
                         self.settings.sub_menu = None;
 
                         if let Some(brightness) = self.settings.brightness.as_mut() {
+                            use hydebar_core::services::Service;
                             cmd.push(brightness.command(BrightnessCommand::Refresh).map(|event| {
-                                Message::Settings(crate::modules::settings::Message::Brightness(
+                                Message::Settings(modules::settings::Message::Brightness(
                                     BrightnessMessage::Event(event),
                                 ))
                             }));
@@ -156,10 +153,9 @@ impl App {
             Message::Updates(message) => {
                 if let Some(updates_config) = self.config.updates.as_ref() {
                     self.updates
-                        .update(message, updates_config, &mut self.outputs, &self.config)
-                } else {
-                    Task::none()
+                        .update(message, updates_config, &mut self.outputs, &self.config);
                 }
+                Task::none()
             }
             Message::OpenLauncher => {
                 if let Some(app_launcher_cmd) = self.config.app_launcher_cmd.as_ref() {
@@ -219,7 +215,8 @@ impl App {
                     _ => Task::none(),
                 };
 
-                Task::batch(vec![self.tray.update(msg), close_tray])
+                self.tray.update(msg);
+                close_tray
             }
             Message::Clock(message) => {
                 self.clock.update(message);
@@ -233,12 +230,15 @@ impl App {
                 self.privacy.update(msg);
                 Task::none()
             }
-            Message::Settings(message) => self.settings.update(
-                message,
-                &self.config.settings,
-                &mut self.outputs,
-                &self.config,
-            ),
+            Message::Settings(message) => {
+                self.settings.update(
+                    message,
+                    &self.config.settings,
+                    &mut self.outputs,
+                    &self.config,
+                );
+                Task::none()
+            }
             Message::OutputEvent((event, wl_output)) => match event {
                 OutputEvent::Created(info) => {
                     info!("Output created: {info:?}");
@@ -267,7 +267,10 @@ impl App {
                 }
                 _ => Task::none(),
             },
-            Message::MediaPlayer(msg) => self.media_player.update(msg),
+            Message::MediaPlayer(msg) => {
+                self.media_player.update(msg);
+                Task::none()
+            }
         }
     }
 
@@ -309,7 +312,7 @@ impl App {
         Subscription::batch(subscriptions)
     }
 
-    fn register_modules(&mut self) {
+    pub(crate) fn register_modules(&mut self) {
         let ctx = &self.module_context;
         let mut register = |name: &str, result: Result<(), modules::ModuleError>| {
             if let Err(err) = result {
@@ -317,31 +320,31 @@ impl App {
             }
         };
 
-        register("app-launcher", self.app_launcher.register(ctx, ())); // uses optional config at view time
-        register("clipboard", self.clipboard.register(ctx, ()));
-        register("clock", self.clock.register(ctx, &self.config.clock.format));
+        register("app-launcher", modules::Module::<Message>::register(&mut self.app_launcher, ctx, ())); // uses optional config at view time
+        register("clipboard", modules::Module::<Message>::register(&mut self.clipboard, ctx, ()));
+        self.clock.register(ctx, &self.config.clock.format);
         register(
             "updates",
-            self.updates.register(ctx, self.config.updates.as_ref()),
+            modules::Module::<Message>::register(&mut self.updates, ctx, self.config.updates.as_ref()),
         );
         register(
             "workspaces",
-            self.workspaces.register(ctx, &self.config.workspaces),
+            modules::Module::<Message>::register(&mut self.workspaces, ctx, &self.config.workspaces),
         );
-        register("window-title", self.window_title.register(ctx, ()));
-        register("system-info", self.system_info.register(ctx, ()));
-        register("keyboard-layout", self.keyboard_layout.register(ctx, ()));
-        register("keyboard-submap", self.keyboard_submap.register(ctx, ()));
-        register("tray", self.tray.register(ctx, ()));
-        register("battery", self.battery.register(ctx, ()));
-        register("privacy", self.privacy.register(ctx, ()));
-        register("settings", self.settings.register(ctx, ()));
-        register("media-player", self.media_player.register(ctx, ()));
+        register("window-title", modules::Module::<Message>::register(&mut self.window_title, ctx, ()));
+        register("system-info", modules::Module::<Message>::register(&mut self.system_info, ctx, ()));
+        register("keyboard-layout", modules::Module::<Message>::register(&mut self.keyboard_layout, ctx, ()));
+        register("keyboard-submap", modules::Module::<Message>::register(&mut self.keyboard_submap, ctx, ()));
+        register("tray", modules::Module::<Message>::register(&mut self.tray, ctx, ()));
+        self.battery.register(ctx);
+        register("privacy", modules::Module::<Message>::register(&mut self.privacy, ctx, ()));
+        register("settings", modules::Module::<Message>::register(&mut self.settings, ctx, ()));
+        register("media-player", modules::Module::<Message>::register(&mut self.media_player, ctx, ()));
 
         for definition in &self.config.custom_modules {
             match self.custom.get_mut(&definition.name) {
                 Some(module) => {
-                    if let Err(err) = module.register(ctx, Some(definition)) {
+                    if let Err(err) = modules::Module::<Message>::register(module, ctx, Some(definition)) {
                         error!(
                             "failed to register custom module '{}': {err}",
                             definition.name
@@ -362,7 +365,7 @@ impl App {
                 .iter()
                 .any(|definition| definition.name == *name)
             {
-                if let Err(err) = module.register(ctx, None) {
+                if let Err(err) = modules::Module::<Message>::register(module, ctx, None) {
                     error!("failed to clear registration for custom module '{name}': {err}");
                 }
             }
@@ -395,6 +398,7 @@ impl App {
             BusEvent::Redraw => Some(Message::None),
             BusEvent::PopupToggle => Some(Message::CloseAllMenus),
             BusEvent::Module(module) => App::message_from_module_event(module),
+            _ => None,
         }
     }
 
@@ -415,6 +419,7 @@ impl App {
             ModuleEvent::Custom { name, message } => {
                 Some(Message::CustomUpdate(name.as_ref().to_owned(), message))
             }
+            _ => None,
         }
     }
 }

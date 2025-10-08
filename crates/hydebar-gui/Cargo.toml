@@ -10,4 +10,5 @@ hydebar-proto = { path = "../hydebar-proto" }
 iced.workspace = true
 flexi_logger.workspace = true
 log.workspace = true
+tokio.workspace = true
 wayland-client.workspace = true

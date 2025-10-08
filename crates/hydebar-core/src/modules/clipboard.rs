@@ -9,7 +9,10 @@ use super::{Module, ModuleError, OnModulePress};
 #[derive(Default, Debug, Clone)]
 pub struct Clipboard;
 
-impl<M> Module<M> for Clipboard {
+impl<M> Module<M> for Clipboard
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = &'a Option<String>;
     type RegistrationData<'a> = ();
 

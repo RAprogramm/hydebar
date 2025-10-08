@@ -1,8 +1,8 @@
 use super::{
-    bluetooth::BluetoothState,
     power::power_menu,
     state::{Message, Settings, SubMenu},
 };
+use crate::services::bluetooth::BluetoothState;
 use crate::{
     components::icons::{Icons, icon},
     config::{Position, SettingsModuleConfig},
@@ -20,7 +20,7 @@ use iced::{
     window::Id,
 };
 
-pub(super) trait SettingsViewExt {
+pub trait SettingsViewExt {
     type ViewData<'a>;
 
     fn settings_view<M>(
@@ -49,43 +49,36 @@ impl SettingsViewExt for Settings {
     where
         M: 'static + From<Message>,
     {
+        let idle_inhibited = self.idle_inhibitor.as_ref().map(|i| i.is_inhibited()).unwrap_or(false);
+        let power_profile_indicator = self.upower.as_ref().and_then(|p| p.power_profile.indicator());
+        let sink_indicator = self.audio.as_ref().and_then(|a| a.sink_indicator());
+        let connection_indicator = self.network.as_ref().and_then(|n| n.get_connection_indicator());
+        let vpn_indicator = self.network.as_ref().and_then(|n| n.get_vpn_indicator());
+        let battery_indicator = self.upower.as_ref().and_then(|upower| upower.battery).map(|battery| battery.indicator());
+
         Some((
             Row::new()
                 .push_maybe(
-                    self.idle_inhibitor
-                        .as_ref()
-                        .filter(|i| i.is_inhibited())
-                        .map(|_| {
-                            container(icon(Icons::EyeOpened)).style(|theme: &Theme| {
-                                container::Style {
-                                    text_color: Some(theme.palette().danger),
-                                    ..Default::default()
-                                }
-                            })
-                        }),
+                    if idle_inhibited {
+                        Some(container(icon(Icons::EyeOpened)).style(|theme: &Theme| {
+                            container::Style {
+                                text_color: Some(theme.palette().danger),
+                                ..Default::default()
+                            }
+                        }))
+                    } else {
+                        None
+                    }
                 )
-                .push_maybe(
-                    self.upower
-                        .as_ref()
-                        .and_then(|p| p.power_profile.indicator()),
-                )
-                .push_maybe(self.audio.as_ref().and_then(|a| a.sink_indicator()))
+                .push_maybe(power_profile_indicator)
+                .push_maybe(sink_indicator)
                 .push(
                     Row::new()
-                        .push_maybe(
-                            self.network
-                                .as_ref()
-                                .and_then(|n| n.get_connection_indicator()),
-                        )
-                        .push_maybe(self.network.as_ref().and_then(|n| n.get_vpn_indicator()))
+                        .push_maybe(connection_indicator)
+                        .push_maybe(vpn_indicator)
                         .spacing(4),
                 )
-                .push_maybe(
-                    self.upower
-                        .as_ref()
-                        .and_then(|upower| upower.battery)
-                        .map(|battery| battery.indicator()),
-                )
+                .push_maybe(battery_indicator)
                 .spacing(8)
                 .into(),
             Some(OnModulePress::ToggleMenu(MenuType::Settings)),

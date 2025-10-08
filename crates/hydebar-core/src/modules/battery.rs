@@ -19,27 +19,16 @@ pub enum BatteryIcon {
 impl From<BatteryIcon> for Icons {
     fn from(icon: BatteryIcon) -> Self {
         match icon {
-            BatteryIcon::Charging(capacity) => match capacity {
-                0..=20 => Icons::BatteryCharging20,
-                21..=30 => Icons::BatteryCharging30,
-                31..=50 => Icons::BatteryCharging50,
-                51..=60 => Icons::BatteryCharging60,
-                61..=80 => Icons::BatteryCharging80,
-                81..=90 => Icons::BatteryCharging90,
-                _ => Icons::BatteryCharging100,
-            },
+            BatteryIcon::Charging(_) => Icons::BatteryCharging,
             BatteryIcon::Discharging(capacity) => match capacity {
-                0..=10 => Icons::Battery0,
-                11..=20 => Icons::Battery20,
-                21..=30 => Icons::Battery30,
-                31..=50 => Icons::Battery50,
-                51..=60 => Icons::Battery60,
-                61..=80 => Icons::Battery80,
-                81..=90 => Icons::Battery90,
-                _ => Icons::Battery100,
+                0..=20 => Icons::Battery0,
+                21..=40 => Icons::Battery1,
+                41..=60 => Icons::Battery2,
+                61..=80 => Icons::Battery3,
+                _ => Icons::Battery4,
             },
-            BatteryIcon::Full => Icons::Battery100,
-            BatteryIcon::Unknown => Icons::BatteryUnknown,
+            BatteryIcon::Full => Icons::Battery4,
+            BatteryIcon::Unknown => Icons::Battery0,
         }
     }
 }
@@ -68,10 +57,10 @@ impl From<crate::services::upower::PowerProfile> for PowerProfile {
 impl From<PowerProfile> for Icons {
     fn from(profile: PowerProfile) -> Self {
         match profile {
-            PowerProfile::Performance => Icons::PowerProfilePerformance,
-            PowerProfile::Balanced => Icons::PowerProfileBalanced,
-            PowerProfile::PowerSaver => Icons::PowerProfilePowerSaver,
-            PowerProfile::Unknown => Icons::PowerProfileBalanced,
+            PowerProfile::Performance => Icons::Performance,
+            PowerProfile::Balanced => Icons::Balanced,
+            PowerProfile::PowerSaver => Icons::PowerSaver,
+            PowerProfile::Unknown => Icons::Balanced,
         }
     }
 }
@@ -153,14 +142,13 @@ pub enum Message {
 #[derive(Debug)]
 pub struct Battery {
     data: Option<BatteryData>,
-    sender: Option<ModuleEventSender<BatteryEvent>>,
+    // sender: Option<ModuleEventSender<BatteryEvent>>, // Unused - battery events not sent to UI
 }
 
 impl Default for Battery {
     fn default() -> Self {
         Self {
             data: None,
-            sender: None,
         }
     }
 }
@@ -176,8 +164,8 @@ impl Battery {
     }
 
     /// Registers module with event system
-    pub fn register(&mut self, ctx: &ModuleContext) {
-        self.sender = Some(ctx.module_sender(ModuleEvent::Battery));
+    pub fn register(&mut self, _ctx: &ModuleContext) {
+        // BatteryEvent is not used for UI updates, Battery module only subscribes to service events
     }
 
     /// Processes incoming messages from GUI layer
@@ -208,7 +196,6 @@ impl Battery {
                 UPowerEvent::UpdatePowerProfile(profile) => {
                     if let Some(data) = &mut self.data {
                         data.power_profile = profile.into();
-                        self.emit_event(BatteryEvent::ProfileChanged(profile.into()));
                     }
                 }
             },
@@ -219,8 +206,8 @@ impl Battery {
     }
 
     fn update_battery_data(&mut self, upower_data: UPowerBatteryData, power_profile: PowerProfile) {
-        let capacity = upower_data.capacity;
-        let charging = matches!(upower_data.state, crate::services::upower::State::Charging);
+        let capacity = upower_data.capacity.clamp(0, 100) as u8;
+        let charging = matches!(upower_data.status, crate::services::upower::BatteryStatus::Charging(_));
 
         let data = BatteryData::new(
             capacity,
@@ -229,24 +216,17 @@ impl Battery {
             power_profile,
         );
 
-        if !charging {
-            if capacity <= 5 {
-                self.emit_event(BatteryEvent::CriticalBattery(capacity));
-            } else if capacity <= 15 {
-                self.emit_event(BatteryEvent::LowBattery(capacity));
-            }
-        }
+        // Battery events are not currently sent to the UI
+        // Notification logic could be added here in the future
+        // if !charging {
+        //     if capacity <= 5 {
+        //         // Critical battery notification
+        //     } else if capacity <= 15 {
+        //         // Low battery notification
+        //     }
+        // }
 
-        self.emit_event(BatteryEvent::StatusChanged(data.clone()));
         self.data = Some(data);
-    }
-
-    fn emit_event(&self, event: BatteryEvent) {
-        if let Some(sender) = &self.sender {
-            if let Err(e) = sender.try_send(event) {
-                warn!("Failed to emit battery event: {}", e);
-            }
-        }
     }
 }
 

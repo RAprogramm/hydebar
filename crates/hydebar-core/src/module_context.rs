@@ -160,10 +160,27 @@ impl ModuleContext {
 ///     .try_send(modules::updates::Message::CheckNow)
 ///     .expect("queued");
 /// ```
-#[derive(Clone)]
 pub struct ModuleEventSender<T> {
     context: ModuleContext,
     convert: Arc<dyn Fn(T) -> ModuleEvent + Send + Sync>,
+}
+
+impl<T> Clone for ModuleEventSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            context: self.context.clone(),
+            convert: Arc::clone(&self.convert),
+        }
+    }
+}
+
+impl<T> std::fmt::Debug for ModuleEventSender<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModuleEventSender")
+            .field("context", &self.context)
+            .field("convert", &"<function>")
+            .finish()
+    }
 }
 
 impl<T> ModuleEventSender<T>

@@ -20,7 +20,7 @@ pub enum UPowerMessage {
 }
 
 impl BatteryData {
-    pub fn indicator<'a, Message: 'static>(&self) -> Element<'a, Message> {
+    pub fn indicator<Message: 'static>(&self) -> Element<'static, Message> {
         let icon_type = self.get_icon();
         let state = self.get_indicator_state();
 
@@ -75,7 +75,7 @@ impl BatteryData {
 }
 
 impl PowerProfile {
-    pub fn indicator<Message: 'static>(&self) -> Option<Element<Message>> {
+    pub fn indicator<Message: 'static>(&self) -> Option<Element<'static, Message>> {
         match self {
             PowerProfile::Balanced => None,
             PowerProfile::Performance => Some(

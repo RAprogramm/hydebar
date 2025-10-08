@@ -205,7 +205,10 @@ impl Workspaces {
     }
 }
 
-impl<M> Module<M> for Workspaces {
+impl<M> Module<M> for Workspaces
+where
+    M: 'static + Clone + From<Message>,
+{
     type ViewData<'a> = (
         &'a Outputs,
         Id,
@@ -283,81 +286,81 @@ impl<M> Module<M> for Workspaces {
     fn view(
         &self,
         (outputs, id, config, workspace_colors, special_workspace_colors): Self::ViewData<'_>,
-    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
-    where
-        M: 'static + From<Message>,
-    {
-        let monitor_name = outputs.get_monitor_name(id);
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
+        let monitor_name = outputs.get_monitor_name(id).map(|s| s.to_string());
 
         Some((
-            Into::<Element<M>>::into(
-                Row::with_children(
-                    self.workspaces
-                        .iter()
-                        .filter_map(|w| {
-                            if config.visibility_mode == WorkspaceVisibilityMode::All
-                                || w.monitor == monitor_name.unwrap_or_else(|| &w.monitor)
-                                || !outputs.has_name(&w.monitor)
-                            {
-                                let empty = w.windows == 0;
-                                let monitor = w.monitor_id;
+            Row::with_children(
+                self.workspaces
+                    .iter()
+                    .filter_map(|w| {
+                        if config.visibility_mode == WorkspaceVisibilityMode::All
+                            || w.monitor == monitor_name.as_deref().unwrap_or(&w.monitor)
+                            || !outputs.has_name(&w.monitor)
+                        {
+                            let empty = w.windows == 0;
+                            let monitor = w.monitor_id;
 
-                                // Safe color lookup by monitor index; None means "no color".
-                                let color = monitor.map(|m| {
-                                    if w.id > 0 {
-                                        workspace_colors.get(m).copied()
-                                    } else {
-                                        special_workspace_colors
-                                            .unwrap_or(workspace_colors)
-                                            .get(m)
-                                            .copied()
-                                    }
-                                });
+                            // Safe color lookup by monitor index; None means "no color".
+                            let color = monitor.map(|m| {
+                                if w.id > 0 {
+                                    workspace_colors.get(m).copied()
+                                } else {
+                                    special_workspace_colors
+                                        .unwrap_or(workspace_colors)
+                                        .get(m)
+                                        .copied()
+                                }
+                            });
 
-                                Some(
-                                    button(
-                                        container(
-                                            if w.id < 0 {
-                                                text(w.name.as_str())
-                                            } else {
-                                                text(w.id)
-                                            }
-                                            .size(10),
-                                        )
-                                        .align_x(alignment::Horizontal::Center)
-                                        .align_y(alignment::Vertical::Center),
+                            let w_id = w.id;
+                            let w_name = w.name.clone();
+                            let w_active = w.active;
+
+                            Some(
+                                button(
+                                    container(
+                                        if w_id < 0 {
+                                            text(w_name)
+                                        } else {
+                                            text(w_id)
+                                        }
+                                        .size(10),
                                     )
-                                    .style(workspace_button_style(empty, color))
-                                    .padding(if w.id < 0 {
-                                        if w.active { [0, 16] } else { [0, 8] }
-                                    } else {
-                                        [0, 0]
-                                    })
-                                    .on_press(if w.id > 0 {
-                                        Message::ChangeWorkspace(w.id)
-                                    } else {
-                                        Message::ToggleSpecialWorkspace(w.id)
-                                    })
-                                    .width(if w.id < 0 {
-                                        Length::Shrink
-                                    } else if w.active {
-                                        Length::Fixed(32.)
-                                    } else {
-                                        Length::Fixed(16.)
-                                    })
-                                    .height(16)
-                                    .into(),
+                                    .align_x(alignment::Horizontal::Center)
+                                    .align_y(alignment::Vertical::Center),
                                 )
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<Element<'_, _, _>>>(),
-                )
-                .padding([2, 0])
-                .spacing(4),
+                                .style(workspace_button_style(empty, color))
+                                .padding(if w_id < 0 {
+                                    if w_active { [0, 16] } else { [0, 8] }
+                                } else {
+                                    [0, 0]
+                                })
+                                .on_press(if w_id > 0 {
+                                    Message::ChangeWorkspace(w_id)
+                                } else {
+                                    Message::ToggleSpecialWorkspace(w_id)
+                                })
+                                .width(if w_id < 0 {
+                                    Length::Shrink
+                                } else if w_active {
+                                    Length::Fixed(32.)
+                                } else {
+                                    Length::Fixed(16.)
+                                })
+                                .height(16)
+                                .into(),
+                            )
+                        } else {
+                            None
+                        }
+                    })
+                    .map(|elem: Element<'_, Message>| elem.map(M::from))
+                    .collect::<Vec<Element<'_, M, _, _>>>(),
             )
-            .map(M::from),
+            .padding([2, 0])
+            .spacing(4)
+            .into(),
             None,
         ))
     }

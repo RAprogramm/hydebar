@@ -122,47 +122,45 @@ pub(crate) async fn events(conn: &zbus::Connection) -> Result<TrayEventStream, T
             .await
             .map_err(TrayWatcherError::EventStream)?;
 
-        if let Ok(stream) = item.item_proxy.receive_icon_pixmap_changed().await {
-            icon_pixel_change.push(
-                stream
-                    .filter_map({
+        let stream = item.item_proxy.receive_icon_pixmap_changed().await;
+        icon_pixel_change.push(
+            stream
+                .filter_map({
+                    let name = name.clone();
+                    move |icon| {
                         let name = name.clone();
-                        move |icon| {
-                            let name = name.clone();
-                            async move {
-                                icon.get()
-                                    .await
-                                    .ok()
-                                    .and_then(icon::icon_from_pixmaps)
-                                    .map(|icon| TrayEvent::IconChanged(name.to_owned(), icon))
-                            }
+                        async move {
+                            icon.get()
+                                .await
+                                .ok()
+                                .and_then(icon::icon_from_pixmaps)
+                                .map(|icon| TrayEvent::IconChanged(name.to_owned(), icon))
                         }
-                    })
-                    .boxed(),
-            );
-        }
+                    }
+                })
+                .boxed(),
+        );
 
-        if let Ok(stream) = item.item_proxy.receive_icon_name_changed().await {
-            icon_name_change.push(
-                stream
-                    .filter_map({
+        let stream = item.item_proxy.receive_icon_name_changed().await;
+        icon_name_change.push(
+            stream
+                .filter_map({
+                    let name = name.clone();
+                    move |icon_name| {
                         let name = name.clone();
-                        move |icon_name| {
-                            let name = name.clone();
-                            async move {
-                                icon_name
-                                    .get()
-                                    .await
-                                    .ok()
-                                    .as_deref()
-                                    .and_then(icon::icon_from_name)
-                                    .map(|icon| TrayEvent::IconChanged(name.to_owned(), icon))
-                            }
+                        async move {
+                            icon_name
+                                .get()
+                                .await
+                                .ok()
+                                .as_deref()
+                                .and_then(icon::icon_from_name)
+                                .map(|icon| TrayEvent::IconChanged(name.to_owned(), icon))
                         }
-                    })
-                    .boxed(),
-            );
-        }
+                    }
+                })
+                .boxed(),
+        );
 
         if let Ok(layout_updated) = item.menu_proxy.receive_layout_updated().await {
             menu_layout_change.push(

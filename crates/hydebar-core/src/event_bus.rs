@@ -80,7 +80,7 @@ impl std::error::Error for EventBusError {}
 impl From<EventBusError> for AppError {
     fn from(err: EventBusError) -> Self {
         match err {
-            EventBusError::QueueFull { .. } => AppError::resource_exhausted(err.to_string()),
+            EventBusError::QueueFull { .. } => AppError::internal(err.to_string()),
             EventBusError::Poisoned => AppError::internal(err.to_string()),
         }
     }

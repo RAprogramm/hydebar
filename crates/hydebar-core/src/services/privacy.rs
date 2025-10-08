@@ -105,7 +105,7 @@ impl PrivacyService {
         publisher: &mut P,
     ) -> Result<State, PrivacyError>
     where
-        P: PrivacyEventPublisher,
+        P: PrivacyEventPublisher + Send,
     {
         let pipewire = PipewireListener::default();
         let webcam = WebcamWatcher::new(Path::new(WEBCAM_DEVICE_PATH));

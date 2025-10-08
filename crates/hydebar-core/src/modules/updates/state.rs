@@ -35,15 +35,43 @@ pub(crate) enum CheckState {
     Ready,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Default)]
 pub struct Updates {
     state: CheckState,
     updates: Vec<Update>,
-    is_updates_list_open: bool,
+    pub is_updates_list_open: bool,
     registration: Option<UpdatesRegistration>,
     sender: Option<ModuleEventSender<Message>>,
     runtime: Option<Handle>,
     tasks: Vec<JoinHandle<()>>,
+}
+
+impl std::fmt::Debug for Updates {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Updates")
+            .field("state", &self.state)
+            .field("updates", &self.updates)
+            .field("is_updates_list_open", &self.is_updates_list_open)
+            .field("registration", &self.registration)
+            .field("sender", &self.sender)
+            .field("runtime", &self.runtime)
+            .field("tasks", &format!("<{} tasks>", self.tasks.len()))
+            .finish()
+    }
+}
+
+impl Clone for Updates {
+    fn clone(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+            updates: self.updates.clone(),
+            is_updates_list_open: self.is_updates_list_open,
+            registration: self.registration.clone(),
+            sender: self.sender.clone(),
+            runtime: self.runtime.clone(),
+            tasks: Vec::new(), // JoinHandles can't be cloned
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,7 +164,7 @@ impl Updates {
                     warn!("updates module is not fully initialised; skipping update command");
                 }
 
-                outputs.close_menu_if(id, MenuType::Updates, main_config)
+                outputs.close_menu_if::<Message>(id, MenuType::Updates, main_config);
             }
         }
     }
@@ -158,7 +186,10 @@ impl Updates {
     }
 }
 
-impl<M> Module<M> for Updates {
+impl<M> Module<M> for Updates
+where
+    M: 'static + Clone + From<Message>,
+{
     type ViewData<'a> = &'a Option<UpdatesModuleConfig>;
     type RegistrationData<'a> = Option<&'a UpdatesModuleConfig>;
 
@@ -212,10 +243,7 @@ impl<M> Module<M> for Updates {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
-    where
-        M: 'static + From<Message>,
-    {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         if config.is_some() {
             Some((
                 view::icon(&self.state, self.updates.len()).map(M::from),

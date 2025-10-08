@@ -22,7 +22,7 @@ use std::{backtrace::Backtrace, borrow::Cow, num::NonZeroUsize, sync::Arc};
 use masterror::AppError;
 use tokio::runtime::Handle;
 
-const ICON_FONT: &[u8] = include_bytes!("../../assets/SymbolsNerdFont-Regular.ttf");
+const ICON_FONT: &[u8] = include_bytes!("../../../assets/SymbolsNerdFont-Regular.ttf");
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -114,7 +114,7 @@ async fn run() -> Result<(), MainError> {
     let (config, config_path) = get_config(args.config_path)?;
     let config_manager = Arc::new(ConfigManager::new(config.clone()));
 
-    logger.set_new_spec(get_log_spec(&config.log_level))?;
+    logger.set_new_spec(get_log_spec(&config.log_level));
 
     let font = match config.appearance.font_name {
         Some(ref font_name) => Font::with_name(Box::leak(font_name.clone().into_boxed_str())),

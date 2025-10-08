@@ -46,7 +46,9 @@ pub trait ServiceEventPublisher<S: ReadOnlyService> {
 
 impl<S> ServiceEventPublisher<S> for Sender<ServiceEvent<S>>
 where
-    S: ReadOnlyService + 'static,
+    S: ReadOnlyService + 'static + Send,
+    S::UpdateEvent: Send,
+    S::Error: Send,
 {
     type SendFuture<'a>
         = Pin<Box<dyn Future<Output = ()> + Send + 'a>>
@@ -55,7 +57,7 @@ where
 
     fn send(&mut self, event: ServiceEvent<S>) -> Self::SendFuture<'_> {
         Box::pin(async move {
-            let _ = self.send(event).await;
+            let _ = SinkExt::send(self, event).await;
         })
     }
 }

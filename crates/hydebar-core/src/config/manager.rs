@@ -34,7 +34,7 @@ impl ConfigImpact {
 }
 
 /// Applied configuration along with its computed impact.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfigApplied {
     /// The fully validated configuration that was applied.
     pub config: Box<Config>,
@@ -116,7 +116,7 @@ impl ConfigUpdateError {
 }
 
 /// Information about configuration degradation events.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfigDegradation {
     /// The reason the configuration could not be refreshed.
     pub reason: ConfigUpdateError,
@@ -234,14 +234,14 @@ fn compute_impact(previous: &Config, next: &Config) -> ConfigImpact {
     mark_if_changed(
         &mut impact,
         ModuleName::AppLauncher,
-        previous.app_launcher_cmd.as_ref(),
-        next.app_launcher_cmd.as_ref(),
+        &previous.app_launcher_cmd,
+        &next.app_launcher_cmd,
     );
     mark_if_changed(
         &mut impact,
         ModuleName::Clipboard,
-        previous.clipboard_cmd.as_ref(),
-        next.clipboard_cmd.as_ref(),
+        &previous.clipboard_cmd,
+        &next.clipboard_cmd,
     );
     mark_if_changed(
         &mut impact,

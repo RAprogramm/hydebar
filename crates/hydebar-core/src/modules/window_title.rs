@@ -111,7 +111,10 @@ impl WindowTitle {
     }
 }
 
-impl<M> Module<M> for WindowTitle {
+impl<M> Module<M> for WindowTitle
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
@@ -169,7 +172,7 @@ impl<M> Module<M> for WindowTitle {
     ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         self.value.as_ref().map(|value| {
             (
-                text(value)
+                text(value.clone())
                     .size(12)
                     .wrapping(text::Wrapping::WordOrGlyph)
                     .into(),

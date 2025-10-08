@@ -15,13 +15,36 @@ use super::{Module, ModuleError, OnModulePress};
 
 const KEYBOARD_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
 
-#[derive(Debug, Clone)]
 pub struct KeyboardLayout {
     hyprland: Arc<dyn HyprlandPort>,
     multiple_layout: bool,
     active: String,
     sender: Option<ModuleEventSender<Message>>,
     task: Option<JoinHandle<()>>,
+}
+
+impl std::fmt::Debug for KeyboardLayout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyboardLayout")
+            .field("hyprland", &"<HyprlandPort>")
+            .field("multiple_layout", &self.multiple_layout)
+            .field("active", &self.active)
+            .field("sender", &self.sender)
+            .field("task", &self.task.as_ref().map(|_| "<JoinHandle>"))
+            .finish()
+    }
+}
+
+impl Clone for KeyboardLayout {
+    fn clone(&self) -> Self {
+        Self {
+            hyprland: Arc::clone(&self.hyprland),
+            multiple_layout: self.multiple_layout,
+            active: self.active.clone(),
+            sender: self.sender.clone(),
+            task: None, // JoinHandle can't be cloned
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -77,7 +100,10 @@ impl KeyboardLayout {
     }
 }
 
-impl<M> Module<M> for KeyboardLayout {
+impl<M> Module<M> for KeyboardLayout
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = &'a KeyboardLayoutModuleConfig;
     type RegistrationData<'a> = ();
 

@@ -9,7 +9,10 @@ use super::{Module, ModuleError, OnModulePress};
 #[derive(Default, Debug, Clone)]
 pub struct AppLauncher;
 
-impl<M> Module<M> for AppLauncher {
+impl<M> Module<M> for AppLauncher
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = &'a Option<String>;
     type RegistrationData<'a> = ();
 

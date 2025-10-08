@@ -60,7 +60,10 @@ impl KeyboardSubmap {
     }
 }
 
-impl<M> Module<M> for KeyboardSubmap {
+impl<M> Module<M> for KeyboardSubmap
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = ();
     type RegistrationData<'a> = ();
 
@@ -119,7 +122,7 @@ impl<M> Module<M> for KeyboardSubmap {
         if self.submap.is_empty() {
             None
         } else {
-            Some((text(&self.submap).into(), None))
+            Some((text(self.submap.clone()).into(), None))
         }
     }
 

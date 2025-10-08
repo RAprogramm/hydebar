@@ -94,6 +94,30 @@ pub enum Message {
     CustomUpdate(String, modules::custom_module::Message),
 }
 
+impl From<modules::settings::Message> for Message {
+    fn from(msg: modules::settings::Message) -> Self {
+        Message::Settings(msg)
+    }
+}
+
+impl From<modules::system_info::Message> for Message {
+    fn from(msg: modules::system_info::Message) -> Self {
+        Message::SystemInfo(msg)
+    }
+}
+
+impl From<modules::updates::Message> for Message {
+    fn from(msg: modules::updates::Message) -> Self {
+        Message::Updates(msg)
+    }
+}
+
+impl From<modules::workspaces::Message> for Message {
+    fn from(msg: modules::workspaces::Message) -> Self {
+        Message::Workspaces(msg)
+    }
+}
+
 impl App {
     pub fn new(
         (

@@ -95,8 +95,8 @@ pub(crate) async fn build_event_stream(conn: &Connection) -> anyhow::Result<Even
                     Ok(args) if is_mpris_service(&args.name) => Some(IpcEvent::NameOwner),
                     _ => None,
                 }
-            }),
-    ));
+            })
+    ) as Pin<Box<dyn Stream<Item = IpcEvent> + Send>>);
 
     for entry in &data {
         let cache = Arc::new(entry.metadata.clone());
@@ -114,15 +114,15 @@ pub(crate) async fn build_event_stream(conn: &Connection) -> anyhow::Result<Even
                     async move {
                         let new_metadata = metadata.get().await.map(MprisPlayerMetadata::from).ok();
 
-                        if new_metadata.as_ref() == cache.as_ref() {
+                        if new_metadata.as_ref() == cache.as_ref().as_ref() {
                             None
                         } else {
                             Some(IpcEvent::Metadata(service, new_metadata))
                         }
                     }
                 }
-            }),
-        ));
+            })
+        ) as Pin<Box<dyn Stream<Item = IpcEvent> + Send>>);
     }
 
     for entry in &data {
@@ -145,8 +145,8 @@ pub(crate) async fn build_event_stream(conn: &Connection) -> anyhow::Result<Even
                             Some(IpcEvent::Volume(service, new_volume))
                         }
                     }
-                }),
-        ));
+                })
+        ) as Pin<Box<dyn Stream<Item = IpcEvent> + Send>>);
     }
 
     for entry in &data {
@@ -174,8 +174,8 @@ pub(crate) async fn build_event_stream(conn: &Connection) -> anyhow::Result<Even
                             Some(IpcEvent::State(service, new_state))
                         }
                     }
-                }),
-        ));
+                })
+        ) as Pin<Box<dyn Stream<Item = IpcEvent> + Send>>);
     }
 
     Ok(combined)

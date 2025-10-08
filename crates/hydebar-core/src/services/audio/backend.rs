@@ -234,17 +234,18 @@ impl PulseAudioServer {
                     }
 
                     let introspector = server.context.introspect();
+                    let from_server_tx_clone = from_server_tx.clone();
                     server.context.set_subscribe_callback(Some(Box::new(
                         move |_facility, _operation, _idx| {
                             server.introspector.get_server_info({
-                                let tx = from_server_tx.clone();
+                                let tx = from_server_tx_clone.clone();
 
                                 move |info| {
                                     Self::send_server_info(info, &tx);
                                 }
                             });
                             introspector.get_sink_info_list({
-                                let tx = from_server_tx.clone();
+                                let tx = from_server_tx_clone.clone();
                                 let sinks = sinks.clone();
 
                                 move |info| {
@@ -256,7 +257,7 @@ impl PulseAudioServer {
                                 }
                             });
                             introspector.get_source_info_list({
-                                let tx = from_server_tx.clone();
+                                let tx = from_server_tx_clone.clone();
                                 let sources = sources.clone();
 
                                 move |info| {
@@ -491,7 +492,7 @@ impl From<&SinkInfo<'_>> for Device {
             description: value
                 .proplist
                 .get_str("device.description")
-                .map_or(String::default(), ToString::to_string),
+                .unwrap_or_default(),
             volume: value.volume,
             is_mute: value.mute,
             in_use: value.state == SinkState::Running,
@@ -538,7 +539,7 @@ impl From<&SourceInfo<'_>> for Device {
             description: value
                 .proplist
                 .get_str("device.description")
-                .map_or(String::default(), ToString::to_string),
+                .unwrap_or_default(),
             volume: value.volume,
             is_mute: value.mute,
             in_use: value.state == SourceState::Running,

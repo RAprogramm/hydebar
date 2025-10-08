@@ -79,7 +79,7 @@ impl Clock {
     pub fn register(&mut self, ctx: &ModuleContext, format: &str) {
         self.tick_interval = Self::determine_interval(format);
         self.data.update();
-        self.sender = Some(ctx.module_sender(ModuleEvent::Clock));
+        self.sender = Some(ctx.module_sender(|_event: ClockEvent| ModuleEvent::Clock(Message::Update)));
 
         if let Some(task) = self.task.take() {
             task.abort();
@@ -87,15 +87,16 @@ impl Clock {
 
         if let Some(sender) = self.sender.clone() {
             let interval_duration = self.tick_interval;
-            let mut update_sender = ctx.module_sender::<Message>(ModuleEvent::Clock);
+            let mut update_sender = sender.clone();
 
             self.task = Some(ctx.runtime_handle().spawn(async move {
                 let mut ticker = interval(interval_duration);
 
                 loop {
                     ticker.tick().await;
+                    let now = Local::now();
 
-                    if let Err(err) = update_sender.try_send(Message::Update) {
+                    if let Err(err) = update_sender.try_send(ClockEvent::Tick(now)) {
                         error!("Failed to publish clock tick: {err}");
                     }
                 }

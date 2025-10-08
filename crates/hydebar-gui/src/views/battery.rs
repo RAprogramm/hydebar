@@ -24,9 +24,10 @@ pub fn render_battery_indicator(
         content = content.push(text(format!("{}%", data.capacity)));
     }
 
+    let indicator_state = data.indicator_state;
     container(content)
         .style(move |theme: &Theme| container::Style {
-            text_color: Some(match data.indicator_state {
+            text_color: Some(match indicator_state {
                 IndicatorState::Success => theme.palette().success,
                 IndicatorState::Warning => theme.extended_palette().danger.weak.color,
                 IndicatorState::Danger => theme.palette().danger,

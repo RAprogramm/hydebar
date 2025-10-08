@@ -6,6 +6,7 @@ use crate::{
     event_bus::ModuleEvent,
     menu::MenuType,
     services::{
+        ReadOnlyService,
         ServiceEvent,
         mpris::{
             ListenerState, MprisEventPublisher, MprisPlayerCommand, MprisPlayerData,
@@ -378,7 +379,10 @@ impl MediaPlayer {
     }
 }
 
-impl<M> Module<M> for MediaPlayer {
+impl<M> Module<M> for MediaPlayer
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = &'a MediaPlayerModuleConfig;
     type RegistrationData<'a> = ();
 

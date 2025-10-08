@@ -2316,6 +2316,7 @@ dependencies = [
  "hydebar-proto",
  "iced",
  "log",
+ "tokio",
  "wayland-client",
 ]
 

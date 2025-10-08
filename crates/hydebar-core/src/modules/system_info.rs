@@ -54,7 +54,10 @@ impl SystemInfo {
     }
 }
 
-impl<M> Module<M> for SystemInfo {
+impl<M> Module<M> for SystemInfo
+where
+    M: 'static + Clone + From<Message>,
+{
     type ViewData<'a> = &'a SystemModuleConfig;
     type RegistrationData<'a> = ();
 

@@ -30,17 +30,20 @@ pub(crate) fn icon_from_pixmaps(mut pixmaps: Vec<Icon>) -> Option<TrayIcon> {
 pub(crate) fn icon_from_name(icon_name: &str) -> Option<TrayIcon> {
     debug!("resolving icon from name {icon_name}");
 
-    let lookup = lookup(icon_name).with_cache();
     let theme = get_icon_theme();
     if let Some(theme_name) = &theme {
         debug!("icon theme found {theme_name}");
     }
 
-    let icon_path = icon_path_with_theme_fallback(
-        theme,
-        |theme_name| lookup.with_theme(theme_name).find(),
-        || lookup.find(),
-    )?;
+    let icon_path = if let Some(theme_name) = theme.as_deref() {
+        // Try with theme first
+        lookup(icon_name).with_cache().with_theme(theme_name).find()
+            // Fall back to default lookup if theme lookup fails
+            .or_else(|| lookup(icon_name).with_cache().find())
+    } else {
+        // No theme, use default lookup
+        lookup(icon_name).with_cache().find()
+    }?;
 
     if icon_path.extension().is_some_and(|ext| ext == "svg") {
         Some(TrayIcon::Svg(svg::Handle::from_path(icon_path)))

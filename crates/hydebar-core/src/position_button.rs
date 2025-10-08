@@ -10,11 +10,13 @@ use iced::{
     widget::button::{Catalog, Status, Style, StyleFn},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ButtonUIRef {
     pub position: Point,
     pub viewport: (f32, f32),
 }
+
+impl Eq for ButtonUIRef {}
 
 enum OnPress<'a, Message> {
     Message(Message),

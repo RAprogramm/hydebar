@@ -263,7 +263,10 @@ impl<Message> Program<Message> for AlertIndicator {
     }
 }
 
-impl<M> Module<M> for Custom {
+impl<M> Module<M> for Custom
+where
+    M: 'static + Clone,
+{
     type ViewData<'a> = &'a CustomModuleDef;
     type RegistrationData<'a> = Option<&'a CustomModuleDef>;
 
@@ -336,10 +339,7 @@ impl<M> Module<M> for Custom {
     fn view(
         &self,
         config: Self::ViewData<'_>,
-    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
-    where
-        M: 'static + Clone,
-    {
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
         let mut icon_element = config
             .icon
             .as_ref()

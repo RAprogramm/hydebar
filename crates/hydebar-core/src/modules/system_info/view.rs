@@ -11,7 +11,7 @@ use iced::{
 
 use super::{Message, data::SystemInfoData};
 
-fn info_element<'a>(info_icon: Icons, label: &str, value: String) -> Element<'a, Message> {
+fn info_element<'a>(info_icon: Icons, label: &'a str, value: String) -> Element<'a, Message> {
     row!(
         container(icon(info_icon).size(22)).center_x(Length::Fixed(32.)),
         text(label).width(Length::Fill),
@@ -22,15 +22,15 @@ fn info_element<'a>(info_icon: Icons, label: &str, value: String) -> Element<'a,
     .into()
 }
 
-fn indicator_info_element<'a, V>(
+fn indicator_info_element<V>(
     info_icon: Icons,
     value: V,
     unit: &str,
     threshold: Option<(V, V)>,
-    prefix: Option<&str>,
-) -> Element<'a,Message>
+    prefix: Option<String>,
+) -> Element<'static, Message>
 where
-    V: std::fmt::Display + PartialOrd + Copy + 'a,
+    V: std::fmt::Display + PartialOrd + Copy + 'static,
 {
     let content = container(
         row!(
@@ -100,11 +100,14 @@ pub fn build_menu_view(data: &SystemInfoData) -> Element<Message> {
                     data.disks
                         .iter()
                         .map(|(mount_point, usage)| {
-                            info_element(
-                                Icons::Drive,
-                                &format!("Disk Usage {mount_point}"),
-                                format!("{usage}%"),
+                            row!(
+                                container(icon(Icons::Drive).size(22)).center_x(Length::Fixed(32.)),
+                                text(format!("Disk Usage {mount_point}")).width(Length::Fill),
+                                text(format!("{usage}%"))
                             )
+                            .align_y(Alignment::Center)
+                            .spacing(8)
+                            .into()
                         })
                         .collect::<Vec<Element<_>>>(),
                 )
@@ -136,14 +139,17 @@ pub fn build_menu_view(data: &SystemInfoData) -> Element<Message> {
 }
 
 /// Build the indicator widgets representing the configured subset of metrics.
-pub fn indicator_elements<'a, M>(
-    data: &SystemInfoData,
+pub fn indicator_elements<M>(
+    data: SystemInfoData,
     config: &SystemModuleConfig,
-) -> Vec<Element<'a, M>> {
+) -> Vec<Element<'static, M>>
+where
+    M: 'static + From<Message>,
+{
     config
         .indicators
         .iter()
-        .filter_map(|indicator| match indicator {
+        .filter_map(|indicator| -> Option<Element<'static, Message>> { match indicator {
             SystemIndicator::Cpu => Some(indicator_info_element(
                 Icons::Cpu,
                 data.cpu_usage,
@@ -163,7 +169,7 @@ pub fn indicator_elements<'a, M>(
                 data.memory_swap_usage,
                 "%",
                 Some((config.memory.warn_threshold, config.memory.alert_threshold)),
-                Some("swap"),
+                Some("swap".to_string()),
             )),
             SystemIndicator::Temperature => data.temperature.map(|temperature| {
                 indicator_info_element(
@@ -184,14 +190,21 @@ pub fn indicator_elements<'a, M>(
                         *disk,
                         "%",
                         Some((config.disk.warn_threshold, config.disk.alert_threshold)),
-                        Some(disk_mount.as_str()),
+                        Some(disk_mount.clone()),
                     ))
                 } else {
                     None
                 }
             }),
             SystemIndicator::IpAddress => data.network.as_ref().map(|network| {
-                indicator_info_element(Icons::IpAddress, network.ip.as_str(), "", None, None)
+                let ip = network.ip.clone();
+                container(
+                    row!(
+                        icon(Icons::IpAddress),
+                        text(ip)
+                    )
+                    .spacing(4),
+                ).into()
             }),
             SystemIndicator::DownloadSpeed => data.network.as_ref().map(|network| {
                 let (value, unit) = format_speed(network.download_speed);
@@ -201,7 +214,8 @@ pub fn indicator_elements<'a, M>(
                 let (value, unit) = format_speed(network.upload_speed);
                 indicator_info_element(Icons::UploadSpeed, value, unit, None, None)
             }),
-        })
+        }})
+        .map(|elem| elem.map(M::from))
         .collect()
 }
 
@@ -209,8 +223,11 @@ pub fn indicator_elements<'a, M>(
 pub fn build_indicator_view<M>(
     data: &SystemInfoData,
     config: &SystemModuleConfig,
-) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
-    let indicators = indicator_elements(data, config);
+) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)>
+where
+    M: 'static + From<Message>,
+{
+    let indicators = indicator_elements(data.clone(), config);
 
     Some((
         Row::with_children(indicators)
@@ -254,7 +271,7 @@ mod tests {
             disk: Default::default(),
         };
 
-        let indicators = indicator_elements(&data, &config);
+        let indicators: Vec<Element<'_, Message>> = indicator_elements(data, &config);
         assert_eq!(indicators.len(), 2);
     }
 
@@ -273,7 +290,7 @@ mod tests {
             ..SystemModuleConfig::default()
         };
 
-        let indicators = indicator_elements(&data, &config);
+        let indicators: Vec<Element<'_, Message>> = indicator_elements(data, &config);
         assert_eq!(indicators.len(), 2);
     }
 

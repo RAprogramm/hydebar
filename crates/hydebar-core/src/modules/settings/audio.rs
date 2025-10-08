@@ -27,7 +27,7 @@ pub enum AudioMessage {
 }
 
 impl AudioData {
-    pub fn sink_indicator<Message>(&self) -> Option<Element<Message>> {
+    pub fn sink_indicator<Message: 'static>(&self) -> Option<Element<'static, Message>> {
         if !self.sinks.is_empty() {
             let icon_type = self.sinks.get_icon(&self.server_info.default_sink);
 

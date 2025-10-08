@@ -16,6 +16,7 @@ use hyprland::{
     data::{Client, Devices, Monitors, Workspace, Workspaces},
     dispatch::{Dispatch, DispatchType, MonitorIdentifier, WorkspaceIdentifierWithSpecial},
     keyword::Keyword,
+    shared::{HyprData, HyprDataActive, HyprDataActiveOptional},
 };
 
 pub use self::config::HyprlandClientConfig;
@@ -134,17 +135,15 @@ impl HyprlandPort for HyprlandClient {
                 .map_err(|err| HyprlandClient::backend_error(WORKSPACE_SNAPSHOT_OP, err))?;
 
             let monitors = monitors
-                .to_vec()
                 .into_iter()
                 .map(|monitor| HyprlandMonitorInfo {
-                    id: monitor.id,
+                    id: monitor.id.try_into().unwrap_or(i32::MAX),
                     name: monitor.name,
-                    special_workspace_id: Some(monitor.special_workspace.id),
+                    special_workspace_id: Some(monitor.special_workspace.id.try_into().unwrap_or(i32::MAX)),
                 })
                 .collect();
 
             let workspaces = workspaces
-                .to_vec()
                 .into_iter()
                 .map(|workspace| HyprlandWorkspaceInfo {
                     id: workspace.id,
@@ -158,17 +157,17 @@ impl HyprlandPort for HyprlandClient {
             Ok(HyprlandWorkspaceSnapshot {
                 monitors,
                 workspaces,
-                active_workspace_id: active.map(|w| w.id),
+                active_workspace_id: Some(active.id),
             })
         })
     }
 
     fn change_workspace(&self, workspace: HyprlandWorkspaceSelector) -> Result<(), HyprlandError> {
-        self.execute_with_retry(CHANGE_WORKSPACE_OP, || {
+        self.execute_with_retry(CHANGE_WORKSPACE_OP, move || {
             let identifier = match &workspace {
                 HyprlandWorkspaceSelector::Id(id) => WorkspaceIdentifierWithSpecial::Id(*id),
                 HyprlandWorkspaceSelector::Name(name) => {
-                    WorkspaceIdentifierWithSpecial::Name(name.clone())
+                    WorkspaceIdentifierWithSpecial::Name(name.as_str())
                 }
             };
             Dispatch::call(DispatchType::Workspace(identifier))
@@ -182,10 +181,10 @@ impl HyprlandPort for HyprlandClient {
         workspace_name: &str,
     ) -> Result<(), HyprlandError> {
         let workspace_name = workspace_name.to_string();
-        self.execute_with_retry(TOGGLE_SPECIAL_OP, || {
+        self.execute_with_retry(TOGGLE_SPECIAL_OP, move || {
             let monitor_identifier = match &monitor {
-                HyprlandMonitorSelector::Id(id) => MonitorIdentifier::Id((*id).into()),
-                HyprlandMonitorSelector::Name(name) => MonitorIdentifier::Name(name.clone()),
+                HyprlandMonitorSelector::Id(id) => MonitorIdentifier::Id((*id).try_into().unwrap_or(i128::MAX)),
+                HyprlandMonitorSelector::Name(name) => MonitorIdentifier::Name(name.as_str()),
             };
             Dispatch::call(DispatchType::FocusMonitor(monitor_identifier))
                 .and_then(|_| {
