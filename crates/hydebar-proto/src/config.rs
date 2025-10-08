@@ -282,7 +282,9 @@ fn default_open_settings_on_click() -> bool
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq,)]
 pub struct ClockModuleConfig
 {
-    pub format: String,
+    pub format:       String,
+    #[serde(default)]
+    pub show_weather: bool,
 }
 
 impl Default for ClockModuleConfig
@@ -290,9 +292,49 @@ impl Default for ClockModuleConfig
     fn default() -> Self
     {
         Self {
-            format: "%a %d %b %R".to_string(),
+            format: "%a %d %b %R".to_string(), show_weather: false,
         }
     }
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq,)]
+pub struct WeatherModuleConfig
+{
+    #[serde(default = "default_weather_location")]
+    pub location:                String,
+    pub api_key:                 Option<String,>,
+    #[serde(default = "default_use_celsius")]
+    pub use_celsius:             bool,
+    #[serde(default = "default_weather_update_interval")]
+    pub update_interval_minutes: u64,
+}
+
+impl Default for WeatherModuleConfig
+{
+    fn default() -> Self
+    {
+        Self {
+            location:                default_weather_location(),
+            api_key:                 None,
+            use_celsius:             default_use_celsius(),
+            update_interval_minutes: default_weather_update_interval(),
+        }
+    }
+}
+
+fn default_weather_location() -> String
+{
+    String::from("London",)
+}
+
+fn default_use_celsius() -> bool
+{
+    true
+}
+
+fn default_weather_update_interval() -> u64
+{
+    30
 }
 
 fn default_shutdown_cmd() -> String
@@ -415,6 +457,8 @@ pub struct Config
     pub keyboard_layout:     KeyboardLayoutModuleConfig,
     #[serde(default)]
     pub menu_keyboard_focus: bool,
+    #[serde(default)]
+    pub weather:             WeatherModuleConfig,
 }
 
 fn default_log_level() -> String
@@ -455,6 +499,7 @@ impl Default for Config
             keyboard_layout:     KeyboardLayoutModuleConfig::default(),
             custom_modules:      vec![],
             menu_keyboard_focus: default_menu_keyboard_focus(),
+            weather:             WeatherModuleConfig::default(),
         }
     }
 }

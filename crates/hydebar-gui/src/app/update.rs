@@ -225,6 +225,18 @@ impl App
                 self.clock.update(message,);
                 Task::none()
             }
+            Message::Weather(message,) => {
+                self.weather.update(message.clone(),);
+
+                // If clock is configured to show weather, update it too
+                if self.config.clock.show_weather {
+                    if let modules::weather::Message::Update(weather_data,) = message {
+                        self.clock.update(modules::clock::Message::UpdateWeather(weather_data,),);
+                    }
+                }
+
+                Task::none()
+            }
             Message::Battery(message,) => {
                 self.battery.update(message,);
                 Task::none()
@@ -341,6 +353,7 @@ impl App
             modules::Module::<Message,>::register(&mut self.clipboard, ctx, (),),
         );
         self.clock.register(ctx, &self.config.clock.format,);
+        self.weather.register(ctx,);
         register(
             "updates",
             modules::Module::<Message,>::register(
@@ -458,6 +471,7 @@ impl App
             ModuleEvent::KeyboardSubmap(message,) => Some(Message::KeyboardSubmap(message,),),
             ModuleEvent::Tray(message,) => Some(Message::Tray(message,),),
             ModuleEvent::Clock(message,) => Some(Message::Clock(message,),),
+            ModuleEvent::Weather(message,) => Some(Message::Weather(message,),),
             ModuleEvent::Battery(message,) => Some(Message::Battery(message,),),
             ModuleEvent::Privacy(message,) => Some(Message::Privacy(message,),),
             ModuleEvent::Settings(message,) => Some(Message::Settings(message,),),
