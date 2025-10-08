@@ -19,6 +19,8 @@ pub enum BluetoothMessage
 {
     Event(ServiceEvent<BluetoothService,>,),
     Toggle,
+    ConnectDevice(zbus::zvariant::OwnedObjectPath,),
+    DisconnectDevice(zbus::zvariant::OwnedObjectPath,),
     More(Id,),
 }
 
@@ -60,7 +62,7 @@ impl BluetoothData
     ) -> Element<Message,>
     {
         let main = if self.devices.is_empty() {
-            text("No devices connected",).into()
+            text("No paired devices",).into()
         } else {
             Column::with_children(
                 self.devices
@@ -69,6 +71,18 @@ impl BluetoothData
                         Row::new()
                             .push(text(d.name.to_string(),).width(Length::Fill,),)
                             .push_maybe(d.battery.map(Self::battery_level,),)
+                            .push(
+                                button(text(if d.connected { "Disconnect" } else { "Connect" },),)
+                                    .padding([4, 12,],)
+                                    .style(ghost_button_style(opacity,),)
+                                    .on_press(Message::Bluetooth(if d.connected {
+                                        BluetoothMessage::DisconnectDevice(d.path.clone(),)
+                                    } else {
+                                        BluetoothMessage::ConnectDevice(d.path.clone(),)
+                                    },),),
+                            )
+                            .spacing(8,)
+                            .align_y(iced::Alignment::Center,)
                             .into()
                     },)
                     .collect::<Vec<Element<Message,>,>>(),
