@@ -751,10 +751,10 @@ mod tests {
             position: Point::new(0.0, 0.0),
             viewport: (0., 0.),
         };
-        outputs.toggle_menu(id, MenuType::Updates, button_ref, &config);
+        outputs.toggle_menu::<()>(id, MenuType::Updates, button_ref, &config);
         assert!(outputs.menu_is_open());
 
-        outputs.close_menu(id, &config);
+        outputs.close_menu::<()>(id, &config);
         assert!(!outputs.menu_is_open());
     }
 
