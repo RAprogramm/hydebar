@@ -27,6 +27,7 @@ use hydebar_core::{
         system_info::SystemInfo,
         tray::{TrayMessage, TrayModule},
         updates::Updates,
+        weather::Weather,
         window_title::WindowTitle,
         workspaces::Workspaces,
     },
@@ -68,6 +69,7 @@ pub struct App
     pub media_player:          MediaPlayer,
     pub notifications:         Notifications,
     pub screenshot:            Screenshot,
+    pub weather:               Weather,
 }
 
 #[derive(Debug, Clone,)]
@@ -97,6 +99,7 @@ pub enum Message
     MediaPlayer(modules::media_player::Message,),
     Notifications(modules::notifications::NotificationsMessage,),
     Screenshot(modules::screenshot::ScreenshotMessage,),
+    Weather(modules::weather::Message,),
     OutputEvent((OutputEvent, WlOutput,),),
     LaunchCommand(String,),
     CustomUpdate(String, modules::custom_module::Message,),
@@ -211,6 +214,11 @@ impl App
                 media_player: MediaPlayer::default(),
                 notifications: Notifications::default(),
                 screenshot: Screenshot::default(),
+                weather: Weather::new(
+                    config.weather.location.clone(),
+                    config.weather.use_celsius,
+                    config.weather.update_interval_minutes,
+                ),
                 config,
             };
 

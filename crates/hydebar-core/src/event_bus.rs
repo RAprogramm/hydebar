@@ -45,6 +45,7 @@ pub enum ModuleEvent
     Settings(modules::settings::Message,),
     MediaPlayer(modules::media_player::Message,),
     Notifications(modules::notifications::NotificationsMessage,),
+    Weather(modules::weather::Message,),
     Custom
     {
         name:    Arc<str,>,
