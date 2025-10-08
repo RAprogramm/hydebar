@@ -6,29 +6,33 @@ use tokio::{task::JoinHandle, time::interval};
 
 use crate::{ModuleContext, ModuleEventSender, event_bus::ModuleEvent};
 
-/// Weather condition data from wttr.in API
-#[derive(Debug, Clone, Deserialize,)]
-pub struct CurrentCondition
-{
-    pub temp_C:         String,
-    pub temp_F:         String,
-    #[serde(rename = "weatherDesc")]
-    pub weather_desc:   Vec<WeatherDesc,>,
-    pub humidity:       String,
-    #[serde(rename = "windspeedKmph")]
-    pub windspeed_kmph: String,
-}
-
-#[derive(Debug, Clone, Deserialize,)]
-pub struct WeatherDesc
-{
-    pub value: String,
-}
-
+/// OpenWeatherMap API response structures
 #[derive(Debug, Clone, Deserialize,)]
 pub struct WeatherResponse
 {
-    pub current_condition: Vec<CurrentCondition,>,
+    pub main:    MainWeather,
+    pub weather: Vec<WeatherCondition,>,
+    pub wind:    Wind,
+}
+
+#[derive(Debug, Clone, Deserialize,)]
+pub struct MainWeather
+{
+    pub temp:     f64,
+    pub humidity: u32,
+}
+
+#[derive(Debug, Clone, Deserialize,)]
+pub struct WeatherCondition
+{
+    pub description: String,
+    pub icon:        String,
+}
+
+#[derive(Debug, Clone, Deserialize,)]
+pub struct Wind
+{
+    pub speed: f64,
 }
 
 /// Weather data for rendering
@@ -61,28 +65,28 @@ impl WeatherData
 
     pub fn from_response(response: WeatherResponse, location: String, use_celsius: bool,) -> Self
     {
-        if let Some(condition,) = response.current_condition.first() {
-            let temperature = if use_celsius {
-                format!("{}°C", condition.temp_C)
-            } else {
-                format!("{}°F", condition.temp_F)
-            };
-
-            Self {
-                temperature,
-                description: condition
-                    .weather_desc
-                    .first()
-                    .map(|d| d.value.clone(),)
-                    .unwrap_or_default(),
-                humidity: format!("{}%", condition.humidity),
-                wind_speed: format!("{} km/h", condition.windspeed_kmph),
-                location,
-                use_celsius,
-                last_updated: chrono::Local::now(),
-            }
+        // OpenWeatherMap returns temperature in Kelvin by default
+        let temp_kelvin = response.main.temp;
+        let temperature = if use_celsius {
+            format!("{:.0}°C", temp_kelvin - 273.15)
         } else {
-            Self::new(location, use_celsius,)
+            format!("{:.0}°F", (temp_kelvin - 273.15) * 9.0 / 5.0 + 32.0)
+        };
+
+        let description = response
+            .weather
+            .first()
+            .map(|w| w.description.clone(),)
+            .unwrap_or_else(|| String::from("Unknown",),);
+
+        Self {
+            temperature,
+            description,
+            humidity: format!("{}%", response.main.humidity),
+            wind_speed: format!("{:.1} m/s", response.wind.speed),
+            location,
+            use_celsius,
+            last_updated: chrono::Local::now(),
         }
     }
 
@@ -119,6 +123,7 @@ pub enum Message
 pub struct Weather
 {
     data:            WeatherData,
+    api_key:         Option<String,>,
     update_interval: Duration,
     sender:          Option<ModuleEventSender<WeatherEvent,>,>,
     task:            Option<JoinHandle<(),>,>,
@@ -126,13 +131,19 @@ pub struct Weather
 
 impl Weather
 {
-    pub fn new(location: String, use_celsius: bool, update_interval_minutes: u64,) -> Self
+    pub fn new(
+        location: String,
+        api_key: Option<String,>,
+        use_celsius: bool,
+        update_interval_minutes: u64,
+    ) -> Self
     {
         Self {
-            data:            WeatherData::new(location, use_celsius,),
+            data: WeatherData::new(location, use_celsius,),
+            api_key,
             update_interval: Duration::from_secs(update_interval_minutes * 60,),
-            sender:          None,
-            task:            None,
+            sender: None,
+            task: None,
         }
     }
 
@@ -158,6 +169,7 @@ impl Weather
             let interval_duration = self.update_interval;
             let location = self.data.location.clone();
             let use_celsius = self.data.use_celsius;
+            let api_key = self.api_key.clone();
 
             self.task = Some(ctx.runtime_handle().spawn(async move {
                 let mut ticker = interval(interval_duration,);
@@ -165,7 +177,7 @@ impl Weather
                 loop {
                     ticker.tick().await;
 
-                    match Self::fetch_weather(&location,).await {
+                    match Self::fetch_weather(&location, &api_key,).await {
                         Ok(response,) => {
                             let data = WeatherData::from_response(
                                 response,
@@ -193,10 +205,11 @@ impl Weather
         if let Some(sender,) = &self.sender {
             let location = self.data.location.clone();
             let use_celsius = self.data.use_celsius;
+            let api_key = self.api_key.clone();
             let update_sender = sender.clone();
 
             ctx.runtime_handle().spawn(async move {
-                match Self::fetch_weather(&location,).await {
+                match Self::fetch_weather(&location, &api_key,).await {
                     Ok(response,) => {
                         let data = WeatherData::from_response(response, location, use_celsius,);
                         let _ = update_sender.try_send(WeatherEvent::Updated(data,),);
@@ -225,10 +238,11 @@ impl Weather
                 if let Some(sender,) = &self.sender {
                     let location = self.data.location.clone();
                     let use_celsius = self.data.use_celsius;
+                    let api_key = self.api_key.clone();
                     let update_sender = sender.clone();
 
                     tokio::spawn(async move {
-                        match Self::fetch_weather(&location,).await {
+                        match Self::fetch_weather(&location, &api_key,).await {
                             Ok(response,) => {
                                 let data =
                                     WeatherData::from_response(response, location, use_celsius,);
@@ -245,10 +259,20 @@ impl Weather
         }
     }
 
-    /// Fetch weather data from wttr.in API
-    async fn fetch_weather(location: &str,) -> anyhow::Result<WeatherResponse,>
+    /// Fetch weather data from OpenWeatherMap API
+    async fn fetch_weather(
+        location: &str,
+        api_key: &Option<String,>,
+    ) -> anyhow::Result<WeatherResponse,>
     {
-        let url = format!("https://wttr.in/{}?format=j1", location);
+        let api_key = api_key
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("OpenWeatherMap API key not configured"),)?;
+
+        let url = format!(
+            "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}",
+            location, api_key
+        );
         let response = reqwest::get(&url,).await?.json::<WeatherResponse>().await?;
 
         Ok(response,)

@@ -226,7 +226,15 @@ impl App
                 Task::none()
             }
             Message::Weather(message,) => {
-                self.weather.update(message,);
+                self.weather.update(message.clone(),);
+
+                // If clock is configured to show weather, update it too
+                if self.config.clock.show_weather {
+                    if let modules::weather::Message::Update(weather_data,) = message {
+                        self.clock.update(modules::clock::Message::UpdateWeather(weather_data,),);
+                    }
+                }
+
                 Task::none()
             }
             Message::Battery(message,) => {

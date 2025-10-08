@@ -216,6 +216,7 @@ impl App
                 screenshot: Screenshot::default(),
                 weather: Weather::new(
                     config.weather.location.clone(),
+                    config.weather.api_key.clone(),
                     config.weather.use_celsius,
                     config.weather.update_interval_minutes,
                 ),

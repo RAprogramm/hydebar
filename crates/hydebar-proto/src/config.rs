@@ -282,7 +282,9 @@ fn default_open_settings_on_click() -> bool
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq,)]
 pub struct ClockModuleConfig
 {
-    pub format: String,
+    pub format:       String,
+    #[serde(default)]
+    pub show_weather: bool,
 }
 
 impl Default for ClockModuleConfig
@@ -290,7 +292,7 @@ impl Default for ClockModuleConfig
     fn default() -> Self
     {
         Self {
-            format: "%a %d %b %R".to_string(),
+            format: "%a %d %b %R".to_string(), show_weather: false,
         }
     }
 }
@@ -300,6 +302,7 @@ pub struct WeatherModuleConfig
 {
     #[serde(default = "default_weather_location")]
     pub location:                String,
+    pub api_key:                 Option<String,>,
     #[serde(default = "default_use_celsius")]
     pub use_celsius:             bool,
     #[serde(default = "default_weather_update_interval")]
@@ -312,6 +315,7 @@ impl Default for WeatherModuleConfig
     {
         Self {
             location:                default_weather_location(),
+            api_key:                 None,
             use_celsius:             default_use_celsius(),
             update_interval_minutes: default_weather_update_interval(),
         }

@@ -4,13 +4,16 @@ use chrono::{DateTime, Local};
 use log::error;
 use tokio::{task::JoinHandle, time::interval};
 
-use crate::{ModuleContext, ModuleEventSender, event_bus::ModuleEvent};
+use crate::{
+    ModuleContext, ModuleEventSender, event_bus::ModuleEvent, modules::weather::WeatherData,
+};
 
 /// Clock data for rendering
 #[derive(Debug, Clone,)]
 pub struct ClockData
 {
     pub current_time: DateTime<Local,>,
+    pub weather:      Option<WeatherData,>,
 }
 
 impl ClockData
@@ -18,13 +21,18 @@ impl ClockData
     pub fn new() -> Self
     {
         Self {
-            current_time: Local::now(),
+            current_time: Local::now(), weather: None,
         }
     }
 
     pub fn update(&mut self,)
     {
         self.current_time = Local::now();
+    }
+
+    pub fn update_weather(&mut self, weather: WeatherData,)
+    {
+        self.weather = Some(weather,);
     }
 
     /// Format the time according to chrono format string
@@ -54,6 +62,7 @@ pub enum ClockEvent
 pub enum Message
 {
     Update,
+    UpdateWeather(WeatherData,),
 }
 
 /// Clock module - business logic only, no GUI!
@@ -135,6 +144,9 @@ impl Clock
                         error!("Failed to emit clock event: {}", e);
                     }
                 }
+            }
+            Message::UpdateWeather(weather,) => {
+                self.data.update_weather(weather,);
             }
         }
     }
