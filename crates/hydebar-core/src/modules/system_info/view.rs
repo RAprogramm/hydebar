@@ -242,7 +242,7 @@ where
 #[cfg(all(test, feature = "enable-broken-tests"))]
 mod tests {
     use super::*;
-    use crate::config::{DiskIndicatorConfig, MemoryIndicatorConfig, TemperatureIndicatorConfig};
+    use crate::config::{SystemInfoDisk, SystemInfoMemory, SystemInfoTemperature};
 
     fn data_fixture() -> SystemInfoData {
         SystemInfoData {
@@ -261,11 +261,11 @@ mod tests {
         let config = SystemModuleConfig {
             indicators: vec![SystemIndicator::Cpu, SystemIndicator::Memory],
             cpu: Default::default(),
-            memory: MemoryIndicatorConfig {
+            memory: SystemInfoMemory {
                 warn_threshold: 70,
                 alert_threshold: 90,
             },
-            temperature: TemperatureIndicatorConfig {
+            temperature: SystemInfoTemperature {
                 warn_threshold: 70,
                 alert_threshold: 90,
             },

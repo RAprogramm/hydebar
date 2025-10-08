@@ -594,7 +594,7 @@ impl Outputs {
     /// # Examples
     ///
     /// ```ignore
-    /// outputs.close_menu_if(surface_id, MenuType::AppLauncher, &config);
+    /// outputs.close_menu_if(surface_id, MenuType::Updates, &config);
     /// ```
     pub fn close_menu_if<Message: 'static>(
         &mut self,
@@ -751,7 +751,7 @@ mod tests {
             position: Point::new(0.0, 0.0),
             viewport: (0., 0.),
         };
-        outputs.toggle_menu(id, MenuType::AppLauncher, button_ref, &config);
+        outputs.toggle_menu(id, MenuType::Updates, button_ref, &config);
         assert!(outputs.menu_is_open());
 
         outputs.close_menu(id, &config);
