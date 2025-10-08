@@ -21,7 +21,7 @@ impl App
         modules_def: &[ModuleDef],
         id: Id,
         opacity: f32,
-    ) -> Element<Message,>
+    ) -> Element<'_, Message,>
     {
         let mut row = row!().height(Length::Shrink,).align_y(Alignment::Center,).spacing(4,);
 
@@ -65,7 +65,7 @@ impl App
         module_name: &ModuleName,
         id: Id,
         opacity: f32,
-    ) -> Option<Element<Message,>,>
+    ) -> Option<Element<'_, Message,>,>
     {
         let module = self.get_module_view(module_name, id, opacity,);
 
@@ -127,7 +127,7 @@ impl App
         group: &[ModuleName],
         id: Id,
         opacity: f32,
-    ) -> Option<Element<Message,>,>
+    ) -> Option<Element<'_, Message,>,>
     {
         let modules = group
             .iter()
@@ -207,7 +207,7 @@ impl App
         module_name: &ModuleName,
         id: Id,
         opacity: f32,
-    ) -> Option<(Element<Message,>, Option<OnModulePress<Message,>,>,),>
+    ) -> Option<(Element<'_, Message,>, Option<OnModulePress<Message,>,>,),>
     {
         use hydebar_core::modules::Module;
 

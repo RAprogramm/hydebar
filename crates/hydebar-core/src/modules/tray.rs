@@ -144,7 +144,7 @@ impl TrayModule
         }
     }
 
-    pub fn menu_view(&self, name: &'_ str, opacity: f32,) -> Element<TrayMessage,>
+    pub fn menu_view(&self, name: &'_ str, opacity: f32,) -> Element<'_, TrayMessage,>
     {
         match self
             .service
@@ -160,7 +160,7 @@ impl TrayModule
         }
     }
 
-    fn menu_voice(&self, name: &str, layout: &Layout, opacity: f32,) -> Element<TrayMessage,>
+    fn menu_voice(&self, name: &str, layout: &Layout, opacity: f32,) -> Element<'_, TrayMessage,>
     {
         match &layout.1 {
             LayoutProps {

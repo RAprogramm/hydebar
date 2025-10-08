@@ -72,7 +72,7 @@ impl Notifications
     }
 
     /// Render notification center menu popup.
-    pub fn menu_view(&self, _opacity: f32,) -> Element<NotificationsMessage,>
+    pub fn menu_view(&self, _opacity: f32,) -> Element<'_, NotificationsMessage,>
     {
         let Some(service,) = self.service.as_ref() else {
             return text("Loading notifications...",).into();

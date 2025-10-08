@@ -7,7 +7,7 @@ use std::{
 
 use iced::{
     Subscription, Task,
-    futures::{SinkExt, StreamExt, stream::pending},
+    futures::{StreamExt, stream::pending},
     stream::channel,
 };
 use log::{debug, error, info, warn};

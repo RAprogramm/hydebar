@@ -15,7 +15,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq,)]
-pub(crate) struct Update
+pub struct Update
 {
     pub(super) package: String,
     pub(super) from:    String,

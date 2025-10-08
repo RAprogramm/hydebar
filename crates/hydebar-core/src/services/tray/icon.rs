@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use freedesktop_icons::lookup;
 use iced::widget::{image, svg};
 use linicon_theme::get_icon_theme;
@@ -57,6 +55,7 @@ pub(crate) fn icon_from_name(icon_name: &str,) -> Option<TrayIcon,>
     }
 }
 
+#[cfg(test)]
 fn icon_path_with_theme_fallback<F, G,>(
     theme: Option<String,>,
     mut themed_lookup: F,

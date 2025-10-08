@@ -4,7 +4,7 @@ use dbus::{Battery, PowerProfilesProxy, UPowerDbus};
 use iced::{
     Subscription,
     futures::{
-        SinkExt, Stream, StreamExt,
+        Stream, StreamExt,
         stream::{once, pending, select_all},
         stream_select,
     },

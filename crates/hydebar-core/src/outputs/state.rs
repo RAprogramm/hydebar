@@ -131,7 +131,7 @@ impl Outputs
     /// let unknown = Id::unique();
     /// assert!(outputs.has(unknown).is_none());
     /// ```
-    pub fn has(&self, id: Id,) -> Option<HasOutput,>
+    pub fn has(&self, id: Id,) -> Option<HasOutput<'_,>,>
     {
         self.0.iter().find_map(|(_, info, _,)| {
             if let Some(info,) = info {

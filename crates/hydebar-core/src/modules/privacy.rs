@@ -46,25 +46,22 @@ impl Privacy
     /// Update the module state based on new privacy events.
     pub fn update(&mut self, message: PrivacyMessage,)
     {
-        if let PrivacyMessage::Event(event,) = message {
-            match event {
-                ServiceEvent::Init(service,) => {
-                    self.service = Some(service,);
-                }
-                ServiceEvent::Update(data,) => {
-                    if let Some(privacy,) = self.service.as_mut() {
-                        privacy.update(data,);
-                    }
-                }
-                ServiceEvent::Error(error,) => match error {
-                    PrivacyError::WebcamUnavailable => {
-                        warn!(
-                            "Webcam device unavailable; continuing with PipeWire-only privacy data"
-                        );
-                    }
-                    _ => error!("Privacy service error: {error}"),
-                },
+        let PrivacyMessage::Event(event,) = message;
+        match event {
+            ServiceEvent::Init(service,) => {
+                self.service = Some(service,);
             }
+            ServiceEvent::Update(data,) => {
+                if let Some(privacy,) = self.service.as_mut() {
+                    privacy.update(data,);
+                }
+            }
+            ServiceEvent::Error(error,) => match error {
+                PrivacyError::WebcamUnavailable => {
+                    warn!("Webcam device unavailable; continuing with PipeWire-only privacy data");
+                }
+                _ => error!("Privacy service error: {error}"),
+            },
         }
     }
 }

@@ -159,11 +159,9 @@ impl HyprlandPort for HyprlandClient
             let monitors = monitors
                 .into_iter()
                 .map(|monitor| HyprlandMonitorInfo {
-                    id:                   monitor.id.try_into().unwrap_or(i32::MAX,),
+                    id:                   i32::try_from(monitor.id,).unwrap_or(i32::MAX,),
                     name:                 monitor.name,
-                    special_workspace_id: Some(
-                        monitor.special_workspace.id.try_into().unwrap_or(i32::MAX,),
-                    ),
+                    special_workspace_id: Some(monitor.special_workspace.id,),
                 },)
                 .collect();
 
@@ -174,7 +172,7 @@ impl HyprlandPort for HyprlandClient
                     name:         workspace.name,
                     monitor_id:   workspace.monitor_id.and_then(|id| usize::try_from(id,).ok(),),
                     monitor_name: workspace.monitor,
-                    window_count: workspace.windows.try_into().unwrap_or(u16::MAX,),
+                    window_count: workspace.windows,
                 },)
                 .collect();
 

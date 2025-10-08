@@ -4,7 +4,7 @@ use dbus::{BatteryProxy, BluetoothDbus};
 use iced::{
     Subscription, Task,
     futures::{
-        SinkExt, Stream, StreamExt,
+        Stream, StreamExt,
         stream::{pending, select_all},
         stream_select,
     },

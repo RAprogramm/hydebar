@@ -1,6 +1,6 @@
 use std::{future::Future, pin::Pin};
 
-use iced::futures::channel::mpsc::Sender;
+use iced::futures::{SinkExt, channel::mpsc::Sender};
 
 use super::{PrivacyError, PrivacyService};
 use crate::services::ServiceEvent;
@@ -27,7 +27,9 @@ impl PrivacyEventPublisher for Sender<ServiceEvent<PrivacyService,>,>
     fn send(&mut self, event: ServiceEvent<PrivacyService,>,) -> Self::SendFuture<'_,>
     {
         Box::pin(async move {
-            self.send(event,).await.map_err(|error| PrivacyError::channel(error.to_string(),),)
+            SinkExt::send(self, event,)
+                .await
+                .map_err(|error| PrivacyError::channel(error.to_string(),),)
         },)
     }
 }

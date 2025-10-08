@@ -8,7 +8,6 @@ use crate::config::{AppearanceColor, AppearanceStyle};
 
 /// Builds the module button style closure based on the appearance
 /// configuration.
-#[must_use]
 pub fn module_button_style(
     style: AppearanceStyle,
     opacity: f32,

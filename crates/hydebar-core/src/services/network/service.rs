@@ -2,7 +2,7 @@ use std::{any::TypeId, ops::Deref, time::Duration};
 
 use iced::{
     Subscription, Task,
-    futures::{SinkExt, Stream, StreamExt, TryFutureExt},
+    futures::{Stream, StreamExt, TryFutureExt},
     stream::channel,
 };
 use log::{debug, error, info};

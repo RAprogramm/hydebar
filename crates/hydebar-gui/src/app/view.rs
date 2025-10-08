@@ -45,7 +45,7 @@ impl App
         self.config.appearance.scale_factor
     }
 
-    pub fn view(&self, id: Id,) -> Element<Message,>
+    pub fn view(&self, id: Id,) -> Element<'_, Message,>
     {
         match self.outputs.has(id,) {
             Some(HasOutput::Main,) => {

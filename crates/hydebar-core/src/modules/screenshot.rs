@@ -168,7 +168,7 @@ impl Screenshot
     }
 
     /// Render screenshot actions menu.
-    pub fn menu_view(&self, _opacity: f32,) -> Element<ScreenshotMessage,>
+    pub fn menu_view(&self, _opacity: f32,) -> Element<'_, ScreenshotMessage,>
     {
         let mut content = Column::new().spacing(8,).padding(12,);
 

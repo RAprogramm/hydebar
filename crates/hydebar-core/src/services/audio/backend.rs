@@ -70,13 +70,16 @@ impl AudioBackend for PulseAudioBackend
 }
 
 /// Handle returned by [`AudioBackend::spawn`].
+///
+/// Keeps the listener and commander thread handles alive for the lifetime
+/// of the backend. When dropped, the threads will be aborted.
 #[derive(Debug,)]
 pub struct BackendHandle
 {
     pub(crate) receiver: UnboundedReceiver<BackendEvent,>,
     pub(crate) sender:   UnboundedSender<BackendCommand,>,
-    listener:            Option<JoinHandle<(),>,>,
-    commander:           Option<JoinHandle<(),>,>,
+    _listener:           Option<JoinHandle<(),>,>,
+    _commander:          Option<JoinHandle<(),>,>,
 }
 
 impl BackendHandle
@@ -91,8 +94,8 @@ impl BackendHandle
         Self {
             receiver,
             sender,
-            listener: Some(listener,),
-            commander: Some(commander,),
+            _listener: Some(listener,),
+            _commander: Some(commander,),
         }
     }
 
@@ -105,8 +108,8 @@ impl BackendHandle
         Self {
             receiver,
             sender,
-            listener: None,
-            commander: None,
+            _listener: None,
+            _commander: None,
         }
     }
 

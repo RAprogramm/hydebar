@@ -214,7 +214,7 @@ impl NetworkData
         active_connection: Option<(&str, u8,),>,
         show_more_button: bool,
         opacity: f32,
-    ) -> Element<NetworkMessage,>
+    ) -> Element<'_, NetworkMessage,>
     {
         let main = column!(
             row!(
@@ -321,7 +321,7 @@ impl NetworkData
         id: Id,
         show_more_button: bool,
         opacity: f32,
-    ) -> Element<NetworkMessage,>
+    ) -> Element<'_, NetworkMessage,>
     {
         let main = Column::with_children(
             self.known_connections

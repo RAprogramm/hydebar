@@ -83,7 +83,7 @@ impl NetworkSnapshot
         },)
     }
 
-    fn into_data(&self, previous: Option<&NetworkSnapshot,>,) -> NetworkData
+    fn to_data(&self, previous: Option<&NetworkSnapshot,>,) -> NetworkData
     {
         let elapsed = previous
             .map(|snapshot| self.timestamp.saturating_duration_since(snapshot.timestamp,),)
@@ -160,7 +160,7 @@ impl SystemInfoSampler
         let now = Instant::now();
         let observation = NetworkSnapshot::capture(&self.networks, now,);
         let network =
-            observation.as_ref().map(|snapshot| snapshot.into_data(self.last_network.as_ref(),),);
+            observation.as_ref().map(|snapshot| snapshot.to_data(self.last_network.as_ref(),),);
         self.last_network = observation;
 
         let cpu_usage = self.system.global_cpu_usage().floor() as u32;
@@ -236,7 +236,7 @@ mod tests
             timestamp,
         };
 
-        let data = snapshot.into_data(Some(&previous,),);
+        let data = snapshot.to_data(Some(&previous,),);
 
         assert_eq!(data.download_speed, 0);
         assert_eq!(data.upload_speed, 0);

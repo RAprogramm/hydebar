@@ -31,84 +31,94 @@ impl SettingsCommandExt for Settings
 {
     fn spawn_audio_command(&self, command: AudioCommand,) -> bool
     {
-        spawn_optional_event_command(
-            self.runtime(),
-            self.sender(),
-            self.audio.clone(),
+        spawn_optional_event_command(OptionalEventCommandParams {
+            runtime: self.runtime(),
+            sender: self.sender(),
+            service: self.audio.clone(),
             command,
-            AudioService::run_command,
-            Message::Audio,
-            AudioMessage::Event,
-            "audio",
-        )
+            runner: AudioService::run_command,
+            message_ctor: Message::Audio,
+            event_ctor: AudioMessage::Event,
+            service_name: "audio",
+        },)
     }
 
     fn spawn_brightness_command(&self, command: BrightnessCommand,) -> bool
     {
-        spawn_event_command(
-            self.runtime(),
-            self.sender(),
-            self.brightness.clone(),
+        spawn_event_command(EventCommandParams {
+            runtime: self.runtime(),
+            sender: self.sender(),
+            service: self.brightness.clone(),
             command,
-            BrightnessService::run_command,
-            Message::Brightness,
-            BrightnessMessage::Event,
-            "brightness",
-        )
+            runner: BrightnessService::run_command,
+            message_ctor: Message::Brightness,
+            event_ctor: BrightnessMessage::Event,
+            service_name: "brightness",
+        },)
     }
 
     fn spawn_network_command(&self, command: NetworkCommand,) -> bool
     {
-        spawn_event_command(
-            self.runtime(),
-            self.sender(),
-            self.network.clone(),
+        spawn_event_command(EventCommandParams {
+            runtime: self.runtime(),
+            sender: self.sender(),
+            service: self.network.clone(),
             command,
-            NetworkService::run_command,
-            Message::Network,
-            NetworkMessage::Event,
-            "network",
-        )
+            runner: NetworkService::run_command,
+            message_ctor: Message::Network,
+            event_ctor: NetworkMessage::Event,
+            service_name: "network",
+        },)
     }
 
     fn spawn_bluetooth_command(&self, command: BluetoothCommand,) -> bool
     {
-        spawn_optional_event_command(
-            self.runtime(),
-            self.sender(),
-            self.bluetooth.clone(),
+        spawn_optional_event_command(OptionalEventCommandParams {
+            runtime: self.runtime(),
+            sender: self.sender(),
+            service: self.bluetooth.clone(),
             command,
-            BluetoothService::run_command,
-            Message::Bluetooth,
-            BluetoothMessage::Event,
-            "bluetooth",
-        )
+            runner: BluetoothService::run_command,
+            message_ctor: Message::Bluetooth,
+            event_ctor: BluetoothMessage::Event,
+            service_name: "bluetooth",
+        },)
     }
 
     fn spawn_upower_command(&self, command: PowerProfileCommand,) -> bool
     {
-        spawn_event_command(
-            self.runtime(),
-            self.sender(),
-            self.upower.clone(),
+        spawn_event_command(EventCommandParams {
+            runtime: self.runtime(),
+            sender: self.sender(),
+            service: self.upower.clone(),
             command,
-            UPowerService::run_command,
-            Message::UPower,
-            UPowerMessage::Event,
-            "upower",
-        )
+            runner: UPowerService::run_command,
+            message_ctor: Message::UPower,
+            event_ctor: UPowerMessage::Event,
+            service_name: "upower",
+        },)
     }
 }
 
-fn spawn_event_command<S, Command, Fut, Msg,>(
-    runtime: Option<Handle,>,
-    sender: Option<crate::ModuleEventSender<Message,>,>,
-    service: Option<S,>,
-    command: Command,
-    runner: fn(S, Command,) -> Fut,
+struct EventCommandParams<S, Command, Fut, Msg,>
+where
+    S: Send + Clone + ReadOnlyService + 'static,
+    Command: Send + 'static,
+    Fut: std::future::Future<Output = ServiceEvent<S,>,> + Send + 'static,
+    Msg: Send + 'static,
+{
+    runtime:      Option<Handle,>,
+    sender:       Option<crate::ModuleEventSender<Message,>,>,
+    service:      Option<S,>,
+    command:      Command,
+    runner:       fn(S, Command,) -> Fut,
     message_ctor: fn(Msg,) -> Message,
-    event_ctor: fn(ServiceEvent<S,>,) -> Msg,
-    service_name: &str,
+    event_ctor:   fn(ServiceEvent<S,>,) -> Msg,
+    service_name: &'static str,
+}
+
+fn spawn_event_command<S, Command, Fut, Msg,>(
+    params: EventCommandParams<S, Command, Fut, Msg,>,
 ) -> bool
 where
     S: Send + Clone + ReadOnlyService + 'static,
@@ -116,8 +126,14 @@ where
     Fut: std::future::Future<Output = ServiceEvent<S,>,> + Send + 'static,
     Msg: Send + 'static,
 {
-    if let (Some(handle,), Some(sender,), Some(service,),) = (runtime, sender, service,) {
-        let service_name = service_name.to_string();
+    if let (Some(handle,), Some(sender,), Some(service,),) =
+        (params.runtime, params.sender, params.service,)
+    {
+        let service_name = params.service_name.to_string();
+        let runner = params.runner;
+        let message_ctor = params.message_ctor;
+        let event_ctor = params.event_ctor;
+        let command = params.command;
         handle.spawn(async move {
             let event = runner(service, command,).await;
             if let Err(err,) = sender.try_send(message_ctor(event_ctor(event,),),) {
@@ -126,20 +142,33 @@ where
         },);
         true
     } else {
-        warn!("{service_name} command ignored because runtime, sender, or service is unavailable");
+        warn!(
+            "{} command ignored because runtime, sender, or service is unavailable",
+            params.service_name
+        );
         false
     }
 }
 
-fn spawn_optional_event_command<S, Command, Fut, Msg,>(
-    runtime: Option<Handle,>,
-    sender: Option<crate::ModuleEventSender<Message,>,>,
-    service: Option<S,>,
-    command: Command,
-    runner: fn(S, Command,) -> Fut,
+struct OptionalEventCommandParams<S, Command, Fut, Msg,>
+where
+    S: Send + Clone + ReadOnlyService + 'static,
+    Command: Send + 'static,
+    Fut: std::future::Future<Output = Option<ServiceEvent<S,>,>,> + Send + 'static,
+    Msg: Send + 'static,
+{
+    runtime:      Option<Handle,>,
+    sender:       Option<crate::ModuleEventSender<Message,>,>,
+    service:      Option<S,>,
+    command:      Command,
+    runner:       fn(S, Command,) -> Fut,
     message_ctor: fn(Msg,) -> Message,
-    event_ctor: fn(ServiceEvent<S,>,) -> Msg,
-    service_name: &str,
+    event_ctor:   fn(ServiceEvent<S,>,) -> Msg,
+    service_name: &'static str,
+}
+
+fn spawn_optional_event_command<S, Command, Fut, Msg,>(
+    params: OptionalEventCommandParams<S, Command, Fut, Msg,>,
 ) -> bool
 where
     S: Send + Clone + ReadOnlyService + 'static,
@@ -147,8 +176,14 @@ where
     Fut: std::future::Future<Output = Option<ServiceEvent<S,>,>,> + Send + 'static,
     Msg: Send + 'static,
 {
-    if let (Some(handle,), Some(sender,), Some(service,),) = (runtime, sender, service,) {
-        let service_name = service_name.to_string();
+    if let (Some(handle,), Some(sender,), Some(service,),) =
+        (params.runtime, params.sender, params.service,)
+    {
+        let service_name = params.service_name.to_string();
+        let runner = params.runner;
+        let message_ctor = params.message_ctor;
+        let event_ctor = params.event_ctor;
+        let command = params.command;
         handle.spawn(async move {
             if let Some(event,) = runner(service, command,).await
                 && let Err(err,) = sender.try_send(message_ctor(event_ctor(event,),),)
@@ -158,7 +193,10 @@ where
         },);
         true
     } else {
-        warn!("{service_name} command ignored because runtime, sender, or service is unavailable");
+        warn!(
+            "{} command ignored because runtime, sender, or service is unavailable",
+            params.service_name
+        );
         false
     }
 }
