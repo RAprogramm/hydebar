@@ -70,33 +70,32 @@ impl App
                     config,
                     impact,
                 } = update;
-                let new_config = *config;
 
-                info!("New config applied: {new_config:?}");
+                info!("New config applied: {config:?}");
                 debug!("Config impact: {impact:?}");
 
                 let mut tasks = Vec::new();
 
                 let outputs_need_sync = impact.outputs_changed
                     || impact.position_changed
-                    || self.config.appearance.style != new_config.appearance.style
-                    || self.config.appearance.scale_factor != new_config.appearance.scale_factor;
+                    || self.config.appearance.style != config.appearance.style
+                    || self.config.appearance.scale_factor != config.appearance.scale_factor;
 
                 if outputs_need_sync {
                     warn!("Outputs or layout changed, syncing");
                     tasks.push(self.outputs.sync(
-                        new_config.appearance.style,
-                        &new_config.outputs,
-                        new_config.position,
-                        &new_config,
+                        config.appearance.style,
+                        &config.outputs,
+                        config.position,
+                        &config,
                     ),);
                 }
 
                 if impact.custom_modules_changed {
-                    self.update_custom_modules(&new_config, &impact,);
+                    self.update_custom_modules(&config, &impact,);
                 }
 
-                self.config = new_config;
+                self.config = config;
 
                 self.register_modules();
 

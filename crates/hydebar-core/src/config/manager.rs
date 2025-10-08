@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     path::PathBuf,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 
 use hydebar_proto::config::{Config, ConfigValidationError, CustomModuleDef, ModuleName};
@@ -42,7 +42,7 @@ impl ConfigImpact
 pub struct ConfigApplied
 {
     /// The fully validated configuration that was applied.
-    pub config: Box<Config,>,
+    pub config: Arc<Config,>,
     /// The impact of applying the configuration.
     pub impact: ConfigImpact,
 }
@@ -232,7 +232,7 @@ impl ConfigManager
         *guard = updated.clone();
 
         Ok(ConfigApplied {
-            config: Box::new(updated,),
+            config: Arc::new(updated,),
             impact,
         },)
     }

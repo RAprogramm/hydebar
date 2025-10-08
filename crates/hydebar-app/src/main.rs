@@ -113,8 +113,9 @@ async fn run() -> Result<(), MainError,>
         error!("Panic: {info} \n {b}");
     },),);
 
-    let (config, config_path,) = get_config(args.config_path,)?;
-    let config_manager = Arc::new(ConfigManager::new(config.clone(),),);
+    let (raw_config, config_path,) = get_config(args.config_path,)?;
+    let config = Arc::new(raw_config,);
+    let config_manager = Arc::new(ConfigManager::new((*config).clone(),),);
 
     logger.set_new_spec(get_log_spec(&config.log_level,),);
 
