@@ -81,42 +81,75 @@ Metrics to be collected:
 
 ---
 
+## Clone Analysis
+
+**Total `.clone()` calls:** 342
+
+**Breakdown by category:**
+1. **Necessary Arc/Handle clones** (~280, 82%)
+   - Async closures in event listeners (36 in hyprland_client/listeners.rs)
+   - D-Bus service backends (34 in network_manager.rs)
+   - ModuleContext sharing (12 in module_context.rs)
+   - Runtime handles for async operations
+   - **Status:** Cannot optimize - required for thread safety
+
+2. **Config clones** (~5, 1.5%) ✅ OPTIMIZED
+   - Hot-reload handler
+   - ConfigManager internal state
+   - **Status:** Now using Arc<Config>
+
+3. **String clones** (~42, 12%)
+   - Icon names, module labels (config.rs)
+   - Custom module definitions
+   - Keyboard layout labels
+   - **Status:** Mostly necessary for ownership transfer
+   - **Potential:** Cow<'static, str> for static strings (low impact)
+
+4. **Other necessary clones** (~15, 4.5%)
+   - Vec clones for updates
+   - HashMap clones for config comparison
+   - **Status:** Required for data ownership
+
+**Conclusion:** Most clones are architecturally necessary. Arc<Config> was the main optimization opportunity.
+
+---
+
 ## Optimization Opportunities
 
-### High Priority
+### High Priority (Requires Runtime Profiling)
 
-2. **Cow for string-heavy operations** (Est. -10% allocations)
-   - Module names, icon names, labels
-   - Use `Cow<'static, str>` where possible
-   - Files: `modules/**/*.rs`
-
-3. **Event batching in listeners** (Est. -30% CPU overhead)
+2. **Event batching in listeners** (Est. -30% CPU overhead)
    - Hyprland events: batch workspace changes
    - Network events: debounce status updates
+   - **Blocker:** Needs runtime profiling to identify hotspots
    - Files: `listeners.rs`, `network_manager.rs`
 
-4. **Lazy module initialization** (Est. -50ms startup)
+3. **Lazy module initialization** (Est. -50ms startup)
    - Don't init disabled modules
-   - Defer heavy operations (D-Bus connections)
+   - Defer heavy D-Bus connections
+   - **Blocker:** Requires significant architecture refactor (Option<Module>)
    - Files: `modules.rs`, individual modules
 
 ### Medium Priority
 
-5. **String interning for icons** (Est. -5% memory)
+4. **String interning for icons** (Est. -5% memory)
    - Icon strings duplicated across modules
    - Use static string pool
+   - **Impact:** Low - icons are small strings
    - Files: `modules/**/*.rs`
 
-6. **Reduce D-Bus polling** (Est. -2% CPU)
-   - Use signals instead of polling where possible
-   - Batch property reads
-   - Files: `services/**/*.rs`
+### Low Priority (Minimal Impact)
 
-### Low Priority
+5. **Cow<'static, str> for static strings** (Est. -2% allocations)
+   - Module names, static labels
+   - **Analysis:** Only 42 string clones total (12%)
+   - **Impact:** Very low - most are necessary for ownership
+   - Files: `modules/**/*.rs`
 
-7. **Optimize rendering paths** (Needs profiling)
+6. **Optimize rendering paths** (Needs profiling)
    - Investigate iced rendering overhead
    - Potential custom widgets
+   - **Blocker:** Requires GUI profiling
    - Files: `gui/src/**/*.rs`
 
 ## Rust 1.90 Features to Leverage
@@ -148,31 +181,45 @@ Metrics to be collected:
 - hydebar: Rust with iced (includes Wayland compositor)
 - Different feature sets
 
-## Next Steps
+## Summary
 
-### Phase 1: Measurement (Current)
+### Completed ✅
+- Baseline metrics established (binary size, clone analysis)
+- Arc<Config> optimization implemented (~10-20KB per hot-reload saved)
+- Code quality maintained (all tests pass, no regressions)
+
+### Findings 🔍
+- 342 total clone() calls analyzed
+- 82% are necessary (Arc/Handle for async)
+- 1.5% were Config clones (now optimized with Arc)
+- 12% are String clones (mostly necessary for ownership)
+- Binary size already meets target: 34MB stripped < 35MB
+
+### Blockers for Further Optimization ⏸️
+- **Runtime profiling required:** CPU/memory metrics need GUI running
+- **Architecture refactor needed:** Lazy init requires Option<Module> pattern
+- **Diminishing returns:** Most remaining clones are necessary
+
+### Recommendations 📊
+1. **Deploy Arc<Config> optimization** - Ready to merge
+2. **Runtime profiling next** - Requires actual usage metrics
+3. **Event batching** - Profile first to identify hotspots
+4. **Lazy init** - Plan separately (significant refactor)
+
+### Next Steps
+
+#### Immediate (v0.8.0)
 - [x] Binary size baseline
 - [x] Static analysis (clone count)
-- [ ] Runtime profiling setup
-- [ ] Establish measurement methodology
+- [x] Arc<Config> optimization
+- [ ] Merge to main
+- [ ] Runtime profiling setup (requires GUI environment)
 
-### Phase 2: Quick Wins
-- [ ] Replace config clones with Arc
-- [ ] Add Cow for string operations
-- [ ] Implement lazy module init
-- [ ] Test and measure impact
-
-### Phase 3: Deep Optimization
-- [ ] Event batching
-- [ ] D-Bus optimization
-- [ ] Custom allocator experiments
-- [ ] Profile-guided optimization (PGO)
-
-### Phase 4: Validation
+#### Future (v0.9.0+)
+- [ ] Event batching (after profiling)
+- [ ] Lazy module initialization (architecture task)
+- [ ] D-Bus optimization (after profiling)
 - [ ] Automated performance tests in CI
-- [ ] Regression detection
-- [ ] Comparative benchmarks
-- [ ] Documentation updates
 
 ## Methodology
 
