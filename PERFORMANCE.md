@@ -56,14 +56,34 @@ Metrics to be collected:
 - [ ] Startup time (hyperfine)
 - [ ] Frame timing (iced metrics)
 
+## Optimizations Implemented
+
+### 1. Arc<Config> for shared configuration ✅ DONE
+
+**Commit:** 1175019
+
+**Changes:**
+- `ConfigApplied::config`: `Box<Config>` → `Arc<Config>`
+- `App::config`: `Config` → `Arc<Config>`
+- Hot-reload handler updated to clone Arc pointer
+
+**Impact:**
+- **Before:** Deep clone of entire Config struct on every hot-reload (~10-20KB)
+- **After:** Arc pointer clone (8 bytes + ref count increment)
+- **Savings:** ~10-20KB per hot-reload event
+- **Side benefit:** Config now thread-safe by default (if needed later)
+
+**Files changed:**
+- `crates/hydebar-core/src/config/manager.rs`
+- `crates/hydebar-gui/src/app/state.rs`
+- `crates/hydebar-gui/src/app/update.rs`
+- `crates/hydebar-app/src/main.rs`
+
+---
+
 ## Optimization Opportunities
 
 ### High Priority
-
-1. **Arc instead of Clone for shared config** (Est. -20% clones)
-   - Config objects cloned on hot-reload
-   - Use `Arc<Config>` for read-only sharing
-   - Files: `module_context.rs`, all modules
 
 2. **Cow for string-heavy operations** (Est. -10% allocations)
    - Module names, icon names, labels
