@@ -213,13 +213,14 @@ cargo build --release
 
 ### Contributing
 
-Contributions are welcome! See [ROADMAP.md](ROADMAP.md) for planned features.
+Contributions are welcome! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 
-Areas for contribution:
-- 🎨 New themes
-- 📚 Documentation improvements
-- 🐛 Bug fixes
-- ✨ Feature implementations
+Quick links:
+- 🎨 [Submit new themes](docs/CONTRIBUTING.md#theme-development)
+- 🐛 [Report bugs](docs/CONTRIBUTING.md#report-bugs)
+- ✨ [Request features](docs/CONTRIBUTING.md#request-features)
+- 💻 [Development workflow](docs/CONTRIBUTING.md#development-workflow)
+- 📋 [Roadmap](ROADMAP.md)
 
 ---
 
