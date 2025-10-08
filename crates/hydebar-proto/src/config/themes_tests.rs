@@ -238,3 +238,28 @@ fn tokyo_night_light_colors()
     let appearance = PresetTheme::TokyoNightLight.to_appearance();
     assert_eq!(appearance.background_color, AppearanceColor::Simple(HexColor::rgb(213, 214, 219)));
 }
+
+#[test]
+fn all_themes_have_animations_enabled()
+{
+    let themes = vec![
+        PresetTheme::CatppuccinMocha,
+        PresetTheme::CatppuccinMacchiato,
+        PresetTheme::CatppuccinFrappe,
+        PresetTheme::CatppuccinLatte,
+        PresetTheme::Dracula,
+        PresetTheme::Nord,
+        PresetTheme::GruvboxDark,
+        PresetTheme::GruvboxLight,
+        PresetTheme::TokyoNight,
+        PresetTheme::TokyoNightStorm,
+        PresetTheme::TokyoNightLight,
+    ];
+
+    for theme in themes {
+        let appearance = theme.to_appearance();
+        assert!(appearance.animations.enabled);
+        assert_eq!(appearance.animations.menu_fade_duration_ms, 200);
+        assert_eq!(appearance.animations.hover_duration_ms, 100);
+    }
+}

@@ -146,82 +146,81 @@ impl App
                     })
                     .into()
             }
-            Some(HasOutput::Menu(menu_info,),) => match menu_info {
-                Some((MenuType::Updates, button_ui_ref,),) => menu_wrapper(
-                    id,
-                    self.updates
-                        .menu_view(id, self.config.appearance.menu.opacity,)
-                        .map(Message::Updates,),
-                    MenuSize::Small,
-                    *button_ui_ref,
-                    self.config.position,
-                    self.config.appearance.style,
-                    self.config.appearance.menu.opacity,
-                    self.config.appearance.menu.backdrop,
-                    Message::None,
-                    Message::CloseMenu(id,),
-                ),
-                Some((MenuType::Tray(name,), button_ui_ref,),) => menu_wrapper(
-                    id,
-                    self.tray
-                        .menu_view(name, self.config.appearance.menu.opacity,)
-                        .map(Message::Tray,),
-                    MenuSize::Small,
-                    *button_ui_ref,
-                    self.config.position,
-                    self.config.appearance.style,
-                    self.config.appearance.menu.opacity,
-                    self.config.appearance.menu.backdrop,
-                    Message::None,
-                    Message::CloseMenu(id,),
-                ),
-                Some((MenuType::Settings, button_ui_ref,),) => menu_wrapper(
-                    id,
-                    self.settings
-                        .menu_view(
-                            id,
-                            &self.config.settings,
-                            self.config.appearance.menu.opacity,
-                            self.config.position,
-                        )
-                        .map(Message::Settings,),
-                    MenuSize::Medium,
-                    *button_ui_ref,
-                    self.config.position,
-                    self.config.appearance.style,
-                    self.config.appearance.menu.opacity,
-                    self.config.appearance.menu.backdrop,
-                    Message::None,
-                    Message::CloseMenu(id,),
-                ),
-                Some((MenuType::MediaPlayer, button_ui_ref,),) => menu_wrapper(
-                    id,
-                    self.media_player
-                        .menu_view(&self.config.media_player, self.config.appearance.menu.opacity,)
-                        .map(Message::MediaPlayer,),
-                    MenuSize::Large,
-                    *button_ui_ref,
-                    self.config.position,
-                    self.config.appearance.style,
-                    self.config.appearance.menu.opacity,
-                    self.config.appearance.menu.backdrop,
-                    Message::None,
-                    Message::CloseMenu(id,),
-                ),
-                Some((MenuType::SystemInfo, button_ui_ref,),) => menu_wrapper(
-                    id,
-                    self.system_info.menu_view().map(Message::SystemInfo,),
-                    MenuSize::Medium,
-                    *button_ui_ref,
-                    self.config.position,
-                    self.config.appearance.style,
-                    self.config.appearance.menu.opacity,
-                    self.config.appearance.menu.backdrop,
-                    Message::None,
-                    Message::CloseMenu(id,),
-                ),
-                None => Row::new().into(),
-            },
+            Some(HasOutput::Menu(menu_info,),) => {
+                let animated_opacity = self.outputs.get_menu_opacity(id,);
+                match menu_info {
+                    Some((MenuType::Updates, button_ui_ref,),) => menu_wrapper(
+                        id,
+                        self.updates.menu_view(id, animated_opacity,).map(Message::Updates,),
+                        MenuSize::Small,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id,),
+                    ),
+                    Some((MenuType::Tray(name,), button_ui_ref,),) => menu_wrapper(
+                        id,
+                        self.tray.menu_view(name, animated_opacity,).map(Message::Tray,),
+                        MenuSize::Small,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id,),
+                    ),
+                    Some((MenuType::Settings, button_ui_ref,),) => menu_wrapper(
+                        id,
+                        self.settings
+                            .menu_view(
+                                id,
+                                &self.config.settings,
+                                animated_opacity,
+                                self.config.position,
+                            )
+                            .map(Message::Settings,),
+                        MenuSize::Medium,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id,),
+                    ),
+                    Some((MenuType::MediaPlayer, button_ui_ref,),) => menu_wrapper(
+                        id,
+                        self.media_player
+                            .menu_view(&self.config.media_player, animated_opacity,)
+                            .map(Message::MediaPlayer,),
+                        MenuSize::Large,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id,),
+                    ),
+                    Some((MenuType::SystemInfo, button_ui_ref,),) => menu_wrapper(
+                        id,
+                        self.system_info.menu_view().map(Message::SystemInfo,),
+                        MenuSize::Medium,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id,),
+                    ),
+                    None => Row::new().into(),
+                }
+            }
             None => Row::new().into(),
         }
     }

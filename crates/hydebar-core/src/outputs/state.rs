@@ -507,6 +507,40 @@ impl Outputs
         },)
     }
 
+    /// Get the animated opacity for a menu window.
+    pub fn get_menu_opacity(&self, id: Id,) -> f32
+    {
+        self.0
+            .iter()
+            .find_map(|(_, shell_info, _,)| {
+                shell_info.as_ref().and_then(|shell_info| {
+                    if shell_info.menu.id == id {
+                        Some(shell_info.menu.get_opacity(),)
+                    } else {
+                        None
+                    }
+                },)
+            },)
+            .unwrap_or(0.0,)
+    }
+
+    /// Update menu animations. Returns true if any menu is currently animating.
+    pub fn tick_menu_animations(
+        &mut self,
+        animation_config: &crate::config::AnimationConfig,
+    ) -> bool
+    {
+        let mut is_animating = false;
+        for (_, shell_info, _,) in &mut self.0 {
+            if let Some(shell_info,) = shell_info {
+                if shell_info.menu.tick_animation(animation_config,) {
+                    is_animating = true;
+                }
+            }
+        }
+        is_animating
+    }
+
     /// Toggle the menu associated with the provided surface identifier.
     ///
     /// # Examples

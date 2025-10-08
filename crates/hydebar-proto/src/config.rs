@@ -9,7 +9,9 @@ mod themes_tests;
 
 use std::collections::HashMap;
 
-pub use appearance::{Appearance, AppearanceColor, AppearanceStyle, MenuAppearance};
+pub use appearance::{
+    AnimationConfig, Appearance, AppearanceColor, AppearanceStyle, MenuAppearance,
+};
 pub use modules::{ModuleDef, ModuleName, Modules, Outputs, Position};
 use serde::Deserialize;
 pub use serde_helpers::RegexCfg;
