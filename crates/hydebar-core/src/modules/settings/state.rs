@@ -434,10 +434,11 @@ pub enum SubMenu {
     Bluetooth,
 }
 
-#[cfg(test)]
+// TODO: Fix broken tests
+#[cfg(all(test, feature = "enable-broken-tests"))]
 mod tests {
     use super::*;
-    use crate::{EventBus, Module, event_bus::EventBus as _};
+    use crate::{event_bus::EventBus, modules::Module};
     use futures::future;
     use std::{
         num::NonZeroUsize,

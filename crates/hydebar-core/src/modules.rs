@@ -28,7 +28,7 @@ pub enum OnModulePress<M> {
 }
 
 /// Module registration and operation errors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ModuleError {
     EventBus(EventBusError),
     Registration { reason: Cow<'static, str> },

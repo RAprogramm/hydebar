@@ -12,3 +12,7 @@ flexi_logger.workspace = true
 log.workspace = true
 tokio.workspace = true
 wayland-client.workspace = true
+
+[dev-dependencies]
+# Enable test utilities from hydebar-core
+hydebar-core = { path = "../hydebar-core", features = ["test-utils"] }

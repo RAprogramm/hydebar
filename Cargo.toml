@@ -29,7 +29,7 @@ chrono = "0.4"
 hyprland = "0.4.0-beta.2"
 serde = { version = "1.0", features = ["derive"] }
 sysinfo = "0.37"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "test-util"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 libpulse-binding = { version = "2", features = ["pa_v15"] }
 log = { version = "0.4", features = ["serde"] }

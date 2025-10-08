@@ -3,7 +3,7 @@ use iced::{
     widget::{Text, text},
 };
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub enum Icons {
     #[default]
     None,

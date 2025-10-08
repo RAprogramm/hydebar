@@ -1,4 +1,5 @@
-#![cfg(test)]
+// Module available for both internal tests and cross-crate testing via feature flag
+#![cfg(any(test, feature = "test-utils"))]
 
 use std::sync::{
     Mutex,
@@ -14,13 +15,13 @@ use hydebar_proto::ports::hyprland::{
 use tokio_stream;
 
 #[derive(Debug)]
-pub(crate) struct MockHyprlandPort {
-    pub(crate) active_window: Mutex<Option<HyprlandWindowInfo>>,
-    pub(crate) workspace_snapshot: Mutex<HyprlandWorkspaceSnapshot>,
-    pub(crate) keyboard_state: Mutex<HyprlandKeyboardState>,
-    pub(crate) change_workspace_calls: AtomicUsize,
-    pub(crate) toggle_special_calls: AtomicUsize,
-    pub(crate) switch_layout_calls: AtomicUsize,
+pub struct MockHyprlandPort {
+    pub active_window: Mutex<Option<HyprlandWindowInfo>>,
+    pub workspace_snapshot: Mutex<HyprlandWorkspaceSnapshot>,
+    pub keyboard_state: Mutex<HyprlandKeyboardState>,
+    pub change_workspace_calls: AtomicUsize,
+    pub toggle_special_calls: AtomicUsize,
+    pub switch_layout_calls: AtomicUsize,
 }
 
 impl Default for MockHyprlandPort {
@@ -58,7 +59,7 @@ impl Default for MockHyprlandPort {
 }
 
 impl MockHyprlandPort {
-    pub(crate) fn with_active_window(title: &str, class: &str) -> Self {
+    pub fn with_active_window(title: &str, class: &str) -> Self {
         let mut port = Self::default();
         *port
             .active_window
@@ -70,15 +71,15 @@ impl MockHyprlandPort {
         port
     }
 
-    pub(crate) fn workspace_calls(&self) -> usize {
+    pub fn workspace_calls(&self) -> usize {
         self.change_workspace_calls.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn toggle_special_calls(&self) -> usize {
+    pub fn toggle_special_calls(&self) -> usize {
         self.toggle_special_calls.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn switch_layout_calls(&self) -> usize {
+    pub fn switch_layout_calls(&self) -> usize {
         self.switch_layout_calls.load(Ordering::SeqCst)
     }
 }

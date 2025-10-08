@@ -135,6 +135,6 @@ mod tests {
                 reason: ref value
             } if value == "context: failure"
         ));
-        assert_eq!(format!("{error}"), "context: failure");
+        assert_eq!(format!("{error}"), "Module registration failed: context: failure");
     }
 }

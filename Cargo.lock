@@ -2280,6 +2280,7 @@ dependencies = [
  "chrono",
  "freedesktop-icons",
  "futures",
+ "hex_color",
  "hydebar-proto",
  "hyprland",
  "iced",

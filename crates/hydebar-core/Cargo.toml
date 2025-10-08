@@ -36,3 +36,8 @@ zbus.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+hex_color = "3"
+
+[features]
+# Enable test utilities for integration testing
+test-utils = []

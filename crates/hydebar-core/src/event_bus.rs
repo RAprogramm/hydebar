@@ -58,7 +58,7 @@ impl EventBusInner {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EventBusError {
     QueueFull { capacity: usize },
     Poisoned,

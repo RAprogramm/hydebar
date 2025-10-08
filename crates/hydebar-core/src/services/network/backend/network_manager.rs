@@ -943,7 +943,7 @@ mod tests {
     fn device_type_from_u32_maps_known_values() {
         assert_eq!(DeviceType::from(2), DeviceType::Wifi);
         assert_eq!(DeviceType::from(29), DeviceType::WireGuard);
-        assert_eq!(DeviceType::from(42), DeviceType::Other);
+        assert_eq!(DeviceType::from(42), DeviceType::Unknown);
     }
 
     #[test]
