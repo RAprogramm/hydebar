@@ -2,6 +2,16 @@
 
 Thank you for your interest in contributing to hydebar! This guide will help you get started.
 
+## Development Philosophy
+
+This project follows the [Rust Manifest](https://github.com/RAprogramm/RustManifest) - a set of task-oriented development principles:
+
+- **Clear scope**: Define what changes and what doesn't
+- **Acceptance criteria**: DoD (Definition of Done) before starting work
+- **Plan first**: Present plan → Get ACK → Implement
+- **Quality gates**: All code must pass `cargo check && cargo test && cargo fmt && cargo clippy`
+- **No version changes**: Don't modify crate versions, CHANGELOG, or Cargo.lock without separate task
+
 ## Code of Conduct
 
 Be respectful, constructive, and professional. We're building a tool for the community.
