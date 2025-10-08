@@ -125,7 +125,7 @@ impl PrivacyService
     where
         P: PrivacyEventPublisher + Send,
     {
-        let pipewire = PipewireListener::default();
+        let pipewire = PipewireListener;
         let webcam = WebcamWatcher::new(Path::new(WEBCAM_DEVICE_PATH,),);
         Self::start_listening_with_sources(state, publisher, &pipewire, &webcam,).await
     }
@@ -310,10 +310,10 @@ fn is_device_in_use(target: &str,) -> i32
 
             if let Ok(fd_entries,) = fs::read_dir(pid_path.join("fd",),) {
                 for fd_entry in fd_entries.flatten() {
-                    if let Ok(link_path,) = fs::read_link(fd_entry.path(),) {
-                        if link_path == Path::new(target,) {
-                            used_by += 1;
-                        }
+                    if let Ok(link_path,) = fs::read_link(fd_entry.path(),)
+                        && link_path == Path::new(target,)
+                    {
+                        used_by += 1;
                     }
                 }
             }

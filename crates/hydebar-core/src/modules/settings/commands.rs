@@ -150,10 +150,10 @@ where
     if let (Some(handle,), Some(sender,), Some(service,),) = (runtime, sender, service,) {
         let service_name = service_name.to_string();
         handle.spawn(async move {
-            if let Some(event,) = runner(service, command,).await {
-                if let Err(err,) = sender.try_send(message_ctor(event_ctor(event,),),) {
-                    warn!("failed to publish {service_name} command event: {err}");
-                }
+            if let Some(event,) = runner(service, command,).await
+                && let Err(err,) = sender.try_send(message_ctor(event_ctor(event,),),)
+            {
+                warn!("failed to publish {service_name} command event: {err}");
             }
         },);
         true

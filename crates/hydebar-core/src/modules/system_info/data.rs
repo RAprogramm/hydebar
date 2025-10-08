@@ -125,6 +125,14 @@ pub struct SystemInfoSampler
     last_network: Option<NetworkSnapshot,>,
 }
 
+impl Default for SystemInfoSampler
+{
+    fn default() -> Self
+    {
+        Self::new()
+    }
+}
+
 impl SystemInfoSampler
 {
     /// Instantiate a sampler with refreshed sysinfo collections.

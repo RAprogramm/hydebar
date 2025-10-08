@@ -414,11 +414,11 @@ where
     enum ThemeOrAppearance
     {
         Theme(PresetTheme,),
-        Appearance(Appearance,),
+        Appearance(Box<Appearance,>,),
     }
 
     match ThemeOrAppearance::deserialize(deserializer,)? {
         ThemeOrAppearance::Theme(theme,) => Ok(theme.to_appearance(),),
-        ThemeOrAppearance::Appearance(appearance,) => Ok(appearance,),
+        ThemeOrAppearance::Appearance(appearance,) => Ok(*appearance,),
     }
 }

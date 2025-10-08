@@ -228,7 +228,7 @@ impl ConfigManager
     {
         let mut guard = self.state.write().map_err(|_| ConfigManagerError::Poisoned,)?;
 
-        let impact = compute_impact(&*guard, &updated,);
+        let impact = compute_impact(&guard, &updated,);
         *guard = updated.clone();
 
         Ok(ConfigApplied {

@@ -66,10 +66,10 @@ where
     F: FnMut(&str,) -> Option<PathBuf,>,
     G: FnMut() -> Option<PathBuf,>,
 {
-    if let Some(theme_name,) = theme.as_deref() {
-        if let Some(path,) = themed_lookup(theme_name,) {
-            return Some(path,);
-        }
+    if let Some(theme_name,) = theme.as_deref()
+        && let Some(path,) = themed_lookup(theme_name,)
+    {
+        return Some(path,);
     }
 
     default_lookup()

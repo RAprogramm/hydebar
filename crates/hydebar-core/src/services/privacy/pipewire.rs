@@ -64,26 +64,25 @@ impl PipewireListener
                             .global({
                                 let tx = tx.clone();
                                 move |global| {
-                                    if let Some(props,) = global.props {
-                                        if let Some(media,) =
+                                    if let Some(props,) = global.props
+                                        && let Some(media,) =
                                             props.get("media.class",).filter(|value| {
                                                 *value == "Stream/Input/Video"
                                                     || *value == "Stream/Input/Audio"
                                             },)
-                                        {
-                                            let event = PrivacyEvent::AddNode(ApplicationNode {
-                                                id:    global.id,
-                                                media: if media == "Stream/Input/Video" {
-                                                    Media::Video
-                                                } else {
-                                                    Media::Audio
-                                                },
-                                            },);
-                                            if let Err(error,) = tx.send(event,) {
-                                                log::warn!(
-                                                    "Failed to forward PipeWire add event: {error}"
-                                                );
-                                            }
+                                    {
+                                        let event = PrivacyEvent::AddNode(ApplicationNode {
+                                            id:    global.id,
+                                            media: if media == "Stream/Input/Video" {
+                                                Media::Video
+                                            } else {
+                                                Media::Audio
+                                            },
+                                        },);
+                                        if let Err(error,) = tx.send(event,) {
+                                            log::warn!(
+                                                "Failed to forward PipeWire add event: {error}"
+                                            );
                                         }
                                     }
                                 }

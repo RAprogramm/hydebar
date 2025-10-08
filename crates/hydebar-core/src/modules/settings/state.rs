@@ -151,14 +151,12 @@ impl Settings
                     if let Some(cmd,) = &config.audio_sinks_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
                         outputs.close_menu::<Message>(id, main_config,);
-                    } else {
                     }
                 }
                 AudioMessage::SourcesMore(id,) => {
                     if let Some(cmd,) = &config.audio_sources_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
                         outputs.close_menu::<Message>(id, main_config,);
-                    } else {
                     }
                 }
             },
@@ -227,14 +225,12 @@ impl Settings
                     if let Some(cmd,) = &config.wifi_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
                         outputs.close_menu::<Message>(id, main_config,);
-                    } else {
                     }
                 }
                 NetworkMessage::VpnMore(id,) => {
                     if let Some(cmd,) = &config.vpn_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
                         outputs.close_menu::<Message>(id, main_config,);
-                    } else {
                     }
                 }
                 NetworkMessage::ToggleVpn(vpn,) => {
@@ -281,7 +277,6 @@ impl Settings
                     if let Some(cmd,) = &config.bluetooth_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
                         outputs.close_menu::<Message>(id, main_config,);
-                    } else {
                     }
                 }
             },
@@ -335,20 +330,19 @@ impl Settings
                 }
                 password_dialog::Message::DialogConfirmed(id,) => {
                     if let Some((ssid, password,),) = self.password_dialog.take() {
-                        if let Some(network,) = self.network.as_ref() {
-                            if let Some(access_point,) = network
+                        if let Some(network,) = self.network.as_ref()
+                            && let Some(access_point,) = network
                                 .wireless_access_points
                                 .iter()
                                 .find(|ap| ap.ssid == ssid,)
                                 .cloned()
-                            {
-                                self.spawn_network_command(NetworkCommand::SelectAccessPoint((
-                                    // We intentionally clone the password to avoid holding a
-                                    // mutable reference across the async boundary.
-                                    access_point,
-                                    Some(password.clone(),),
-                                ),),);
-                            }
+                        {
+                            self.spawn_network_command(NetworkCommand::SelectAccessPoint((
+                                // We intentionally clone the password to avoid holding a
+                                // mutable reference across the async boundary.
+                                access_point,
+                                Some(password.clone(),),
+                            ),),);
                         }
 
                         outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);

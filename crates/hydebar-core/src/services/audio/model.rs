@@ -124,7 +124,7 @@ impl Sinks for Vec<Device,>
 }
 
 /// Runtime state tracked by the audio service and exposed to the UI.
-#[derive(Debug, Clone,)]
+#[derive(Debug, Clone, Default,)]
 pub struct AudioData
 {
     pub server_info:       ServerInfo,
@@ -132,20 +132,6 @@ pub struct AudioData
     pub sources:           Vec<Device,>,
     pub cur_sink_volume:   i32,
     pub cur_source_volume: i32,
-}
-
-impl Default for AudioData
-{
-    fn default() -> Self
-    {
-        Self {
-            server_info:       ServerInfo::default(),
-            sinks:             Vec::new(),
-            sources:           Vec::new(),
-            cur_sink_volume:   0,
-            cur_source_volume: 0,
-        }
-    }
 }
 
 /// Events produced by the backend to update the service state.

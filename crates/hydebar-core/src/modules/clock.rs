@@ -139,10 +139,10 @@ impl Clock
             Message::Update => {
                 self.data.update();
 
-                if let Some(sender,) = &self.sender {
-                    if let Err(e,) = sender.try_send(ClockEvent::Tick(self.data.current_time,),) {
-                        error!("Failed to emit clock event: {}", e);
-                    }
+                if let Some(sender,) = &self.sender
+                    && let Err(e,) = sender.try_send(ClockEvent::Tick(self.data.current_time,),)
+                {
+                    error!("Failed to emit clock event: {}", e);
                 }
             }
             Message::UpdateWeather(weather,) => {

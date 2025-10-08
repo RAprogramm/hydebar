@@ -73,8 +73,8 @@ fn map_snapshot_to_workspaces(
                 .name
                 .as_str()
                 .split(':',)
-                .last()
-                .map_or_else(|| String::new(), ToOwned::to_owned,),
+                .next_back()
+                .map_or_else(String::new, ToOwned::to_owned,),
             // Option<i128> -> Option<usize> with bounds check.
             monitor_id: w.monitor_id,
             monitor:    w.monitor_name.clone(),
@@ -103,10 +103,10 @@ fn map_snapshot_to_workspaces(
     // Synthesize "missing" workspaces [1..=max_id] for filling UI.
     let existing_ids = normal.iter().map(|w| w.id,).collect::<Vec<_,>>();
     let mut max_id = *existing_ids.iter().max().unwrap_or(&0,);
-    if let Some(max_workspaces,) = config.max_workspaces {
-        if max_workspaces > max_id as u32 {
-            max_id = max_workspaces as i32;
-        }
+    if let Some(max_workspaces,) = config.max_workspaces
+        && max_workspaces > max_id as u32
+    {
+        max_id = max_workspaces as i32;
     }
 
     let missing_ids: Vec<i32,> = (1..=max_id).filter(|id| !existing_ids.contains(id,),).collect();
@@ -280,10 +280,10 @@ where
             },),);
         }
 
-        if let Some(sender,) = self.sender.clone() {
-            if let Err(err,) = sender.try_send(Message::WorkspacesChanged,) {
-                error!("failed to enqueue initial workspace refresh: {err}");
-            }
+        if let Some(sender,) = self.sender.clone()
+            && let Err(err,) = sender.try_send(Message::WorkspacesChanged,)
+        {
+            error!("failed to enqueue initial workspace refresh: {err}");
         }
 
         Ok((),)

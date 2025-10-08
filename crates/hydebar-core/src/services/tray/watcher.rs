@@ -242,7 +242,7 @@ where
                 }
                 Err(err,) => transition_to_error(err,),
             },
-            Err(err,) => transition_to_error(TrayWatcherError::Connection(err.into(),),),
+            Err(err,) => transition_to_error(TrayWatcherError::Connection(err,),),
         },
         State::Active(conn,) => {
             info!("Listening for tray events");

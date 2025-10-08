@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+#[allow(unused_imports)]
+use hydebar_core::modules::custom_module::Custom as _;
 use hydebar_core::{
     config::{self, ConfigEvent, ConfigImpact},
     event_bus::{BusEvent, ModuleEvent},

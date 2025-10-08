@@ -153,21 +153,11 @@ pub enum Message
 }
 
 /// Battery monitoring module
-#[derive(Debug,)]
+#[derive(Debug, Default,)]
 pub struct Battery
 {
     data: Option<BatteryData,>,
     // sender: Option<ModuleEventSender<BatteryEvent>>, // Unused - battery events not sent to UI
-}
-
-impl Default for Battery
-{
-    fn default() -> Self
-    {
-        Self {
-            data: None,
-        }
-    }
 }
 
 impl Battery

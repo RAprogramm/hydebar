@@ -346,8 +346,8 @@ where
                         module_name_for_task
                     );
 
-                    if !matches!(error, CustomCommandError::ChannelClosed) {
-                        if let Err(send_error) =
+                    if !matches!(error, CustomCommandError::ChannelClosed)
+                        && let Err(send_error) =
                             send_event(&error_sender, ServiceEvent::Error(error.clone()))
                         {
                             error!(
@@ -355,7 +355,6 @@ where
                                 module_name_for_task
                             );
                         }
-                    }
                 }
                 Err(CustomListenerError::Module(error)) => {
                     error!(
@@ -392,10 +391,10 @@ where
         let padded_icon_container = container(icon_element,).padding([0, 1,],);
 
         let mut show_alert = false;
-        if let Some(re,) = &config.alert {
-            if re.is_match(&self.data.alt,) {
-                show_alert = true;
-            }
+        if let Some(re,) = &config.alert
+            && re.is_match(&self.data.alt,)
+        {
+            show_alert = true;
         }
 
         if self.last_error.is_some() {

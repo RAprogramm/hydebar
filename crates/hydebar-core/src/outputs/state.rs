@@ -418,17 +418,17 @@ impl Outputs
         let mut tasks = Vec::new();
 
         for (name, wl_output,) in to_add {
-            if let Some(wl_output,) = wl_output {
-                if let Some(name,) = name {
-                    tasks.push(self.add(
-                        style,
-                        request_outputs,
-                        position,
-                        name.as_str(),
-                        wl_output,
-                        config,
-                    ),);
-                }
+            if let Some(wl_output,) = wl_output
+                && let Some(name,) = name
+            {
+                tasks.push(self.add(
+                    style,
+                    request_outputs,
+                    position,
+                    name.as_str(),
+                    wl_output,
+                    config,
+                ),);
             }
         }
 
@@ -532,10 +532,10 @@ impl Outputs
     {
         let mut is_animating = false;
         for (_, shell_info, _,) in &mut self.0 {
-            if let Some(shell_info,) = shell_info {
-                if shell_info.menu.tick_animation(animation_config,) {
-                    is_animating = true;
-                }
+            if let Some(shell_info,) = shell_info
+                && shell_info.menu.tick_animation(animation_config,)
+            {
+                is_animating = true;
             }
         }
         is_animating

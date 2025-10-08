@@ -150,10 +150,10 @@ impl EventBus
             },);
         }
 
-        if let Some(last,) = queue.back() {
-            if event.is_coalescable_with(last,) {
-                return Ok((),);
-            }
+        if let Some(last,) = queue.back()
+            && event.is_coalescable_with(last,)
+        {
+            return Ok((),);
         }
 
         queue.push_back(event,);
@@ -186,10 +186,10 @@ impl EventSender
             },);
         }
 
-        if let Some(last,) = queue.back() {
-            if event.is_coalescable_with(last,) {
-                return Ok((),);
-            }
+        if let Some(last,) = queue.back()
+            && event.is_coalescable_with(last,)
+        {
+            return Ok((),);
         }
 
         queue.push_back(event,);

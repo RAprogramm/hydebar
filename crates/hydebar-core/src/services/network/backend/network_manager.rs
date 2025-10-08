@@ -652,10 +652,10 @@ impl<'a,> NetworkDbus<'a,>
                     .await?;
                 wireless_device.request_scan(HashMap::new(),).await?;
                 let mut scan_changed = wireless_device.receive_last_scan_changed().await;
-                if let Some(t,) = scan_changed.next().await {
-                    if let Ok(-1,) = t.get().await {
-                        return Ok(Default::default(),);
-                    }
+                if let Some(t,) = scan_changed.next().await
+                    && let Ok(-1,) = t.get().await
+                {
+                    return Ok(Default::default(),);
                 }
                 let access_points = wireless_device.get_access_points().await?;
                 let state: DeviceState = device
@@ -675,10 +675,10 @@ impl<'a,> NetworkDbus<'a,>
                     let ssid = String::from_utf8_lossy(&ap.ssid().await?.clone(),).into_owned();
                     let public = ap.flags().await.unwrap_or_default() == 0;
                     let strength = ap.strength().await?;
-                    if let Some(access_point,) = aps.get(&ssid,) {
-                        if access_point.strength > strength {
-                            continue;
-                        }
+                    if let Some(access_point,) = aps.get(&ssid,)
+                        && access_point.strength > strength
+                    {
+                        continue;
                     }
 
                     aps.insert(

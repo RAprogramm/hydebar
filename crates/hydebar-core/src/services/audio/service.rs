@@ -234,7 +234,7 @@ impl AudioService
     where
         P: ServiceEventPublisher<Self,> + Send,
     {
-        Self::listen_with_backend(PulseAudioBackend::default(), publisher,).await;
+        Self::listen_with_backend(PulseAudioBackend, publisher,).await;
     }
 }
 
