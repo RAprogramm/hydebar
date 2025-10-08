@@ -16,8 +16,8 @@ Detailed comparison of Wayland panel solutions for Hyprland.
 | **Config format** | TOML | JSON | TypeScript |
 | **Hot reload** | ✅ Yes | ⚠️ Partial | ✅ Yes |
 | **GUI config** | 🔜 Planned | ❌ No | ✅ Yes |
-| **Preset themes** | 🔜 Planned | ❌ No | ✅ Yes |
-| **Animations** | ⚠️ Basic | ⚠️ Basic | ✅ Smooth |
+| **Preset themes** | ✅ 11 themes | ❌ No | ✅ Yes |
+| **Animations** | ✅ Smooth | ⚠️ Basic | ✅ Smooth |
 | **Wayland-native** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Multi-monitor** | ✅ Yes | ✅ Yes | ✅ Yes |
 
@@ -44,7 +44,7 @@ Detailed comparison of Wayland panel solutions for Hyprland.
 | **Updates** | ✅ Yes | ⚠️ Basic | ✅ Yes |
 | **Keyboard layout** | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Privacy indicators** | ✅ Yes | ❌ No | ⚠️ Basic |
-| **Notifications** | 🔜 v0.9.0 | ⚠️ Dunst | ✅ Yes |
+| **Notifications** | ✅ Yes (D-Bus) | ⚠️ Dunst | ✅ Yes |
 | **Weather** | 🔜 v1.1.0 | ⚠️ Basic | ✅ Yes |
 | **Calendar** | 🔜 v1.1.0 | ❌ No | ⚠️ Basic |
 
@@ -54,8 +54,8 @@ Detailed comparison of Wayland panel solutions for Hyprland.
 |---------|---------|--------|-----------|
 | **Custom modules** | ✅ Yes (Rust) | ✅ Yes (Script) | ✅ Yes (TS) |
 | **Module ordering** | ✅ Config | ✅ Config | ✅ GUI |
-| **Inline controls** | 🔜 v0.9.0 | ❌ No | ✅ Yes |
-| **Screenshot tool** | 🔜 v0.9.0 | ❌ No | ✅ Yes |
+| **Inline controls** | ✅ Yes (sliders) | ❌ No | ✅ Yes |
+| **Screenshot tool** | ✅ Yes (grim/wf-recorder) | ❌ No | ✅ Yes |
 | **Power menu** | ✅ Yes | ⚠️ Basic | ✅ Yes |
 | **Clipboard history** | ✅ Yes | ❌ No | ⚠️ Basic |
 

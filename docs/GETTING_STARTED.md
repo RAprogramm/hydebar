@@ -105,13 +105,15 @@ right = ["SystemInfo", "Clock", "Battery", "Settings"]
 Available modules:
 - `Workspaces` - Hyprland workspaces
 - `WindowTitle` - Active window
-- `SystemInfo` - CPU/RAM/temp
+- `SystemInfo` - CPU/RAM/temp/network
 - `Clock` - Date and time
-- `Battery` - Battery status
-- `MediaPlayer` - Music controls
-- `Tray` - System tray
-- `Privacy` - Camera/mic indicators
-- `Settings` - Settings panel
+- `Battery` - Battery status with power profiles
+- `MediaPlayer` - Music controls (MPRIS)
+- `Tray` - System tray icons
+- `Privacy` - Camera/mic/screenshare indicators
+- `Notifications` - Notification center with DND mode
+- `Screenshot` - Screenshot and screen recording
+- `Settings` - Comprehensive settings panel
 - Custom modules (see Advanced section)
 
 ## Common Configurations
@@ -137,7 +139,8 @@ left = ["Workspaces"]
 center = ["WindowTitle"]
 right = [
     "SystemInfo",
-    ["Clock", "Privacy", "Battery", "Settings"]
+    ["Privacy", "Notifications", "Screenshot"],
+    ["Clock", "Battery", "Settings"]
 ]
 
 # Show system info

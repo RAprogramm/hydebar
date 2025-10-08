@@ -16,16 +16,18 @@
 - ⏰ **Clock** - Customizable date/time format
 - 📊 **System Info** - CPU, RAM, temperature, disk, network speeds
 - 🔋 **Battery** - Battery status and power profiles
-- 📡 **Network** - WiFi, VPN, connection management
-- 🔊 **Audio** - Volume control, sink/source selection
+- 📡 **Network** - WiFi with signal strength %, VPN, connection management
+- 🔊 **Audio** - Volume control with inline sliders, sink/source selection
 - 🎵 **Media Player** - MPRIS integration with playback controls
-- 💡 **Brightness** - Screen brightness control
-- 🔵 **Bluetooth** - Device management
+- 💡 **Brightness** - Screen brightness control with inline slider
+- 🔵 **Bluetooth** - Device management with quick connect/disconnect, battery levels
 - 📋 **Tray** - System tray support
 - 🔄 **Updates** - Package update notifications
 - 🔒 **Privacy** - Camera/microphone/screenshare indicators
 - ⌨️ **Keyboard Layout** - Layout switching with custom labels
 - 🚀 **App Launcher** - Quick app launcher button
+- 🔔 **Notifications** - Notification center with D-Bus integration, DND mode
+- 📸 **Screenshot** - Screenshot and screen recording (grim/slurp/wf-recorder)
 - ⚙️ **Settings Panel** - Comprehensive settings menu
 
 ### Visual Features
@@ -96,7 +98,7 @@ menu_fade_duration_ms = 200
 [modules]
 left = ["Workspaces"]
 center = ["WindowTitle"]
-right = ["SystemInfo", "Clock", "Settings"]
+right = [["Privacy", "Notifications", "Screenshot"], "Clock", "Settings"]
 ```
 
 ### Available Themes
