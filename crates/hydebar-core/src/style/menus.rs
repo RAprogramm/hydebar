@@ -3,7 +3,6 @@ use iced::{Border, Theme, widget::container::Style};
 use super::theme::backdrop_color;
 
 /// Builds the menu container style closure used for popup content.
-#[must_use]
 pub fn menu_container_style(opacity: f32,) -> impl Fn(&Theme,) -> Style
 {
     move |theme: &Theme| Style {
@@ -18,7 +17,6 @@ pub fn menu_container_style(opacity: f32,) -> impl Fn(&Theme,) -> Style
 }
 
 /// Builds the menu backdrop style closure that applies the configured opacity.
-#[must_use]
 pub fn menu_backdrop_style(backdrop: f32,) -> impl Fn(&Theme,) -> Style
 {
     move |_| Style {

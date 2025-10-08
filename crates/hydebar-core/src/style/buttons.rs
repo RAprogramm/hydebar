@@ -46,7 +46,6 @@ pub fn module_button_style(
 }
 
 /// Builds a ghost button style closure that fades in on hover.
-#[must_use]
 pub fn ghost_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
 {
     move |theme, status| {
@@ -72,7 +71,6 @@ pub fn ghost_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::
 }
 
 /// Builds an outline button style closure that highlights borders on hover.
-#[must_use]
 pub fn outline_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
 {
     move |theme, status| {
@@ -100,7 +98,6 @@ pub fn outline_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button
 }
 
 /// Builds the confirm button style closure with filled background.
-#[must_use]
 pub fn confirm_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
 {
     move |theme, status| {
@@ -128,7 +125,6 @@ pub fn confirm_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button
 }
 
 /// Builds the rounded settings button style closure.
-#[must_use]
 pub fn settings_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
 {
     move |theme, status| {
@@ -156,7 +152,6 @@ pub fn settings_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> butto
 }
 
 /// Builds the workspace button style closure, handling optional colours.
-#[must_use]
 pub fn workspace_button_style(
     is_empty: bool,
     colors: Option<Option<AppearanceColor,>,>,
@@ -242,7 +237,6 @@ pub fn workspace_button_style(
 }
 
 /// Builds the quick settings button style closure with active feedback.
-#[must_use]
 pub fn quick_settings_button_style(
     is_active: bool,
     opacity: f32,
@@ -290,7 +284,6 @@ pub fn quick_settings_button_style(
 }
 
 /// Builds the submenu button style closure used inside quick settings menus.
-#[must_use]
 pub fn quick_settings_submenu_button_style(
     is_active: bool,
     opacity: f32,
