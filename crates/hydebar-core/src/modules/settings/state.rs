@@ -267,6 +267,16 @@ impl Settings
                         log::warn!("Bluetooth service not initialized");
                     }
                 },
+                BluetoothMessage::ConnectDevice(device_path,) => {
+                    let _spawned = self
+                        .spawn_bluetooth_command(BluetoothCommand::ConnectDevice(device_path,),);
+                }
+                BluetoothMessage::DisconnectDevice(device_path,) => {
+                    let _spawned =
+                        self.spawn_bluetooth_command(BluetoothCommand::DisconnectDevice(
+                            device_path,
+                        ),);
+                }
                 BluetoothMessage::More(id,) => {
                     if let Some(cmd,) = &config.bluetooth_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);

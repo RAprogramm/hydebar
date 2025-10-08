@@ -90,9 +90,10 @@ impl BluetoothDbus<'_,>
 
             let name = device.alias().await?;
             let connected = device.connected().await?;
+            let paired = device.paired().await.unwrap_or(false,);
 
-            if connected {
-                let battery = if has_battery {
+            if paired {
+                let battery = if connected && has_battery {
                     let battery_proxy = BatteryProxy::builder(self.bluez.inner().connection(),)
                         .path(&device_path,)?
                         .build()
@@ -107,11 +108,34 @@ impl BluetoothDbus<'_,>
                     name,
                     battery,
                     path: device_path,
+                    connected,
                 },);
             }
         }
 
         Ok(devices,)
+    }
+
+    pub async fn connect_device(&self, device_path: &OwnedObjectPath,) -> anyhow::Result<(),>
+    {
+        let device = DeviceProxy::builder(self.bluez.inner().connection(),)
+            .path(device_path,)?
+            .build()
+            .await?;
+
+        device.connect().await?;
+        Ok((),)
+    }
+
+    pub async fn disconnect_device(&self, device_path: &OwnedObjectPath,) -> anyhow::Result<(),>
+    {
+        let device = DeviceProxy::builder(self.bluez.inner().connection(),)
+            .path(device_path,)?
+            .build()
+            .await?;
+
+        device.disconnect().await?;
+        Ok((),)
     }
 }
 
@@ -153,6 +177,13 @@ trait Device
 
     #[zbus(property)]
     fn connected(&self,) -> zbus::Result<bool,>;
+
+    #[zbus(property)]
+    fn paired(&self,) -> zbus::Result<bool,>;
+
+    fn connect(&self,) -> zbus::Result<(),>;
+
+    fn disconnect(&self,) -> zbus::Result<(),>;
 }
 
 #[proxy(default_service = "org.bluez", interface = "org.bluez.Battery1")]

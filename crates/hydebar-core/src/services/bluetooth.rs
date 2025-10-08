@@ -30,9 +30,10 @@ pub enum BluetoothState
 #[derive(Debug, Clone,)]
 pub struct BluetoothDevice
 {
-    pub name:    String,
-    pub battery: Option<u8,>,
-    pub path:    OwnedObjectPath,
+    pub name:      String,
+    pub battery:   Option<u8,>,
+    pub path:      OwnedObjectPath,
+    pub connected: bool,
 }
 
 #[derive(Debug, Clone,)]
@@ -63,6 +64,8 @@ impl Deref for BluetoothService
 pub enum BluetoothCommand
 {
     Toggle,
+    ConnectDevice(OwnedObjectPath,),
+    DisconnectDevice(OwnedObjectPath,),
 }
 
 enum State
@@ -251,6 +254,20 @@ impl BluetoothService
 
                     Some(ServiceEvent::Update(data,),)
                 }
+            }
+            BluetoothCommand::ConnectDevice(device_path,) => {
+                let bluetooth = BluetoothDbus::new(&self.conn,).await.ok()?;
+                bluetooth.connect_device(&device_path,).await.ok()?;
+
+                // Refresh device list after connect
+                Self::initialize_data(&self.conn,).await.ok().map(ServiceEvent::Update,)
+            }
+            BluetoothCommand::DisconnectDevice(device_path,) => {
+                let bluetooth = BluetoothDbus::new(&self.conn,).await.ok()?;
+                bluetooth.disconnect_device(&device_path,).await.ok()?;
+
+                // Refresh device list after disconnect
+                Self::initialize_data(&self.conn,).await.ok().map(ServiceEvent::Update,)
             }
         }
     }

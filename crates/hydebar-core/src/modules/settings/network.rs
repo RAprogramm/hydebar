@@ -155,7 +155,8 @@ impl NetworkData
                 quick_setting_button(
                     active_connection.map_or_else(|| Icons::Wifi0, |(_, _, icon,)| icon,),
                     "Wi-Fi".to_string(),
-                    active_connection.map(|(name, _, _,)| name.clone(),),
+                    active_connection
+                        .map(|(name, strength, _,)| format!("{name} ({}%)", strength,),),
                     self.wifi_enabled,
                     Message::Network(NetworkMessage::ToggleWiFi,),
                     Some((SubMenu::Wifi, sub_menu, Message::ToggleSubMenu(SubMenu::Wifi,),),)
@@ -260,6 +261,7 @@ impl NetworkData
                                         })
                                         .width(Length::Shrink),
                                         text(ac.ssid.clone()).width(Length::Fill),
+                                        text(format!("{}%", ac.strength)).size(12),
                                     )
                                     .align_y(Alignment::Center)
                                     .spacing(8),
