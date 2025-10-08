@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use iced::{
     self, Element, Length, Padding, Task,
     alignment::{Horizontal, Vertical},
@@ -9,7 +11,7 @@ use iced::{
 };
 
 use crate::{
-    config::{AppearanceStyle, Position},
+    config::{AnimationConfig, AppearanceStyle, Position},
     position_button::ButtonUIRef,
     style::{menu_backdrop_style, menu_container_style},
 };
@@ -27,8 +29,11 @@ pub enum MenuType
 #[derive(Clone, Debug,)]
 pub struct Menu
 {
-    pub id:        Id,
-    pub menu_info: Option<(MenuType, ButtonUIRef,),>,
+    pub id:              Id,
+    pub menu_info:       Option<(MenuType, ButtonUIRef,),>,
+    pub current_opacity: f32,
+    pub target_opacity:  f32,
+    pub animation_start: Option<Instant,>,
 }
 
 impl Menu
@@ -38,6 +43,9 @@ impl Menu
         Self {
             id,
             menu_info: None,
+            current_opacity: 0.0,
+            target_opacity: 0.0,
+            animation_start: None,
         }
     }
 
@@ -49,6 +57,15 @@ impl Menu
     ) -> Task<Message,>
     {
         self.menu_info.replace((menu_type, button_ui_ref,),);
+
+        // Start fade-in animation
+        if config.appearance.animations.enabled {
+            self.target_opacity = config.appearance.menu.opacity;
+            self.animation_start = Some(Instant::now(),);
+        } else {
+            self.current_opacity = config.appearance.menu.opacity;
+            self.target_opacity = config.appearance.menu.opacity;
+        }
 
         let mut tasks = vec![set_layer(self.id, Layer::Overlay,)];
 
@@ -63,6 +80,15 @@ impl Menu
     {
         if self.menu_info.is_some() {
             self.menu_info.take();
+
+            // Start fade-out animation
+            if config.appearance.animations.enabled {
+                self.target_opacity = 0.0;
+                self.animation_start = Some(Instant::now(),);
+            } else {
+                self.current_opacity = 0.0;
+                self.target_opacity = 0.0;
+            }
 
             let mut tasks = vec![set_layer(self.id, Layer::Background,)];
 
@@ -126,6 +152,40 @@ impl Menu
             Task::none()
         }
     }
+
+    /// Update menu animation state. Returns true if animation is in progress.
+    pub fn tick_animation(&mut self, animation_config: &AnimationConfig,) -> bool
+    {
+        if !animation_config.enabled {
+            return false;
+        }
+
+        if let Some(start,) = self.animation_start {
+            let elapsed = start.elapsed().as_millis() as u64;
+            let duration = animation_config.menu_fade_duration_ms;
+
+            if elapsed >= duration {
+                // Animation complete
+                self.current_opacity = self.target_opacity;
+                self.animation_start = None;
+                false
+            } else {
+                // Interpolate opacity
+                let progress = elapsed as f32 / duration as f32;
+                let delta = self.target_opacity - self.current_opacity;
+                self.current_opacity += delta * progress;
+                true
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Get the current animated opacity for rendering
+    pub fn get_opacity(&self,) -> f32
+    {
+        self.current_opacity
+    }
 }
 
 pub enum MenuSize
@@ -149,7 +209,7 @@ impl MenuSize
 
 #[allow(clippy::too_many_arguments)]
 pub fn menu_wrapper<Message: Clone + 'static,>(
-    id: Id,
+    _id: Id,
     content: Element<Message,>,
     menu_size: MenuSize,
     button_ui_ref: ButtonUIRef,

@@ -33,6 +33,9 @@ impl App
     {
         match message {
             Message::MicroTick => {
+                // Update menu animations
+                self.outputs.tick_menu_animations(&self.config.appearance.animations,);
+
                 Task::perform(drain_bus(Arc::clone(&self.bus_receiver,),), Message::BusFlushed,)
             }
             Message::BusFlushed(outcome,) => {
