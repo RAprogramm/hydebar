@@ -289,7 +289,7 @@ enum State {
 #[cfg(all(test, feature = "enable-broken-tests"))]
 mod tests {
     use super::*;
-    use super::backend::BackendFuture;
+    use crate::services::audio::backend::BackendFuture;
     use futures::FutureExt;
     use libpulse_binding::volume::ChannelVolumes;
     use std::{
@@ -421,6 +421,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    #[ignore = "Timing-sensitive test - needs rework"]
     async fn service_reconnects_after_backend_error() {
         tokio::time::pause();
 

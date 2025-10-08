@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn execute_with_retry_returns_last_error() {
-        let error = execute_with_retry(&base_config(), "retry", || {
+        let error = execute_with_retry(&base_config(), "retry", || -> Result<(), HyprlandError> {
             Err(HyprlandError::message("retry", "failed"))
         })
         .unwrap_err();

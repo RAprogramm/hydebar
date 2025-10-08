@@ -92,8 +92,8 @@ impl MprisPlayerService {
     {
         #[cfg(all(test, feature = "enable-broken-tests"))]
         if let Some(callback) = test_support::current_start_listening_override() {
-            let mut publisher = publisher as &mut dyn MprisEventPublisher;
-            return (callback)(state, &mut publisher).await;
+            let publisher = publisher as &mut dyn MprisEventPublisher;
+            return (callback)(state, publisher).await;
         }
 
         Self::start_listening_internal(state, publisher).await

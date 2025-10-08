@@ -166,7 +166,7 @@ mod tests {
 
         assert!(!settings.spawn_audio_command(AudioCommand::ToggleSinkMute));
         assert!(!settings.spawn_bluetooth_command(BluetoothCommand::Toggle));
-        assert!(!settings.spawn_brightness_command(BrightnessCommand::Set(0.5)));
+        assert!(!settings.spawn_brightness_command(BrightnessCommand::Set(50)));
         assert!(!settings.spawn_network_command(NetworkCommand::ToggleWiFi));
         assert!(!settings.spawn_upower_command(PowerProfileCommand::Toggle));
     }

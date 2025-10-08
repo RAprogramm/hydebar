@@ -122,8 +122,7 @@ async fn re_register_aborts_previous_listener() {
         alert: None,
     };
 
-    custom
-        .register(&context, Some(&first))
+    <Custom as Module<Message>>::register(&mut custom, &context, Some(&first))
         .expect("first register");
 
     timeout(Duration::from_secs(2), async {
@@ -157,8 +156,7 @@ async fn re_register_aborts_previous_listener() {
         alert: None,
     };
 
-    custom
-        .register(&context, Some(&second))
+    <Custom as Module<Message>>::register(&mut custom, &context, Some(&second))
         .expect("second register");
 
     let observed = timeout(Duration::from_secs(2), async {
