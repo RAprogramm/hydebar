@@ -47,7 +47,7 @@ pub struct App
     pub(super) bus_receiver:   Arc<Mutex<EventReceiver,>,>,
     pub(super) micro_ticker:   MicroTicker,
     pub(super) module_context: ModuleContext,
-    pub config:                Config,
+    pub config:                Arc<Config,>,
     pub outputs:               Outputs,
     pub app_launcher:          AppLauncher,
     pub custom:                HashMap<String, Custom,>,
@@ -142,7 +142,7 @@ impl App
             bus_receiver,
         ): (
             LoggerHandle,
-            Config,
+            Arc<Config,>,
             Arc<ConfigManager,>,
             PathBuf,
             Arc<dyn HyprlandPort,>,
@@ -240,7 +240,7 @@ mod tests
 
         let (app, _,) = App::new((
             logger,
-            config,
+            Arc::new(config,),
             Arc::clone(&config_manager,),
             path,
             Arc::clone(&mock_port,),
@@ -271,7 +271,7 @@ mod tests
 
         let (mut app, _,) = App::new((
             logger,
-            config,
+            Arc::new(config,),
             Arc::clone(&config_manager,),
             path,
             mock_port,
