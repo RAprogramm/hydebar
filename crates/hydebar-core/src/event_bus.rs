@@ -44,6 +44,7 @@ pub enum ModuleEvent
     Privacy(modules::privacy::PrivacyMessage,),
     Settings(modules::settings::Message,),
     MediaPlayer(modules::media_player::Message,),
+    Notifications(modules::notifications::NotificationsMessage,),
     Custom
     {
         name:    Arc<str,>,

@@ -13,6 +13,7 @@ pub mod custom_module;
 pub mod keyboard_layout;
 pub mod keyboard_submap;
 pub mod media_player;
+pub mod notifications;
 pub mod privacy;
 pub mod settings;
 pub mod system_info;

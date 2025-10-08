@@ -20,6 +20,7 @@ use hydebar_core::{
         keyboard_layout::KeyboardLayout,
         keyboard_submap::KeyboardSubmap,
         media_player::MediaPlayer,
+        notifications::Notifications,
         privacy::Privacy,
         settings::Settings,
         system_info::SystemInfo,
@@ -64,6 +65,7 @@ pub struct App
     pub privacy:               Privacy,
     pub settings:              Settings,
     pub media_player:          MediaPlayer,
+    pub notifications:         Notifications,
 }
 
 #[derive(Debug, Clone,)]
@@ -91,6 +93,7 @@ pub enum Message
     Privacy(modules::privacy::PrivacyMessage,),
     Settings(modules::settings::Message,),
     MediaPlayer(modules::media_player::Message,),
+    Notifications(modules::notifications::NotificationsMessage,),
     OutputEvent((OutputEvent, WlOutput,),),
     LaunchCommand(String,),
     CustomUpdate(String, modules::custom_module::Message,),
@@ -125,6 +128,14 @@ impl From<modules::workspaces::Message,> for Message
     fn from(msg: modules::workspaces::Message,) -> Self
     {
         Message::Workspaces(msg,)
+    }
+}
+
+impl From<modules::notifications::NotificationsMessage,> for Message
+{
+    fn from(msg: modules::notifications::NotificationsMessage,) -> Self
+    {
+        Message::Notifications(msg,)
     }
 }
 
@@ -187,6 +198,7 @@ impl App
                 privacy: Privacy::default(),
                 settings: Settings::default(),
                 media_player: MediaPlayer::default(),
+                notifications: Notifications::default(),
                 config,
             };
 

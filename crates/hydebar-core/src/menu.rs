@@ -24,6 +24,7 @@ pub enum MenuType
     Tray(String,),
     MediaPlayer,
     SystemInfo,
+    Notifications,
 }
 
 #[derive(Clone, Debug,)]

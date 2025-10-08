@@ -271,6 +271,10 @@ impl App
                 self.media_player.update(msg,);
                 Task::none()
             }
+            Message::Notifications(msg,) => {
+                self.notifications.update(msg,);
+                Task::none()
+            }
         }
     }
 
@@ -373,6 +377,10 @@ impl App
             "media-player",
             modules::Module::<Message,>::register(&mut self.media_player, ctx, (),),
         );
+        register(
+            "notifications",
+            modules::Module::<Message,>::register(&mut self.notifications, ctx, (),),
+        );
 
         for definition in &self.config.custom_modules {
             match self.custom.get_mut(&definition.name,) {
@@ -446,6 +454,7 @@ impl App
             ModuleEvent::Privacy(message,) => Some(Message::Privacy(message,),),
             ModuleEvent::Settings(message,) => Some(Message::Settings(message,),),
             ModuleEvent::MediaPlayer(message,) => Some(Message::MediaPlayer(message,),),
+            ModuleEvent::Notifications(message,) => Some(Message::Notifications(message,),),
             ModuleEvent::Custom {
                 name,
                 message,

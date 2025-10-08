@@ -218,6 +218,20 @@ impl App
                         Message::None,
                         Message::CloseMenu(id,),
                     ),
+                    Some((MenuType::Notifications, button_ui_ref,),) => menu_wrapper(
+                        id,
+                        self.notifications
+                            .menu_view(animated_opacity,)
+                            .map(Message::Notifications,),
+                        MenuSize::Medium,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id,),
+                    ),
                     None => Row::new().into(),
                 }
             }

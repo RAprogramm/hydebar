@@ -11,6 +11,7 @@ pub mod brightness;
 pub mod idle_inhibitor;
 pub mod mpris;
 pub mod network;
+pub mod notifications;
 pub mod privacy;
 pub mod tray;
 pub mod upower;

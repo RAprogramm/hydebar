@@ -247,6 +247,7 @@ impl App
             ModuleName::Privacy => self.privacy.view((),),
             ModuleName::Settings => self.settings.view((),),
             ModuleName::MediaPlayer => self.media_player.view(&self.config.media_player,),
+            ModuleName::Notifications => self.notifications.view((),),
         }
     }
 
@@ -283,6 +284,7 @@ impl App
             ModuleName::Privacy => self.privacy.subscription(),
             ModuleName::Settings => self.settings.subscription(),
             ModuleName::MediaPlayer => self.media_player.subscription(),
+            ModuleName::Notifications => self.notifications.subscription(),
         }
     }
 }
