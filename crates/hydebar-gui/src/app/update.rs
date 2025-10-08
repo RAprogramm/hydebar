@@ -231,10 +231,10 @@ impl App
                 self.weather.update(message.clone(),);
 
                 // If clock is configured to show weather, update it too
-                if self.config.clock.show_weather {
-                    if let modules::weather::Message::Update(weather_data,) = message {
-                        self.clock.update(modules::clock::Message::UpdateWeather(weather_data,),);
-                    }
+                if self.config.clock.show_weather
+                    && let modules::weather::Message::Update(weather_data,) = message
+                {
+                    self.clock.update(modules::clock::Message::UpdateWeather(weather_data,),);
                 }
 
                 Task::none()
@@ -422,10 +422,10 @@ impl App
         }
 
         for (name, module,) in self.custom.iter_mut() {
-            if !self.config.custom_modules.iter().any(|definition| definition.name == *name,) {
-                if let Err(err,) = modules::Module::<Message,>::register(module, ctx, None,) {
-                    error!("failed to clear registration for custom module '{name}': {err}");
-                }
+            if !self.config.custom_modules.iter().any(|definition| definition.name == *name,)
+                && let Err(err,) = modules::Module::<Message,>::register(module, ctx, None,)
+            {
+                error!("failed to clear registration for custom module '{name}': {err}");
             }
         }
     }
@@ -440,10 +440,8 @@ impl App
 
             let entry = if impact.affects_module(&module_key,) {
                 Custom::default()
-            } else if let Some(existing,) = self.custom.remove(module_name.as_str(),) {
-                existing
             } else {
-                Custom::default()
+                self.custom.remove(module_name.as_str(),).unwrap_or_default()
             };
 
             state.insert(module_name, entry,);

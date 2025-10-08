@@ -60,10 +60,10 @@ fn icon_path_with_theme_fallback<F, G,>(
     theme: Option<String,>,
     mut themed_lookup: F,
     mut default_lookup: G,
-) -> Option<PathBuf,>
+) -> Option<std::path::PathBuf,>
 where
-    F: FnMut(&str,) -> Option<PathBuf,>,
-    G: FnMut() -> Option<PathBuf,>,
+    F: FnMut(&str,) -> Option<std::path::PathBuf,>,
+    G: FnMut() -> Option<std::path::PathBuf,>,
 {
     if let Some(theme_name,) = theme.as_deref()
         && let Some(path,) = themed_lookup(theme_name,)

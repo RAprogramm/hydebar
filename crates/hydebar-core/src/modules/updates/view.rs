@@ -13,7 +13,7 @@ use crate::{
     style::ghost_button_style,
 };
 
-pub(super) fn menu_view(updates: &Updates, id: Id, opacity: f32,) -> Element<Message,>
+pub(super) fn menu_view(updates: &Updates, id: Id, opacity: f32,) -> Element<'_, Message,>
 {
     column!(
         if updates.updates().is_empty() {
@@ -47,7 +47,7 @@ pub(super) fn icon(state: &CheckState, update_count: usize,) -> Element<'static,
     content.into()
 }
 
-fn build_updates_list(updates: &Updates, opacity: f32,) -> Element<Message,>
+fn build_updates_list(updates: &Updates, opacity: f32,) -> Element<'_, Message,>
 {
     let mut elements = column!(
         button(row!(
@@ -85,7 +85,7 @@ fn build_updates_list(updates: &Updates, opacity: f32,) -> Element<Message,>
     elements.into()
 }
 
-fn build_update_entry(update: &super::state::Update,) -> Element<Message,>
+fn build_update_entry(update: &super::state::Update,) -> Element<'_, Message,>
 {
     column!(
         text(update.package.as_str()).size(10).width(Length::Fill),

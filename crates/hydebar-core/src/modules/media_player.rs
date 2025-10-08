@@ -301,7 +301,11 @@ impl MediaPlayer
         }
     }
 
-    pub fn menu_view(&self, config: &MediaPlayerModuleConfig, opacity: f32,) -> Element<Message,>
+    pub fn menu_view(
+        &self,
+        config: &MediaPlayerModuleConfig,
+        opacity: f32,
+    ) -> Element<'_, Message,>
     {
         match &self.service {
             None => text("Not connected to MPRIS service",).into(),

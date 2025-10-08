@@ -32,7 +32,7 @@ impl BluetoothData
         sub_menu: Option<SubMenu,>,
         show_more_button: bool,
         opacity: f32,
-    ) -> Option<(Element<Message,>, Option<Element<Message,>,>,),>
+    ) -> Option<(Element<'_, Message,>, Option<Element<'_, Message,>,>,),>
     {
         Some(
             (
@@ -58,8 +58,11 @@ impl BluetoothData
     }
 
     pub fn bluetooth_menu(
-        &self, id: Id, show_more_button: bool, opacity: f32,
-    ) -> Element<Message,>
+        &self,
+        id: Id,
+        show_more_button: bool,
+        opacity: f32,
+    ) -> Element<'_, Message,>
     {
         let main = if self.devices.is_empty() {
             text("No paired devices",).into()
@@ -85,7 +88,7 @@ impl BluetoothData
                             .align_y(iced::Alignment::Center,)
                             .into()
                     },)
-                    .collect::<Vec<Element<Message,>,>>(),
+                    .collect::<Vec<Element<'_, Message,>,>>(),
             )
             .spacing(8,)
             .into()

@@ -172,12 +172,12 @@ impl Updates
                     warn!("updates module is not fully initialised; skipping update command");
                 }
 
-                outputs.close_menu_if::<Message>(id, MenuType::Updates, main_config,);
+                let _ = outputs.close_menu_if::<Message>(id, MenuType::Updates, main_config,);
             }
         }
     }
 
-    pub fn menu_view(&self, id: Id, opacity: f32,) -> Element<Message,>
+    pub fn menu_view(&self, id: Id, opacity: f32,) -> Element<'_, Message,>
     {
         view::menu_view(self, id, opacity,)
     }

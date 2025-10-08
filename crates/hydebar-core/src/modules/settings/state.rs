@@ -101,8 +101,12 @@ impl Settings
             Message::ToggleMenu(id, button_ui_ref,) => {
                 self.sub_menu = None;
                 self.password_dialog = None;
-                outputs
-                    .toggle_menu::<Message>(id, MenuType::Settings, button_ui_ref, main_config,);
+                let _ = outputs.toggle_menu::<Message>(
+                    id,
+                    MenuType::Settings,
+                    button_ui_ref,
+                    main_config,
+                );
             }
             Message::Audio(msg,) => match msg {
                 AudioMessage::Event(event,) => match event {
@@ -150,13 +154,13 @@ impl Settings
                 AudioMessage::SinksMore(id,) => {
                     if let Some(cmd,) = &config.audio_sinks_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
-                        outputs.close_menu::<Message>(id, main_config,);
+                        let _ = outputs.close_menu::<Message>(id, main_config,);
                     }
                 }
                 AudioMessage::SourcesMore(id,) => {
                     if let Some(cmd,) = &config.audio_sources_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
-                        outputs.close_menu::<Message>(id, main_config,);
+                        let _ = outputs.close_menu::<Message>(id, main_config,);
                     }
                 }
             },
@@ -216,7 +220,8 @@ impl Settings
                 NetworkMessage::RequestWiFiPassword(id, ssid,) => {
                     info!("Requesting password for {ssid}");
                     self.password_dialog = Some((ssid, String::new(),),);
-                    outputs.request_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
+                    let _ =
+                        outputs.request_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
                 }
                 NetworkMessage::ScanNearByWiFi => {
                     let _spawned = self.spawn_network_command(NetworkCommand::ScanNearByWiFi,);
@@ -224,13 +229,13 @@ impl Settings
                 NetworkMessage::WiFiMore(id,) => {
                     if let Some(cmd,) = &config.wifi_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
-                        outputs.close_menu::<Message>(id, main_config,);
+                        let _ = outputs.close_menu::<Message>(id, main_config,);
                     }
                 }
                 NetworkMessage::VpnMore(id,) => {
                     if let Some(cmd,) = &config.vpn_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
-                        outputs.close_menu::<Message>(id, main_config,);
+                        let _ = outputs.close_menu::<Message>(id, main_config,);
                     }
                 }
                 NetworkMessage::ToggleVpn(vpn,) => {
@@ -276,7 +281,7 @@ impl Settings
                 BluetoothMessage::More(id,) => {
                     if let Some(cmd,) = &config.bluetooth_more_cmd {
                         crate::utils::launcher::execute_command(cmd.to_string(),);
-                        outputs.close_menu::<Message>(id, main_config,);
+                        let _ = outputs.close_menu::<Message>(id, main_config,);
                     }
                 }
             },
@@ -345,15 +350,18 @@ impl Settings
                             ),),);
                         }
 
-                        outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
+                        let _ = outputs
+                            .release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
                     } else {
-                        outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
+                        let _ = outputs
+                            .release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
                     }
                 }
                 password_dialog::Message::DialogCancelled(id,) => {
                     self.password_dialog = None;
 
-                    outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
+                    let _ =
+                        outputs.release_keyboard::<Message>(id, main_config.menu_keyboard_focus,);
                 }
             },
         }

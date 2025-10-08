@@ -45,7 +45,7 @@ pub struct App
 {
     pub(super) config_path:    PathBuf,
     pub(super) logger:         LoggerHandle,
-    pub(super) hyprland:       Arc<dyn HyprlandPort,>,
+    pub(super) _hyprland:      Arc<dyn HyprlandPort,>,
     pub(super) config_manager: Arc<ConfigManager,>,
     pub(super) bus_receiver:   Arc<Mutex<EventReceiver,>,>,
     pub(super) micro_ticker:   MicroTicker,
@@ -153,6 +153,17 @@ impl From<modules::screenshot::ScreenshotMessage,> for Message
     }
 }
 
+type AppDependencies = (
+    LoggerHandle,
+    Arc<Config,>,
+    Arc<ConfigManager,>,
+    PathBuf,
+    Arc<dyn HyprlandPort,>,
+    EventSender,
+    Handle,
+    EventReceiver,
+);
+
 impl App
 {
     pub fn new(
@@ -165,16 +176,7 @@ impl App
             event_sender,
             runtime_handle,
             bus_receiver,
-        ): (
-            LoggerHandle,
-            Arc<Config,>,
-            Arc<ConfigManager,>,
-            PathBuf,
-            Arc<dyn HyprlandPort,>,
-            EventSender,
-            Handle,
-            EventReceiver,
-        ),
+        ): AppDependencies,
     ) -> impl FnOnce() -> (Self, Task<Message,>,)
     {
         move || {
@@ -191,7 +193,7 @@ impl App
             let mut app = App {
                 config_path,
                 logger,
-                hyprland,
+                _hyprland: hyprland,
                 config_manager,
                 bus_receiver: Arc::new(Mutex::new(bus_receiver,),),
                 micro_ticker: MicroTicker::default(),
@@ -282,7 +284,7 @@ mod tests
             bus_receiver,
         ),)();
 
-        assert!(Arc::ptr_eq(&app.hyprland, &mock_port));
+        assert!(Arc::ptr_eq(&app._hyprland, &mock_port));
     }
 
     #[test]

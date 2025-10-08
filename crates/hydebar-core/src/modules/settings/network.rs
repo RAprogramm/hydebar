@@ -139,7 +139,7 @@ impl NetworkData
         sub_menu: Option<SubMenu,>,
         show_more_button: bool,
         opacity: f32,
-    ) -> Option<(Element<Message,>, Option<Element<Message,>,>,),>
+    ) -> Option<(Element<'_, Message,>, Option<Element<'_, Message,>,>,),>
     {
         if self.wifi_present {
             let active_connection = self.active_connections.iter().find_map(|c| match c {
@@ -184,7 +184,7 @@ impl NetworkData
         sub_menu: Option<SubMenu,>,
         show_more_button: bool,
         opacity: f32,
-    ) -> Option<(Element<Message,>, Option<Element<Message,>,>,),>
+    ) -> Option<(Element<'_, Message,>, Option<Element<'_, Message,>,>,),>
     {
         self.known_connections.iter().any(|c| matches!(c, KnownConnection::Vpn { .. }),).then(
             || {
@@ -367,7 +367,7 @@ impl NetworkData
     pub fn get_airplane_mode_quick_setting_button(
         &self,
         opacity: f32,
-    ) -> (Element<Message,>, Option<Element<Message,>,>,)
+    ) -> (Element<'_, Message,>, Option<Element<'_, Message,>,>,)
     {
         (
             quick_setting_button(

@@ -69,7 +69,7 @@ fn format_speed(speed: u32,) -> (u32, &'static str,)
 }
 
 /// Render the module menu displaying detailed system metrics.
-pub fn build_menu_view(data: &SystemInfoData,) -> Element<Message,>
+pub fn build_menu_view(data: &SystemInfoData,) -> Element<'_, Message,>
 {
     column![
         text("System Info").size(20),

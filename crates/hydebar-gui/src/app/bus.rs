@@ -4,7 +4,7 @@ use hydebar_core::event_bus::{BusEvent, EventReceiver};
 use log::error;
 
 #[derive(Debug, Clone,)]
-pub(super) struct BusFlushOutcome
+pub struct BusFlushOutcome
 {
     events:    Vec<BusEvent,>,
     had_error: bool,
@@ -12,13 +12,6 @@ pub(super) struct BusFlushOutcome
 
 impl BusFlushOutcome
 {
-    pub(super) fn empty() -> Self
-    {
-        Self {
-            events: Vec::new(), had_error: false,
-        }
-    }
-
     pub(super) fn with_events(events: Vec<BusEvent,>, had_error: bool,) -> Self
     {
         Self {

@@ -54,7 +54,7 @@ impl SystemInfo
     }
 
     /// Render the menu entry exposing detailed system information.
-    pub fn menu_view(&self,) -> Element<Message,>
+    pub fn menu_view(&self,) -> Element<'_, Message,>
     {
         view::build_menu_view(&self.data,)
     }

@@ -212,7 +212,7 @@ impl MenuSize
 #[allow(clippy::too_many_arguments)]
 pub fn menu_wrapper<Message: Clone + 'static,>(
     _id: Id,
-    content: Element<Message,>,
+    content: Element<'_, Message,>,
     menu_size: MenuSize,
     button_ui_ref: ButtonUIRef,
     bar_position: Position,
@@ -221,7 +221,7 @@ pub fn menu_wrapper<Message: Clone + 'static,>(
     menu_backdrop: f32,
     none_message: Message,
     close_menu_message: Message,
-) -> Element<Message,>
+) -> Element<'_, Message,>
 {
     mouse_area(
         container(

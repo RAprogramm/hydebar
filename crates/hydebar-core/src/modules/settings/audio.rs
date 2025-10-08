@@ -45,7 +45,7 @@ impl AudioData
         &self,
         sub_menu: Option<SubMenu,>,
         opacity: f32,
-    ) -> (Option<Element<Message,>,>, Option<Element<Message,>,>,)
+    ) -> (Option<Element<'_, Message,>,>, Option<Element<'_, Message,>,>,)
     {
         let active_sink =
             self.sinks.iter().find(|sink| sink.name == self.server_info.default_sink,);
@@ -92,7 +92,7 @@ impl AudioData
         }
     }
 
-    pub fn sinks_submenu(&self, id: Id, show_more: bool, opacity: f32,) -> Element<Message,>
+    pub fn sinks_submenu(&self, id: Id, show_more: bool, opacity: f32,) -> Element<'_, Message,>
     {
         audio_submenu(
             self.sinks
@@ -114,7 +114,8 @@ impl AudioData
         )
     }
 
-    pub fn sources_submenu(&self, id: Id, show_more: bool, opacity: f32,) -> Element<Message,>
+    pub fn sources_submenu(&self, id: Id, show_more: bool, opacity: f32,)
+    -> Element<'_, Message,>
     {
         audio_submenu(
             self.sources

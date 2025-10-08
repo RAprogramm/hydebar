@@ -105,7 +105,7 @@ impl PowerProfile
     pub fn get_quick_setting_button(
         &self,
         opacity: f32,
-    ) -> Option<(Element<Message,>, Option<Element<Message,>,>,),>
+    ) -> Option<(Element<'_, Message,>, Option<Element<'_, Message,>,>,),>
     {
         if !matches!(self, PowerProfile::Unknown) {
             Some((

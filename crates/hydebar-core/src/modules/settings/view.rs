@@ -38,7 +38,7 @@ pub trait SettingsViewExt
         config: &SettingsModuleConfig,
         opacity: f32,
         position: Position,
-    ) -> Element<Message,>;
+    ) -> Element<'_, Message,>;
 }
 
 impl SettingsViewExt for Settings
@@ -99,7 +99,7 @@ impl SettingsViewExt for Settings
         config: &SettingsModuleConfig,
         opacity: f32,
         position: Position,
-    ) -> Element<Message,>
+    ) -> Element<'_, Message,>
     {
         if let Some((ssid, current_password,),) = &self.password_dialog {
             password_dialog::view(id, ssid, current_password, opacity,)
