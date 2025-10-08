@@ -10,26 +10,25 @@ use crate::{
     style::{confirm_button_style, outline_button_style, text_input_style},
 };
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    PasswordChanged(String),
-    DialogConfirmed(Id),
-    DialogCancelled(Id),
+#[derive(Debug, Clone,)]
+pub enum Message
+{
+    PasswordChanged(String,),
+    DialogConfirmed(Id,),
+    DialogCancelled(Id,),
 }
 
-pub fn view<'a>(
+pub fn view<'a,>(
     id: Id,
     wifi_ssid: &str,
     current_password: &str,
     opacity: f32,
-) -> Element<'a, Message> {
+) -> Element<'a, Message,>
+{
     column!(
-        row!(
-            icon(Icons::WifiLock4).size(32),
-            text("Authentication required").size(22),
-        )
-        .spacing(16)
-        .align_y(Alignment::Center),
+        row!(icon(Icons::WifiLock4).size(32), text("Authentication required").size(22),)
+            .spacing(16)
+            .align_y(Alignment::Center),
         text(format!("Insert password to connect to: {wifi_ssid}")),
         text_input("", current_password)
             .secure(true)
@@ -54,8 +53,8 @@ pub fn view<'a>(
         .spacing(8)
         .width(Length::Fill)
     )
-    .spacing(16)
-    .padding(16)
-    .max_width(350.)
+    .spacing(16,)
+    .padding(16,)
+    .max_width(350.,)
     .into()
 }

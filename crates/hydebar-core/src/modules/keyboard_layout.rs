@@ -1,70 +1,76 @@
-use hydebar_proto::ports::hyprland::{HyprlandKeyboardEvent, HyprlandKeyboardState, HyprlandPort};
-use iced::Element;
-use iced::widget::text;
-use log::error;
 use std::{sync::Arc, time::Duration};
+
+use hydebar_proto::ports::hyprland::{HyprlandKeyboardEvent, HyprlandKeyboardState, HyprlandPort};
+use iced::{Element, widget::text};
+use log::error;
 use tokio::{task::JoinHandle, time::sleep};
 use tokio_stream::StreamExt;
 
+use super::{Module, ModuleError, OnModulePress};
 use crate::{
-    ModuleContext, ModuleEventSender, config::KeyboardLayoutModuleConfig,
-    event_bus::ModuleEvent,
+    ModuleContext, ModuleEventSender, config::KeyboardLayoutModuleConfig, event_bus::ModuleEvent,
 };
 
-use super::{Module, ModuleError, OnModulePress};
+const KEYBOARD_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500,);
 
-const KEYBOARD_EVENT_RETRY_DELAY: Duration = Duration::from_millis(500);
-
-pub struct KeyboardLayout {
-    hyprland: Arc<dyn HyprlandPort>,
+pub struct KeyboardLayout
+{
+    hyprland:        Arc<dyn HyprlandPort,>,
     multiple_layout: bool,
-    active: String,
-    sender: Option<ModuleEventSender<Message>>,
-    task: Option<JoinHandle<()>>,
+    active:          String,
+    sender:          Option<ModuleEventSender<Message,>,>,
+    task:            Option<JoinHandle<(),>,>,
 }
 
-impl std::fmt::Debug for KeyboardLayout {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KeyboardLayout")
-            .field("hyprland", &"<HyprlandPort>")
-            .field("multiple_layout", &self.multiple_layout)
-            .field("active", &self.active)
-            .field("sender", &self.sender)
-            .field("task", &self.task.as_ref().map(|_| "<JoinHandle>"))
+impl std::fmt::Debug for KeyboardLayout
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_,>,) -> std::fmt::Result
+    {
+        f.debug_struct("KeyboardLayout",)
+            .field("hyprland", &"<HyprlandPort>",)
+            .field("multiple_layout", &self.multiple_layout,)
+            .field("active", &self.active,)
+            .field("sender", &self.sender,)
+            .field("task", &self.task.as_ref().map(|_| "<JoinHandle>",),)
             .finish()
     }
 }
 
-impl Clone for KeyboardLayout {
-    fn clone(&self) -> Self {
+impl Clone for KeyboardLayout
+{
+    fn clone(&self,) -> Self
+    {
         Self {
-            hyprland: Arc::clone(&self.hyprland),
+            hyprland:        Arc::clone(&self.hyprland,),
             multiple_layout: self.multiple_layout,
-            active: self.active.clone(),
-            sender: self.sender.clone(),
-            task: None, // JoinHandle can't be cloned
+            active:          self.active.clone(),
+            sender:          self.sender.clone(),
+            task:            None, // JoinHandle can't be cloned
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    LayoutConfigChanged(bool),
-    ActiveLayoutChanged(String),
+#[derive(Debug, Clone,)]
+pub enum Message
+{
+    LayoutConfigChanged(bool,),
+    ActiveLayoutChanged(String,),
     ChangeLayout,
 }
 
-impl KeyboardLayout {
-    pub fn new(hyprland: Arc<dyn HyprlandPort>) -> Self {
+impl KeyboardLayout
+{
+    pub fn new(hyprland: Arc<dyn HyprlandPort,>,) -> Self
+    {
         let HyprlandKeyboardState {
             active_layout,
             has_multiple_layouts,
             ..
         } = hyprland.keyboard_state().unwrap_or(HyprlandKeyboardState {
-            active_layout: "unknown".to_string(),
+            active_layout:        "unknown".to_string(),
             has_multiple_layouts: false,
-            active_submap: None,
-        });
+            active_submap:        None,
+        },);
 
         Self {
             hyprland,
@@ -75,14 +81,15 @@ impl KeyboardLayout {
         }
     }
 
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message,)
+    {
         match message {
-            Message::ActiveLayoutChanged(layout) => {
+            Message::ActiveLayoutChanged(layout,) => {
                 self.active = layout;
             }
-            Message::LayoutConfigChanged(layout_flag) => self.multiple_layout = layout_flag,
+            Message::LayoutConfigChanged(layout_flag,) => self.multiple_layout = layout_flag,
             Message::ChangeLayout => {
-                if let Err(err) = self.hyprland.switch_keyboard_layout() {
+                if let Err(err,) = self.hyprland.switch_keyboard_layout() {
                     error!("failed to switch keyboard layout: {err}");
                 }
             }
@@ -90,36 +97,39 @@ impl KeyboardLayout {
     }
 
     #[cfg(test)]
-    pub(crate) fn active_layout(&self) -> &str {
+    pub(crate) fn active_layout(&self,) -> &str
+    {
         &self.active
     }
 
     #[cfg(test)]
-    pub(crate) fn has_multiple_layouts(&self) -> bool {
+    pub(crate) fn has_multiple_layouts(&self,) -> bool
+    {
         self.multiple_layout
     }
 }
 
-impl<M> Module<M> for KeyboardLayout
+impl<M,> Module<M,> for KeyboardLayout
 where
     M: 'static + Clone,
 {
-    type ViewData<'a> = &'a KeyboardLayoutModuleConfig;
-    type RegistrationData<'a> = ();
+    type ViewData<'a,> = &'a KeyboardLayoutModuleConfig;
+    type RegistrationData<'a,> = ();
 
     fn register(
         &mut self,
         ctx: &ModuleContext,
-        _: Self::RegistrationData<'_>,
-    ) -> Result<(), ModuleError> {
-        self.sender = Some(ctx.module_sender(ModuleEvent::KeyboardLayout));
+        _: Self::RegistrationData<'_,>,
+    ) -> Result<(), ModuleError,>
+    {
+        self.sender = Some(ctx.module_sender(ModuleEvent::KeyboardLayout,),);
 
-        if let Some(handle) = self.task.take() {
+        if let Some(handle,) = self.task.take() {
             handle.abort();
         }
 
-        if let Some(sender) = self.sender.clone() {
-            let hyprland = Arc::clone(&self.hyprland);
+        if let Some(sender,) = self.sender.clone() {
+            let hyprland = Arc::clone(&self.hyprland,);
             self.task = Some(ctx.runtime_handle().spawn(async move {
                 loop {
                     match hyprland.keyboard_events() {
@@ -158,51 +168,55 @@ where
             }));
         }
 
-        Ok(())
+        Ok((),)
     }
 
     fn view(
         &self,
-        config: Self::ViewData<'_>,
-    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
+        config: Self::ViewData<'_,>,
+    ) -> Option<(Element<'static, M,>, Option<OnModulePress<M,>,>,),>
+    {
         if !self.multiple_layout {
             None
         } else {
-            let active = match config.labels.get(&self.active) {
-                Some(value) => value.to_string(),
+            let active = match config.labels.get(&self.active,) {
+                Some(value,) => value.to_string(),
                 None => self.active.clone(),
             };
             Some((
-                text(active).into(),
+                text(active,).into(),
                 None, // Action handled in GUI layer
-            ))
+            ),)
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod tests
+{
     use super::*;
     use crate::test_utils::MockHyprlandPort;
 
     #[test]
-    fn initializes_from_keyboard_state() {
-        let port = Arc::new(MockHyprlandPort::default());
-        let port_trait: Arc<dyn HyprlandPort> = port.clone();
+    fn initializes_from_keyboard_state()
+    {
+        let port = Arc::new(MockHyprlandPort::default(),);
+        let port_trait: Arc<dyn HyprlandPort,> = port.clone();
 
-        let module = KeyboardLayout::new(port_trait);
+        let module = KeyboardLayout::new(port_trait,);
 
         assert_eq!(module.active_layout(), "us");
         assert!(module.has_multiple_layouts());
     }
 
     #[test]
-    fn change_layout_invokes_port_command() {
-        let port = Arc::new(MockHyprlandPort::default());
-        let port_trait: Arc<dyn HyprlandPort> = port.clone();
-        let mut module = KeyboardLayout::new(port_trait);
+    fn change_layout_invokes_port_command()
+    {
+        let port = Arc::new(MockHyprlandPort::default(),);
+        let port_trait: Arc<dyn HyprlandPort,> = port.clone();
+        let mut module = KeyboardLayout::new(port_trait,);
 
-        module.update(Message::ChangeLayout);
+        module.update(Message::ChangeLayout,);
 
         assert_eq!(port.switch_layout_calls(), 1);
     }

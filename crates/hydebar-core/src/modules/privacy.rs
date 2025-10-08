@@ -1,4 +1,20 @@
+use std::future::{Ready, ready};
+#[cfg(test)]
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
+use iced::{
+    Alignment, Element,
+    widget::{Row, container},
+};
+use log::{error, warn};
+use tokio::task::JoinHandle;
+
 use super::{Module, ModuleError, OnModulePress};
+#[cfg(test)]
+use crate::event_bus::BusEvent;
 use crate::{
     ModuleContext, ModuleEventSender,
     components::icons::{Icons, icon},
@@ -8,64 +24,39 @@ use crate::{
         privacy::{PrivacyEventPublisher, PrivacyService, State, error::PrivacyError},
     },
 };
-use iced::{
-    Alignment, Element,
-    widget::{Row, container},
-};
-use log::{error, warn};
-use std::{
-    future::{Future, Ready, ready},
-    pin::Pin,
-};
-use tokio::task::JoinHandle;
-
-#[cfg(test)]
-use std::{
-    num::NonZeroUsize,
-    sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
-
-#[cfg(test)]
-use crate::event_bus::{BusEvent, EventBus, ModuleEvent as BusModuleEvent};
-
-#[cfg(test)]
-use iced::futures::future::pending;
-
-#[cfg(test)]
-use tokio::time::timeout;
 
 /// Message emitted by the privacy module subscription.
-#[derive(Debug, Clone)]
-pub enum PrivacyMessage {
-    Event(ServiceEvent<PrivacyService>),
+#[derive(Debug, Clone,)]
+pub enum PrivacyMessage
+{
+    Event(ServiceEvent<PrivacyService,>,),
 }
 
 /// UI module exposing privacy information icons.
-#[derive(Debug, Default)]
-pub struct Privacy {
-    pub service: Option<PrivacyService>,
-    sender: Option<ModuleEventSender<PrivacyMessage>>,
-    tasks: Vec<JoinHandle<()>>,
+#[derive(Debug, Default,)]
+pub struct Privacy
+{
+    pub service: Option<PrivacyService,>,
+    sender:      Option<ModuleEventSender<PrivacyMessage,>,>,
+    tasks:       Vec<JoinHandle<(),>,>,
 }
 
-impl Privacy {
+impl Privacy
+{
     /// Update the module state based on new privacy events.
-    pub fn update(&mut self, message: PrivacyMessage) {
-        if let PrivacyMessage::Event(event) = message {
+    pub fn update(&mut self, message: PrivacyMessage,)
+    {
+        if let PrivacyMessage::Event(event,) = message {
             match event {
-                ServiceEvent::Init(service) => {
-                    self.service = Some(service);
+                ServiceEvent::Init(service,) => {
+                    self.service = Some(service,);
                 }
-                ServiceEvent::Update(data) => {
-                    if let Some(privacy) = self.service.as_mut() {
-                        privacy.update(data);
+                ServiceEvent::Update(data,) => {
+                    if let Some(privacy,) = self.service.as_mut() {
+                        privacy.update(data,);
                     }
                 }
-                ServiceEvent::Error(error) => match error {
+                ServiceEvent::Error(error,) => match error {
                     PrivacyError::WebcamUnavailable => {
                         warn!(
                             "Webcam device unavailable; continuing with PipeWire-only privacy data"
@@ -78,37 +69,38 @@ impl Privacy {
     }
 }
 
-impl<M> Module<M> for Privacy
+impl<M,> Module<M,> for Privacy
 where
     M: 'static + Clone,
 {
-    type ViewData<'a> = ();
-    type RegistrationData<'a> = ();
+    type ViewData<'a,> = ();
+    type RegistrationData<'a,> = ();
 
     fn register(
         &mut self,
         ctx: &ModuleContext,
-        _: Self::RegistrationData<'_>,
-    ) -> Result<(), ModuleError> {
-        for task in self.tasks.drain(..) {
+        _: Self::RegistrationData<'_,>,
+    ) -> Result<(), ModuleError,>
+    {
+        for task in self.tasks.drain(..,) {
             task.abort();
         }
 
-        let sender = ctx.module_sender(ModuleEvent::Privacy);
-        let mut publisher = ModulePublisher::new(sender.clone());
-        let mut error_sender = sender.clone();
+        let sender = ctx.module_sender(ModuleEvent::Privacy,);
+        let mut publisher = ModulePublisher::new(sender.clone(),);
+        let error_sender = sender.clone();
 
         let task = ctx.runtime_handle().spawn(async move {
             let mut state = State::Init;
 
             loop {
-                match run_start_listening(state, &mut publisher).await {
-                    Ok(next_state) => {
+                match run_start_listening(state, &mut publisher,).await {
+                    Ok(next_state,) => {
                         state = next_state;
                     }
-                    Err(error) => {
-                        if let Err(err) = error_sender
-                            .try_send(PrivacyMessage::Event(ServiceEvent::Error(error.clone())))
+                    Err(error,) => {
+                        if let Err(err,) = error_sender
+                            .try_send(PrivacyMessage::Event(ServiceEvent::Error(error.clone(),),),)
                         {
                             warn!("failed to publish privacy service error: {err}");
                             break;
@@ -118,41 +110,40 @@ where
                     }
                 }
             }
-        });
+        },);
 
-        self.sender = Some(sender);
-        self.tasks.push(task);
+        self.sender = Some(sender,);
+        self.tasks.push(task,);
 
-        Ok(())
+        Ok((),)
     }
 
     /// Render the privacy indicator when data is available.
     fn view(
         &self,
-        _: Self::ViewData<'_>,
-    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
-        if let Some(service) = self.service.as_ref() {
+        _: Self::ViewData<'_,>,
+    ) -> Option<(Element<'static, M,>, Option<OnModulePress<M,>,>,),>
+    {
+        if let Some(service,) = self.service.as_ref() {
             if !service.no_access() {
                 Some((
                     container(
                         Row::new()
                             .push_maybe(
-                                service
-                                    .screenshare_access()
-                                    .then(|| icon(Icons::ScreenShare)),
+                                service.screenshare_access().then(|| icon(Icons::ScreenShare,),),
                             )
-                            .push_maybe(service.webcam_access().then(|| icon(Icons::Webcam)))
-                            .push_maybe(service.microphone_access().then(|| icon(Icons::Mic1)))
-                            .align_y(Alignment::Center)
-                            .spacing(8),
+                            .push_maybe(service.webcam_access().then(|| icon(Icons::Webcam,),),)
+                            .push_maybe(service.microphone_access().then(|| icon(Icons::Mic1,),),)
+                            .align_y(Alignment::Center,)
+                            .spacing(8,),
                     )
                     .style(|theme| container::Style {
-                        text_color: Some(theme.extended_palette().danger.weak.color),
+                        text_color: Some(theme.extended_palette().danger.weak.color,),
                         ..Default::default()
-                    })
+                    },)
                     .into(),
                     None,
-                ))
+                ),)
             } else {
                 None
             }
@@ -162,54 +153,55 @@ where
     }
 }
 
-struct ModulePublisher {
-    sender: ModuleEventSender<PrivacyMessage>,
+struct ModulePublisher
+{
+    sender: ModuleEventSender<PrivacyMessage,>,
 }
 
-impl ModulePublisher {
-    fn new(sender: ModuleEventSender<PrivacyMessage>) -> Self {
-        Self { sender }
+impl ModulePublisher
+{
+    fn new(sender: ModuleEventSender<PrivacyMessage,>,) -> Self
+    {
+        Self {
+            sender,
+        }
     }
 }
 
-impl PrivacyEventPublisher for ModulePublisher {
-    type SendFuture<'a>
-        = Ready<Result<(), PrivacyError>>
+impl PrivacyEventPublisher for ModulePublisher
+{
+    type SendFuture<'a,>
+        = Ready<Result<(), PrivacyError,>,>
     where
         Self: 'a;
 
-    fn send(&mut self, event: ServiceEvent<PrivacyService>) -> Self::SendFuture<'_> {
-        ready(
-            self.sender
-                .try_send(PrivacyMessage::Event(event))
-                .map_err(|err| {
-                    PrivacyError::channel(format!("failed to publish privacy event: {err}"))
-                }),
-        )
+    fn send(&mut self, event: ServiceEvent<PrivacyService,>,) -> Self::SendFuture<'_,>
+    {
+        ready(self.sender.try_send(PrivacyMessage::Event(event,),).map_err(|err| {
+            PrivacyError::channel(format!("failed to publish privacy event: {err}"),)
+        },),)
     }
 }
 
-async fn run_start_listening<P>(
-    state: State,
-    publisher: &mut P,
-) -> Result<State, PrivacyError>
+async fn run_start_listening<P,>(state: State, publisher: &mut P,) -> Result<State, PrivacyError,>
 where
     P: PrivacyEventPublisher + Send,
 {
-    // Note: Test override mechanism removed due to GAT incompatibility with dyn trait objects
-    // Tests will now use the real implementation
-    PrivacyService::start_listening(state, publisher).await
+    // Note: Test override mechanism removed due to GAT incompatibility with dyn
+    // trait objects Tests will now use the real implementation
+    PrivacyService::start_listening(state, publisher,).await
 }
 
-// Test override infrastructure removed due to GAT incompatibility with dyn trait objects
-// The tests below have been disabled and will need to be rewritten to use concrete types
+// Test override infrastructure removed due to GAT incompatibility with dyn
+// trait objects The tests below have been disabled and will need to be
+// rewritten to use concrete types
 
 #[cfg(test)]
-async fn recv_event(receiver: &mut crate::event_bus::EventReceiver) -> BusEvent {
+async fn recv_event(receiver: &mut crate::event_bus::EventReceiver,) -> BusEvent
+{
     loop {
-        if let Some(event) = receiver
-            .try_recv()
-            .expect("event bus receiver should not be poisoned")
+        if let Some(event,) =
+            receiver.try_recv().expect("event bus receiver should not be poisoned",)
         {
             return event;
         }
@@ -219,14 +211,17 @@ async fn recv_event(receiver: &mut crate::event_bus::EventReceiver) -> BusEvent 
 }
 
 #[cfg(test)]
-struct CancellationProbe {
-    flag: Arc<AtomicBool>,
+struct CancellationProbe
+{
+    flag: Arc<AtomicBool,>,
 }
 
 #[cfg(test)]
-impl Drop for CancellationProbe {
-    fn drop(&mut self) {
-        self.flag.store(true, Ordering::SeqCst);
+impl Drop for CancellationProbe
+{
+    fn drop(&mut self,)
+    {
+        self.flag.store(true, Ordering::SeqCst,);
     }
 }
 

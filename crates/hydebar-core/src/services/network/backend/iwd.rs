@@ -15,58 +15,56 @@ pub mod simple_configuration;
 pub mod station;
 pub mod station_diagnostic;
 
+use std::ops::Deref;
+
+use access_point::AccessPointProxy;
+use adapter::AdapterProxy;
+use agent_manager::AgentManagerProxy;
+use device::DeviceProxy;
+use iced::futures::{Stream, StreamExt, future::join_all, stream::select_all};
+use known_network::KnownNetworkProxy;
+use log::{debug, info, warn};
+use network::NetworkProxy;
+use station::StationProxy;
+use tokio::process::Command;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
+use zbus::{fdo::ObjectManagerProxy, interface, zvariant::OwnedObjectPath};
 
 // source for dbus: https://git.kernel.org/pub/scm/network/wireless/iwd.git/tree/doc
-//info!("{:?}",n.inner().introspect().await?); => can use this to generate proxy implementations
-
+//info!("{:?}",n.inner().introspect().await?); => can use this to generate proxy
+// implementations
 use crate::services::bluetooth::BluetoothService;
 use crate::services::network::{
     AccessPoint, ActiveConnectionInfo, ConnectivityState, DeviceState, KnownConnection,
     NetworkBackend, NetworkData, NetworkEvent,
 };
 
-use iced::futures::future::join_all;
-use iced::futures::stream::select_all;
-use iced::futures::{Stream, StreamExt};
-use zbus::interface;
-
-use log::{debug, info, warn};
-use std::ops::Deref;
-use tokio::process::Command;
-use zbus::fdo::ObjectManagerProxy;
-use zbus::zvariant::OwnedObjectPath;
-
-use access_point::AccessPointProxy;
-use adapter::AdapterProxy;
-use agent_manager::AgentManagerProxy;
-use device::DeviceProxy;
-use known_network::KnownNetworkProxy;
-use network::NetworkProxy;
-use station::StationProxy;
-
 /// Wrapper around the IWD D-Bus ObjectManager
-pub struct IwdDbus<'a> {
-    _inner: ObjectManagerProxy<'a>,
+pub struct IwdDbus<'a,>
+{
+    _inner: ObjectManagerProxy<'a,>,
 }
 
-impl<'a> Deref for IwdDbus<'a> {
-    type Target = ObjectManagerProxy<'a>;
-    fn deref(&self) -> &Self::Target {
+impl<'a,> Deref for IwdDbus<'a,>
+{
+    type Target = ObjectManagerProxy<'a,>;
+    fn deref(&self,) -> &Self::Target
+    {
         &self._inner
     }
 }
 
 #[allow(unused_variables)]
-impl NetworkBackend for IwdDbus<'_> {
-    async fn initialize_data(&self) -> anyhow::Result<NetworkData> {
+impl NetworkBackend for IwdDbus<'_,>
+{
+    async fn initialize_data(&self,) -> anyhow::Result<NetworkData,>
+    {
         let nm = self;
 
         // airplane mode
-        let bluetooth_soft_blocked = BluetoothService::check_rfkill_soft_block()
-            .await
-            .unwrap_or_default();
+        let bluetooth_soft_blocked =
+            BluetoothService::check_rfkill_soft_block().await.unwrap_or_default();
 
         let wifi_present = nm.wifi_device_present().await?;
 
@@ -85,11 +83,11 @@ impl NetworkBackend for IwdDbus<'_> {
         let known_connections = nm.known_connections().await?;
         debug!("Known connections: {known_connections:?}");
 
-        let is_scanning = join_all(self.stations().await?.iter().map(|s| s.scanning()))
+        let is_scanning = join_all(self.stations().await?.iter().map(|s| s.scanning(),),)
             .await
             .into_iter()
-            .filter_map(|v| v.ok())
-            .any(|v| v);
+            .filter_map(|v| v.ok(),)
+            .any(|v| v,);
 
         Ok(NetworkData {
             wifi_present,
@@ -100,21 +98,22 @@ impl NetworkBackend for IwdDbus<'_> {
                 .connectivity()
                 .await?
                 .into_iter()
-                .map(ConnectivityState::from)
-                .collect::<Vec<ConnectivityState>>()
+                .map(ConnectivityState::from,)
+                .collect::<Vec<ConnectivityState,>>()
                 .into(),
             wireless_access_points,
             known_connections,
             scanning_nearby_wifi: is_scanning,
             last_error: None,
-        })
+        },)
     }
 
     /// List known (provisioned) SSIDs
-    async fn known_connections(&self) -> anyhow::Result<Vec<KnownConnection>> {
+    async fn known_connections(&self,) -> anyhow::Result<Vec<KnownConnection,>,>
+    {
         let nets = self.reachable_networks().await?;
         let mut networks = Vec::new();
-        for (n, s) in nets {
+        for (n, s,) in nets {
             if n.known_network().await.is_err() {
                 continue;
             }
@@ -129,12 +128,13 @@ impl NetworkBackend for IwdDbus<'_> {
                 state: DeviceState::Unknown, // TODO:
                 public: n.type_().await? == "open",
                 working: false, // TODO:
-            }));
+            },),);
         }
-        Ok(networks)
+        Ok(networks,)
     }
 
-    async fn scan_nearby_wifi(&self) -> anyhow::Result<()> {
+    async fn scan_nearby_wifi(&self,) -> anyhow::Result<(),>
+    {
         for station in self.stations().await? {
             if station.scanning().await? {
                 debug!("Already scanning");
@@ -142,80 +142,77 @@ impl NetworkBackend for IwdDbus<'_> {
             }
             station.scan().await?;
         }
-        Ok(())
+        Ok((),)
     }
 
-    async fn set_wifi_enabled(&self, enabled: bool) -> anyhow::Result<()> {
-        AdapterProxy::new(self.inner().connection())
-            .await?
-            .set_powered(enabled)
-            .await?;
-        Ok(())
+    async fn set_wifi_enabled(&self, enabled: bool,) -> anyhow::Result<(),>
+    {
+        AdapterProxy::new(self.inner().connection(),).await?.set_powered(enabled,).await?;
+        Ok((),)
     }
 
     async fn select_access_point(
         &mut self,
         ap: &AccessPoint,
-        password: Option<String>,
-    ) -> anyhow::Result<()> {
+        password: Option<String,>,
+    ) -> anyhow::Result<(),>
+    {
         // Get the agent manager
         let agent_manager = self.agent_manager().await?;
 
         // If password is provided, register a new agent to handle it
-        if let Some(p) = password {
-            let path = OwnedObjectPath::try_from("/hydebar/pwagent/main").unwrap();
+        if let Some(p,) = password {
+            let path = OwnedObjectPath::try_from("/hydebar/pwagent/main",).unwrap();
 
-            match agent_manager.unregister_agent(&path).await {
-                Ok(_) => info!("Successfully unregistered agent at {path}"),
-                Err(e) => info!("Failed to unregister agent at {path}: {e}"),
+            match agent_manager.unregister_agent(&path,).await {
+                Ok(_,) => info!("Successfully unregistered agent at {path}"),
+                Err(e,) => info!("Failed to unregister agent at {path}: {e}"),
             }
 
             // Create a new agent with the password
-            let (tx, password_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+            let (tx, password_rx,) = tokio::sync::mpsc::unbounded_channel::<String,>();
 
             // Register the new agent
-            let pw_agent = PWAgent { password_rx };
-            self.inner()
-                .connection()
-                .object_server()
-                .at(path.clone(), pw_agent)
-                .await?;
+            let pw_agent = PWAgent {
+                password_rx,
+            };
+            self.inner().connection().object_server().at(path.clone(), pw_agent,).await?;
 
-            agent_manager.register_agent(&path).await?;
+            agent_manager.register_agent(&path,).await?;
 
             // Send the password to the agent channel
-            tx.send(p)?;
+            tx.send(p,)?;
         }
 
-        let net = NetworkProxy::builder(self.inner().connection())
-            .destination("net.connman.iwd")?
-            .path(ap.path.clone())?
+        let net = NetworkProxy::builder(self.inner().connection(),)
+            .destination("net.connman.iwd",)?
+            .path(ap.path.clone(),)?
             .build()
             .await?;
         net.connect().await?;
-        Ok(())
+        Ok((),)
     }
 
     async fn set_vpn(
         &self,
         path: OwnedObjectPath,
         enable: bool,
-    ) -> anyhow::Result<Vec<KnownConnection>> {
+    ) -> anyhow::Result<Vec<KnownConnection,>,>
+    {
         // IWD doesn't natively support VPN management
         // This would need to be implemented with additional VPN management tools
-        Err(anyhow::anyhow!(
-            "VPN management not implemented for IWD backend"
-        ))
+        Err(anyhow::anyhow!("VPN management not implemented for IWD backend"),)
     }
 
-    async fn set_airplane_mode(&self, airplane: bool) -> anyhow::Result<()> {
-        Command::new("/usr/sbin/rfkill")
-            .arg(if airplane { "block" } else { "unblock" })
-            .arg("bluetooth")
+    async fn set_airplane_mode(&self, airplane: bool,) -> anyhow::Result<(),>
+    {
+        Command::new("/usr/sbin/rfkill",)
+            .arg(if airplane { "block" } else { "unblock" },)
+            .arg("bluetooth",)
             .output()
             .await?;
-        self.set_wifi_enabled(!airplane).await?;
-        Ok(())
+        self.set_wifi_enabled(!airplane,).await?;
+        Ok((),)
     }
 }
 
@@ -225,24 +222,25 @@ macro_rules! list_proxies {
         async {
             let objects = $manager.get_managed_objects().await?;
             let mut proxies = Vec::new();
-            for (path, ifs) in objects {
-                if ifs.contains_key($interface) {
+            for (path, ifs,) in objects {
+                if ifs.contains_key($interface,) {
                     proxies.push(
-                        <$proxy_type>::builder($manager.inner().connection())
-                            .destination("net.connman.iwd")?
-                            .path(path.clone())?
+                        <$proxy_type>::builder($manager.inner().connection(),)
+                            .destination("net.connman.iwd",)?
+                            .path(path.clone(),)?
                             .build()
                             .await?,
                     );
                 }
             }
-            Ok::<_, anyhow::Error>(proxies)
+            Ok::<_, anyhow::Error,>(proxies,)
         }
     };
 }
 
 #[allow(dead_code)]
-enum IwdStationState {
+enum IwdStationState
+{
     Connected,
     Disconnected,
     Connecting,
@@ -250,8 +248,10 @@ enum IwdStationState {
     Roaming,
 }
 
-impl From<String> for IwdStationState {
-    fn from(state: String) -> Self {
+impl From<String,> for IwdStationState
+{
+    fn from(state: String,) -> Self
+    {
         match state.as_str() {
             "connected" => IwdStationState::Connected,
             "disconnected" => IwdStationState::Disconnected,
@@ -263,160 +263,176 @@ impl From<String> for IwdStationState {
     }
 }
 
-struct SignalAgent {
-    tx: tokio::sync::mpsc::UnboundedSender<i16>,
+struct SignalAgent
+{
+    tx: tokio::sync::mpsc::UnboundedSender<i16,>,
 }
 
 #[interface(name = "net.connman.iwd.SignalLevelAgent")]
-impl SignalAgent {
+impl SignalAgent
+{
     /// Called by iwd whenever RSSI crosses a threshold
     #[zbus(name = "Changed")]
-    fn changed(&self, level: i16) {
+    fn changed(&self, level: i16,)
+    {
         // ignore failure if receiver was dropped
         warn!("Signal level changed: {level}");
-        let _ = self.tx.send(level);
+        let _ = self.tx.send(level,);
     }
 }
 
-struct PWAgent {
+struct PWAgent
+{
     // Channel for receiving passwords
-    password_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+    password_rx: tokio::sync::mpsc::UnboundedReceiver<String,>,
 }
 
 #[interface(name = "net.connman.iwd.Agent")]
-impl PWAgent {
+impl PWAgent
+{
     #[zbus(name = "RequestPassphrase")]
     async fn request_passphrase(
         &mut self,
         _network_path: OwnedObjectPath,
-    ) -> zbus::fdo::Result<String> {
+    ) -> zbus::fdo::Result<String,>
+    {
         // Try to receive a password from the channel
-        if let Ok(pass) = self.password_rx.try_recv() {
-            Ok(pass)
+        if let Ok(pass,) = self.password_rx.try_recv() {
+            Ok(pass,)
         } else {
             warn!("No password available");
-            Err(zbus::fdo::Error::Failed("No password set".into()))
+            Err(zbus::fdo::Error::Failed("No password set".into(),),)
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod tests
+{
     use std::convert::TryFrom;
+
     use zbus::zvariant::OwnedObjectPath;
 
+    use super::*;
+
     #[tokio::test]
-    async fn pw_agent_returns_password_when_available() {
-        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut agent = PWAgent { password_rx: rx };
-        let path = OwnedObjectPath::try_from("/").expect("valid object path");
+    async fn pw_agent_returns_password_when_available()
+    {
+        let (_tx, rx,) = tokio::sync::mpsc::unbounded_channel();
+        let mut agent = PWAgent {
+            password_rx: rx,
+        };
+        let path = OwnedObjectPath::try_from("/",).expect("valid object path",);
 
         assert!(agent.request_passphrase(path.clone()).await.is_err());
 
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        tx.send("secret".to_string()).expect("send password");
-        let mut agent = PWAgent { password_rx: rx };
-        let path = OwnedObjectPath::try_from("/").expect("valid object path");
-        let value = agent
-            .request_passphrase(path)
-            .await
-            .expect("password available");
+        let (tx, rx,) = tokio::sync::mpsc::unbounded_channel();
+        tx.send("secret".to_string(),).expect("send password",);
+        let mut agent = PWAgent {
+            password_rx: rx,
+        };
+        let path = OwnedObjectPath::try_from("/",).expect("valid object path",);
+        let value = agent.request_passphrase(path,).await.expect("password available",);
         assert_eq!(value, "secret");
     }
 
     #[test]
-    fn signal_agent_emits_levels() {
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let agent = SignalAgent { tx };
-        agent.changed(42);
+    fn signal_agent_emits_levels()
+    {
+        let (tx, mut rx,) = tokio::sync::mpsc::unbounded_channel();
+        let agent = SignalAgent {
+            tx,
+        };
+        agent.changed(42,);
         assert_eq!(rx.try_recv().expect("signal level"), 42);
     }
 }
 
 #[allow(dead_code, unused_variables)]
-impl IwdDbus<'_> {
+impl IwdDbus<'_,>
+{
     /// Connect to the system bus and the IWD service
-    pub async fn new(conn: &zbus::Connection) -> anyhow::Result<Self> {
-        let manager = ObjectManagerProxy::builder(conn)
-            .destination("net.connman.iwd")?
-            .path("/")?
+    pub async fn new(conn: &zbus::Connection,) -> anyhow::Result<Self,>
+    {
+        let manager = ObjectManagerProxy::builder(conn,)
+            .destination("net.connman.iwd",)?
+            .path("/",)?
             .build()
             .await?;
 
-        Ok(Self { _inner: manager })
+        Ok(Self {
+            _inner: manager,
+        },)
     }
 
     // adapter <- device (station mode) <- station
 
-    pub async fn stations(&self) -> anyhow::Result<Vec<StationProxy>> {
+    pub async fn stations(&self,) -> anyhow::Result<Vec<StationProxy,>,>
+    {
         list_proxies!(&self._inner, "net.connman.iwd.Station", StationProxy).await
     }
 
-    pub async fn adapters(&self) -> anyhow::Result<Vec<AdapterProxy>> {
+    pub async fn adapters(&self,) -> anyhow::Result<Vec<AdapterProxy,>,>
+    {
         list_proxies!(&self._inner, "net.connman.iwd.Adapter", AdapterProxy).await
     }
 
-    pub async fn devices(&self) -> anyhow::Result<Vec<DeviceProxy>> {
+    pub async fn devices(&self,) -> anyhow::Result<Vec<DeviceProxy,>,>
+    {
         list_proxies!(&self._inner, "net.connman.iwd.Device", DeviceProxy).await
     }
 
-    pub async fn agent_manager(&self) -> anyhow::Result<AgentManagerProxy> {
-        list_proxies!(
-            &self._inner,
-            "net.connman.iwd.AgentManager",
-            AgentManagerProxy
-        )
-        .await?
-        .first()
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("No AgentManagerProxy found"))
+    pub async fn agent_manager(&self,) -> anyhow::Result<AgentManagerProxy,>
+    {
+        list_proxies!(&self._inner, "net.connman.iwd.AgentManager", AgentManagerProxy)
+            .await?
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("No AgentManagerProxy found"),)
     }
 
-    pub async fn known_networks_proxies(&self) -> anyhow::Result<Vec<KnownNetworkProxy>> {
-        list_proxies!(
-            &self._inner,
-            "net.connman.iwd.KnownNetwork",
-            KnownNetworkProxy
-        )
-        .await
+    pub async fn known_networks_proxies(&self,) -> anyhow::Result<Vec<KnownNetworkProxy,>,>
+    {
+        list_proxies!(&self._inner, "net.connman.iwd.KnownNetwork", KnownNetworkProxy).await
     }
 
-    pub async fn networks_proxies(&self) -> anyhow::Result<Vec<NetworkProxy>> {
+    pub async fn networks_proxies(&self,) -> anyhow::Result<Vec<NetworkProxy,>,>
+    {
         list_proxies!(&self._inner, "net.connman.iwd.Network", NetworkProxy).await
     }
 
-    pub async fn access_points_proxies(&self) -> anyhow::Result<Vec<AccessPointProxy>> {
+    pub async fn access_points_proxies(&self,) -> anyhow::Result<Vec<AccessPointProxy,>,>
+    {
         // Note: AccessPoint interface might not be directly on the root object manager.
-        // It might be associated with a Device or Station. This function assumes they might appear.
-        // If this doesn't work as expected, the logic might need refinement based on IWD's structure.
-        list_proxies!(
-            &self._inner,
-            "net.connman.iwd.AccessPoint",
-            AccessPointProxy
-        )
-        .await
+        // It might be associated with a Device or Station. This function assumes they
+        // might appear. If this doesn't work as expected, the logic might need
+        // refinement based on IWD's structure.
+        list_proxies!(&self._inner, "net.connman.iwd.AccessPoint", AccessPointProxy).await
     }
 
-    pub async fn reachable_networks(&self) -> anyhow::Result<Vec<(NetworkProxy, i16)>> {
+    pub async fn reachable_networks(&self,) -> anyhow::Result<Vec<(NetworkProxy, i16,),>,>
+    {
         let stations = self.stations().await?;
         let mut networks = Vec::new();
 
         for station in stations {
             let networks_proxies = station.get_ordered_networks().await?;
-            for (path, strength) in networks_proxies {
-                let network = NetworkProxy::builder(self.inner().connection())
-                    .destination("net.connman.iwd")?
-                    .path(path.clone())?
+            for (path, strength,) in networks_proxies {
+                let network = NetworkProxy::builder(self.inner().connection(),)
+                    .destination("net.connman.iwd",)?
+                    .path(path.clone(),)?
                     .build()
                     .await?;
-                networks.push((network, strength));
+                networks.push((network, strength,),);
             }
         }
-        Ok(networks)
+        Ok(networks,)
     }
 
-    pub async fn subscribe_events(&self) -> anyhow::Result<impl Stream<Item = Vec<NetworkEvent>>> {
+    pub async fn subscribe_events(
+        &self,
+    ) -> anyhow::Result<impl Stream<Item = Vec<NetworkEvent,>,>,>
+    {
         let _conn = self.inner().connection();
         let iwd = self;
 
@@ -431,15 +447,15 @@ impl IwdDbus<'_> {
                 .then({
                     move |p| async move {
                         // Add move here
-                        let value = p.get().await.unwrap_or(false);
+                        let value = p.get().await.unwrap_or(false,);
                         debug!("Adapter Powered changed: {value}");
                         // We need to check *all* adapters to determine overall wifi state
-                        let wifi_enabled = iwd.wireless_enabled().await.unwrap_or(false);
-                        vec![NetworkEvent::WiFiEnabled(wifi_enabled)]
+                        let wifi_enabled = iwd.wireless_enabled().await.unwrap_or(false,);
+                        vec![NetworkEvent::WiFiEnabled(wifi_enabled,)]
                     }
-                })
+                },)
                 .boxed();
-            wireless_enabled_changes.push(stream);
+            wireless_enabled_changes.push(stream,);
         }
 
         // connectivity, access points, strengths and known - all in one
@@ -448,8 +464,8 @@ impl IwdDbus<'_> {
         let mut ap_s_kap_changes = vec![];
         let mut signal_level_updates = vec![];
         for station in stations {
-            // this gets also triggered when connecting to new networks, so no need to listen to
-            // network changes
+            // this gets also triggered when connecting to new networks, so no need to
+            // listen to network changes
             let cstream = station
                 .receive_state_changed()
                 .await
@@ -464,8 +480,8 @@ impl IwdDbus<'_> {
                                     .await
                                     .unwrap_or_default()
                                     .into_iter()
-                                    .map(ConnectivityState::from)
-                                    .collect::<Vec<ConnectivityState>>()
+                                    .map(ConnectivityState::from,)
+                                    .collect::<Vec<ConnectivityState,>>()
                                     .into(),
                             ),
                             NetworkEvent::ActiveConnections(
@@ -473,73 +489,71 @@ impl IwdDbus<'_> {
                             ),
                         ]
                     }
-                })
+                },)
                 .boxed();
-            connectivity_changes.push(cstream);
+            connectivity_changes.push(cstream,);
 
             let apstream = station
                 .receive_scanning_changed()
                 .await
                 .then({
                     move |s| async move {
-                        let is_scanning = s.get().await.unwrap_or(false);
+                        let is_scanning = s.get().await.unwrap_or(false,);
 
                         let aps = iwd.wireless_access_points().await.unwrap_or_default();
                         let kcs = iwd.known_connections().await.unwrap_or_default();
 
                         let mut events = vec![
-                            NetworkEvent::KnownConnections(kcs),
+                            NetworkEvent::KnownConnections(kcs,),
                             // TODO: Strength((String, u8)), <- responibility for the signal agent
                         ];
                         if is_scanning {
                             debug!("Scanning wifi");
-                            events.push(NetworkEvent::ScanningNearbyWifi);
+                            events.push(NetworkEvent::ScanningNearbyWifi,);
                             // to update list, if scanning stopped use device
-                            events.push(NetworkEvent::WirelessAccessPoint(aps));
+                            events.push(NetworkEvent::WirelessAccessPoint(aps,),);
                         } else {
                             debug!("Stopped scanning wifi");
                             events.push(NetworkEvent::WirelessDevice {
                                 // TODO: can we reasonably assume this is true here?
-                                wifi_present: iwd.wireless_enabled().await.unwrap_or(false),
+                                wifi_present:           iwd
+                                    .wireless_enabled()
+                                    .await
+                                    .unwrap_or(false,),
                                 wireless_access_points: aps,
-                            });
+                            },);
                         }
                         events
                     }
-                })
+                },)
                 .boxed();
-            ap_s_kap_changes.push(apstream);
+            ap_s_kap_changes.push(apstream,);
 
             // 2) channel
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<i16>();
+            let (tx, rx,) = tokio::sync::mpsc::unbounded_channel::<i16,>();
             // 3) export agent
-            let agent = SignalAgent { tx };
+            let agent = SignalAgent {
+                tx,
+            };
 
             let agent_path = OwnedObjectPath::try_from(format!(
                 "/com/hydebar/signalagent/{}",
                 Uuid::new_v4().as_simple()
-            ))?;
+            ),)?;
 
-            let server = self
-                .inner()
-                .connection()
-                .object_server()
-                .at(&agent_path, agent)
-                .await?;
+            let server = self.inner().connection().object_server().at(&agent_path, agent,).await?;
             // 6) turn receiver into a Stream
             signal_level_updates.push(
-                UnboundedReceiverStream::new(rx)
+                UnboundedReceiverStream::new(rx,)
                     .filter_map(|level| async move {
                         debug!("Signal level changed: {level}");
                         // TODO: get current network name
-                        Some(vec![NetworkEvent::Strength(("".to_string(), level as u8))])
-                    })
+                        Some(vec![NetworkEvent::Strength(("".to_string(), level as u8,),)],)
+                    },)
                     .boxed(),
             );
 
-            station
-                .register_signal_level_agent(&agent_path, &[-40, -50, -60])
-                .await?;
+            station.register_signal_level_agent(&agent_path, &[-40, -50, -60,],).await?;
             warn!("Registered signal level agent at {agent_path}");
         }
 
@@ -558,16 +572,17 @@ impl IwdDbus<'_> {
         //            async move {
         //                let nm = NetworkDbus::new(&conn).await.unwrap();
 
-        //                let current_devices = nm.wireless_devices().await.unwrap_or_default();
-        //                if current_devices != devices {
-        //                    let wifi_present = nm.wifi_device_present().await.unwrap_or_default();
-        //                    let wireless_access_points =
-        //                        nm.wireless_access_points().await.unwrap_or_default();
+        //                let current_devices =
+        // nm.wireless_devices().await.unwrap_or_default();                if
+        // current_devices != devices {                    let wifi_present =
+        // nm.wifi_device_present().await.unwrap_or_default();
+        // let wireless_access_points =
+        // nm.wireless_access_points().await.unwrap_or_default();
 
         //                    debug!(
-        //                        "Wireless device changed: wifi present {:?}, wireless_access_points {:?}",
-        //                        wifi_present, wireless_access_points,
-        //                    );
+        //                        "Wireless device changed: wifi present {:?},
+        // wireless_access_points {:?}",                        wifi_present,
+        // wireless_access_points,                    );
         //                    Some(NetworkEvent::WirelessDevice {
         //                        wifi_present,
         //                        wireless_access_points,
@@ -580,9 +595,9 @@ impl IwdDbus<'_> {
         //    })
         //    .boxed();
 
-        //TODO: likely need to register an auth agent and wait for it here, same goes for network
-        //configuration etc - these all are agents registered with IWD - and represent device
-        //states
+        //TODO: likely need to register an auth agent and wait for it here, same goes
+        // for network configuration etc - these all are agents registered with
+        // IWD - and represent device states
 
         //// When devices list change I need to update the wireless device state changes
         //let wireless_ac = nm.wireless_access_points().await?;
@@ -619,86 +634,92 @@ impl IwdDbus<'_> {
         //let access_points = select_all(ac_changes).boxed();
 
         let events = select_all(vec![
-            select_all(wireless_enabled_changes).boxed(),
-            select_all(connectivity_changes).boxed(),
-            select_all(ap_s_kap_changes).boxed(),
-            select_all(signal_level_updates).boxed(),
+            select_all(wireless_enabled_changes,).boxed(),
+            select_all(connectivity_changes,).boxed(),
+            select_all(ap_s_kap_changes,).boxed(),
+            select_all(signal_level_updates,).boxed(),
             // TODO: add a future that waits for 10s to poll certain information like the signal
             // strength change
-        ]);
+        ],);
 
-        Ok(events)
+        Ok(events,)
     }
 
     /// Get the state of all station interfaces
-    pub async fn connectivity(&self) -> anyhow::Result<Vec<String>> {
+    pub async fn connectivity(&self,) -> anyhow::Result<Vec<String,>,>
+    {
         let mut states = Vec::new();
         for s in self.stations().await? {
             let state = s.state().await?;
-            states.push(state);
+            states.push(state,);
         }
-        Ok(states)
+        Ok(states,)
     }
 
     /// Return true if any device in station mode is present
-    pub async fn wifi_device_present(&self) -> anyhow::Result<bool> {
+    pub async fn wifi_device_present(&self,) -> anyhow::Result<bool,>
+    {
         let devices = self.wireless_devices().await?;
 
         for d in devices {
             if d.powered().await? {
-                return Ok(true);
+                return Ok(true,);
             }
         }
-        Ok(false)
+        Ok(false,)
     }
 
     /// List all networks currently connected (Connected = true)
-    pub async fn active_connections(&self) -> anyhow::Result<Vec<(NetworkProxy, i16)>> {
+    pub async fn active_connections(&self,) -> anyhow::Result<Vec<(NetworkProxy, i16,),>,>
+    {
         let mut networks = Vec::new();
-        for (net, strength) in self.reachable_networks().await? {
+        for (net, strength,) in self.reachable_networks().await? {
             if net.connected().await? {
-                networks.push((net, strength));
+                networks.push((net, strength,),);
             }
         }
-        Ok(networks)
+        Ok(networks,)
     }
 
     /// Detailed info on active connections
-    pub async fn active_connections_info(&self) -> anyhow::Result<Vec<ActiveConnectionInfo>> {
+    pub async fn active_connections_info(&self,) -> anyhow::Result<Vec<ActiveConnectionInfo,>,>
+    {
         // INFO: probably way cleaner with a custom dbus object - SignalLevelAgent
 
         let nets = self.active_connections().await?;
         let mut info = Vec::new();
-        for (net, s) in nets {
+        for (net, s,) in nets {
             let ssid = net.name().await?;
             // strength not directly on Network; placeholder 0
             info.push(ActiveConnectionInfo::WiFi {
-                id: ssid.clone(),
-                name: ssid,
+                id:       ssid.clone(),
+                name:     ssid,
                 strength: (s / 100 + 100) as u8,
-            });
+            },);
         }
-        Ok(info)
+        Ok(info,)
     }
 
     /// List all wireless (station-mode) devices
-    pub async fn wireless_devices(&self) -> anyhow::Result<Vec<DeviceProxy>> {
+    pub async fn wireless_devices(&self,) -> anyhow::Result<Vec<DeviceProxy,>,>
+    {
         let devices = self.devices().await?;
         let mut devs = Vec::new();
         for d in devices {
             if d.mode().await? == "station" {
-                devs.push(d);
+                devs.push(d,);
             }
         }
-        Ok(devs)
+        Ok(devs,)
     }
 
     /// Scan and list available access points
-    pub async fn wireless_access_points(&self) -> anyhow::Result<Vec<AccessPoint>> {
+    pub async fn wireless_access_points(&self,) -> anyhow::Result<Vec<AccessPoint,>,>
+    {
         let mut aps = Vec::new();
         {
             let nets = self.reachable_networks().await?;
-            for (net, s) in nets {
+            for (net, s,) in nets {
                 let ssid = net.name().await?;
                 let public = net.type_().await? == "open";
                 let path = net.inner().path().clone().into();
@@ -713,20 +734,21 @@ impl IwdDbus<'_> {
                     working: false, // TODO:
                     path,
                     device_path,
-                });
+                },);
             }
         }
-        aps.sort_by(|a, b| b.strength.cmp(&a.strength));
-        Ok(aps)
+        aps.sort_by(|a, b| b.strength.cmp(&a.strength,),);
+        Ok(aps,)
     }
 
-    pub async fn wireless_enabled(&self) -> anyhow::Result<bool> {
+    pub async fn wireless_enabled(&self,) -> anyhow::Result<bool,>
+    {
         let devs = self.wireless_devices().await?;
         for d in devs {
             if d.powered().await? {
-                return Ok(true);
+                return Ok(true,);
             }
         }
-        Ok(false)
+        Ok(false,)
     }
 }

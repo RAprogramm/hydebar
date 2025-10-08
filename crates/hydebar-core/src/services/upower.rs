@@ -1,63 +1,66 @@
-use super::{ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher};
-use crate::{components::icons::Icons, utils::IndicatorState};
+use std::{any::TypeId, time::Duration};
+
 use dbus::{Battery, PowerProfilesProxy, UPowerDbus};
 use iced::{
     Subscription,
     futures::{
         SinkExt, Stream, StreamExt,
-        channel::mpsc::Sender,
         stream::{once, pending, select_all},
         stream_select,
     },
     stream::channel,
 };
 use log::{error, warn};
-use std::{any::TypeId, time::Duration};
 use zbus::zvariant::ObjectPath;
+
+use super::{ReadOnlyService, Service, ServiceEvent, ServiceEventPublisher};
+use crate::{components::icons::Icons, utils::IndicatorState};
 
 mod dbus;
 
-#[derive(Clone, Copy, Debug)]
-pub struct BatteryData {
+#[derive(Clone, Copy, Debug,)]
+pub struct BatteryData
+{
     pub capacity: i64,
-    pub status: BatteryStatus,
+    pub status:   BatteryStatus,
 }
 
-impl BatteryData {
-    pub fn get_indicator_state(&self) -> IndicatorState {
+impl BatteryData
+{
+    pub fn get_indicator_state(&self,) -> IndicatorState
+    {
         match self {
             BatteryData {
-                status: BatteryStatus::Charging(_),
-                ..
+                status: BatteryStatus::Charging(_,), ..
             } => IndicatorState::Success,
             BatteryData {
-                status: BatteryStatus::Discharging(_),
+                status: BatteryStatus::Discharging(_,),
                 capacity,
             } if *capacity < 20 => IndicatorState::Danger,
             _ => IndicatorState::Normal,
         }
     }
 
-    pub fn get_icon(&self) -> Icons {
+    pub fn get_icon(&self,) -> Icons
+    {
         match self {
             BatteryData {
-                status: BatteryStatus::Charging(_),
-                ..
+                status: BatteryStatus::Charging(_,), ..
             } => Icons::BatteryCharging,
             BatteryData {
-                status: BatteryStatus::Discharging(_),
+                status: BatteryStatus::Discharging(_,),
                 capacity,
             } if *capacity < 20 => Icons::Battery0,
             BatteryData {
-                status: BatteryStatus::Discharging(_),
+                status: BatteryStatus::Discharging(_,),
                 capacity,
             } if *capacity < 40 => Icons::Battery1,
             BatteryData {
-                status: BatteryStatus::Discharging(_),
+                status: BatteryStatus::Discharging(_,),
                 capacity,
             } if *capacity < 60 => Icons::Battery2,
             BatteryData {
-                status: BatteryStatus::Discharging(_),
+                status: BatteryStatus::Discharging(_,),
                 capacity,
             } if *capacity < 80 => Icons::Battery3,
             _ => Icons::Battery4,
@@ -65,22 +68,25 @@ impl BatteryData {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum UPowerEvent {
-    UpdateBattery(BatteryData),
+#[derive(Debug, Clone,)]
+pub enum UPowerEvent
+{
+    UpdateBattery(BatteryData,),
     NoBattery,
-    UpdatePowerProfile(PowerProfile),
+    UpdatePowerProfile(PowerProfile,),
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum BatteryStatus {
-    Charging(Duration),
-    Discharging(Duration),
+#[derive(Copy, Clone, Debug,)]
+pub enum BatteryStatus
+{
+    Charging(Duration,),
+    Discharging(Duration,),
     Full,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PowerProfile {
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq,)]
+pub enum PowerProfile
+{
     Balanced,
     Performance,
     PowerSaver,
@@ -88,8 +94,10 @@ pub enum PowerProfile {
     Unknown,
 }
 
-impl From<String> for PowerProfile {
-    fn from(power_profile: String) -> PowerProfile {
+impl From<String,> for PowerProfile
+{
+    fn from(power_profile: String,) -> PowerProfile
+    {
         match power_profile.as_str() {
             "balanced" => PowerProfile::Balanced,
             "performance" => PowerProfile::Performance,
@@ -99,8 +107,10 @@ impl From<String> for PowerProfile {
     }
 }
 
-impl From<PowerProfile> for Icons {
-    fn from(profile: PowerProfile) -> Self {
+impl From<PowerProfile,> for Icons
+{
+    fn from(profile: PowerProfile,) -> Self
+    {
         match profile {
             PowerProfile::Balanced => Icons::Balanced,
             PowerProfile::Performance => Icons::Performance,
@@ -110,140 +120,140 @@ impl From<PowerProfile> for Icons {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct UPowerService {
-    pub battery: Option<BatteryData>,
+#[derive(Debug, Clone,)]
+pub struct UPowerService
+{
+    pub battery:       Option<BatteryData,>,
     pub power_profile: PowerProfile,
-    conn: zbus::Connection,
+    conn:              zbus::Connection,
 }
 
-pub(crate) enum State {
+pub(crate) enum State
+{
     Init,
-    Active(zbus::Connection, Option<Vec<ObjectPath<'static>>>),
+    Active(zbus::Connection, Option<Vec<ObjectPath<'static,>,>,>,),
     Error,
 }
 
-impl ReadOnlyService for UPowerService {
+impl ReadOnlyService for UPowerService
+{
     type UpdateEvent = UPowerEvent;
     type Error = ();
 
-    fn update(&mut self, event: Self::UpdateEvent) {
+    fn update(&mut self, event: Self::UpdateEvent,)
+    {
         match event {
-            UPowerEvent::UpdateBattery(data) => {
-                self.battery.replace(data);
+            UPowerEvent::UpdateBattery(data,) => {
+                self.battery.replace(data,);
             }
             UPowerEvent::NoBattery => {
                 self.battery = None;
             }
-            UPowerEvent::UpdatePowerProfile(profile) => {
+            UPowerEvent::UpdatePowerProfile(profile,) => {
                 self.power_profile = profile;
             }
         }
     }
 
-    fn subscribe() -> Subscription<ServiceEvent<Self>> {
-        Self::subscription_with_id(TypeId::of::<Self>())
+    fn subscribe() -> Subscription<ServiceEvent<Self,>,>
+    {
+        Self::subscription_with_id(TypeId::of::<Self,>(),)
     }
 }
 
-impl UPowerService {
-    pub fn subscription_with_id(id: TypeId) -> Subscription<ServiceEvent<Self>> {
+impl UPowerService
+{
+    pub fn subscription_with_id(id: TypeId,) -> Subscription<ServiceEvent<Self,>,>
+    {
         Subscription::run_with_id(
             id,
             channel(100, async |mut output| {
-                UPowerService::listen(&mut output).await;
-            }),
+                UPowerService::listen(&mut output,).await;
+            },),
         )
     }
 
     async fn initialize_data(
         conn: &zbus::Connection,
-    ) -> anyhow::Result<(
-        Option<(BatteryData, Vec<ObjectPath<'static>>)>,
-        PowerProfile,
-    )> {
-        let battery = UPowerService::initialize_battery_data(conn).await?;
-        let power_profile = UPowerService::initialize_power_profile_data(conn).await;
+    ) -> anyhow::Result<(Option<(BatteryData, Vec<ObjectPath<'static,>,>,),>, PowerProfile,),>
+    {
+        let battery = UPowerService::initialize_battery_data(conn,).await?;
+        let power_profile = UPowerService::initialize_power_profile_data(conn,).await;
 
-        match (battery, power_profile) {
-            (Some(battery), Ok(power_profile)) => Ok((
-                Some((battery.0, battery.1.get_devices_path())),
-                power_profile,
-            )),
-            (Some(battery), Err(err)) => {
-                warn!("Failed to get power profile: {err}");
-
-                Ok((
-                    Some((battery.0, battery.1.get_devices_path())),
-                    PowerProfile::Unknown,
-                ))
+        match (battery, power_profile,) {
+            (Some(battery,), Ok(power_profile,),) => {
+                Ok((Some((battery.0, battery.1.get_devices_path(),),), power_profile,),)
             }
-            (None, Ok(power_profile)) => Ok((None, power_profile)),
-            (None, Err(err)) => {
+            (Some(battery,), Err(err,),) => {
                 warn!("Failed to get power profile: {err}");
 
-                Ok((None, PowerProfile::Unknown))
+                Ok((Some((battery.0, battery.1.get_devices_path(),),), PowerProfile::Unknown,),)
+            }
+            (None, Ok(power_profile,),) => Ok((None, power_profile,),),
+            (None, Err(err,),) => {
+                warn!("Failed to get power profile: {err}");
+
+                Ok((None, PowerProfile::Unknown,),)
             }
         }
     }
 
     async fn initialize_power_profile_data(
         conn: &zbus::Connection,
-    ) -> anyhow::Result<PowerProfile> {
-        let powerprofiles = PowerProfilesProxy::new(conn).await?;
+    ) -> anyhow::Result<PowerProfile,>
+    {
+        let powerprofiles = PowerProfilesProxy::new(conn,).await?;
 
-        let profile = powerprofiles
-            .active_profile()
-            .await
-            .map(PowerProfile::from)?;
+        let profile = powerprofiles.active_profile().await.map(PowerProfile::from,)?;
 
-        Ok(profile)
+        Ok(profile,)
     }
 
     async fn initialize_battery_data(
         conn: &zbus::Connection,
-    ) -> anyhow::Result<Option<(BatteryData, Battery)>> {
-        let upower = UPowerDbus::new(conn).await?;
+    ) -> anyhow::Result<Option<(BatteryData, Battery,),>,>
+    {
+        let upower = UPowerDbus::new(conn,).await?;
         let battery = upower.get_battery_devices().await?;
 
         match battery {
-            Some(battery) => {
+            Some(battery,) => {
                 let state = battery.state().await;
                 let state = match state {
                     1 => BatteryStatus::Charging(Duration::from_secs(
                         battery.time_to_full().await as u64,
-                    )),
+                    ),),
                     2 => BatteryStatus::Discharging(Duration::from_secs(
                         battery.time_to_empty().await as u64,
-                    )),
+                    ),),
                     4 => BatteryStatus::Full,
-                    _ => BatteryStatus::Discharging(Duration::from_secs(0)),
+                    _ => BatteryStatus::Discharging(Duration::from_secs(0,),),
                 };
                 let percentage = battery.percentage().await as i64;
 
                 Ok(Some((
                     BatteryData {
-                        capacity: percentage,
-                        status: state,
+                        capacity: percentage, status: state,
                     },
                     battery,
-                )))
+                ),),)
             }
-            _ => Ok(None),
+            _ => Ok(None,),
         }
     }
 
     async fn events(
         conn: &zbus::Connection,
-        battery_devices: &Option<Vec<ObjectPath<'static>>>,
-    ) -> anyhow::Result<impl Stream<Item = UPowerEvent> + use<>> {
-        let battery_event = if let Some(battery_devices) = battery_devices {
-            let upower = UPowerDbus::new(conn).await?;
+        battery_devices: &Option<Vec<ObjectPath<'static,>,>,>,
+    ) -> anyhow::Result<impl Stream<Item = UPowerEvent,> + use<>,>
+    {
+        let battery_event = if let Some(battery_devices,) = battery_devices {
+            let upower = UPowerDbus::new(conn,).await?;
 
             let mut events = Vec::new();
 
             for device_path in battery_devices {
-                let device = upower.get_device(device_path).await?;
+                let device = upower.get_device(device_path,).await?;
 
                 events.push(
                     stream_select!(
@@ -257,56 +267,53 @@ impl UPowerService {
                         move |_| {
                             let conn = conn.clone();
                             async move {
-                                if let Some((data, _)) =
-                                    Self::initialize_battery_data(&conn).await.ok().flatten()
+                                if let Some((data, _,),) =
+                                    Self::initialize_battery_data(&conn,).await.ok().flatten()
                                 {
-                                    Some(UPowerEvent::UpdateBattery(data))
+                                    Some(UPowerEvent::UpdateBattery(data,),)
                                 } else {
                                     None
                                 }
                             }
                         }
-                    })
+                    },)
                     .boxed(),
                 );
             }
 
-            select_all(events).boxed()
+            select_all(events,).boxed()
         } else {
-            once(async {}).map(|_| UPowerEvent::NoBattery).boxed()
+            once(async {},).map(|_| UPowerEvent::NoBattery,).boxed()
         };
 
-        let powerprofiles = PowerProfilesProxy::new(conn).await?;
+        let powerprofiles = PowerProfilesProxy::new(conn,).await?;
         let power_profile_event =
-            powerprofiles
-                .receive_active_profile_changed()
-                .await
-                .map(move |_| {
-                    UPowerEvent::UpdatePowerProfile(
-                        powerprofiles
-                            .cached_active_profile()
-                            .map(|d| d.map(PowerProfile::from).unwrap_or_default())
-                            .unwrap_or_default(),
-                    )
-                });
+            powerprofiles.receive_active_profile_changed().await.map(move |_| {
+                UPowerEvent::UpdatePowerProfile(
+                    powerprofiles
+                        .cached_active_profile()
+                        .map(|d| d.map(PowerProfile::from,).unwrap_or_default(),)
+                        .unwrap_or_default(),
+                )
+            },);
 
-        Ok(stream_select!(battery_event, power_profile_event))
+        Ok(stream_select!(battery_event, power_profile_event),)
     }
 
-    pub(crate) async fn start_listening<P>(state: State, publisher: &mut P) -> State
+    pub(crate) async fn start_listening<P,>(state: State, publisher: &mut P,) -> State
     where
-        P: ServiceEventPublisher<Self> + Send,
+        P: ServiceEventPublisher<Self,> + Send,
     {
         match state {
             State::Init => match zbus::Connection::system().await {
-                Ok(conn) => {
-                    let (battery, battery_path, power_profile) =
-                        match UPowerService::initialize_data(&conn).await {
-                            Ok((Some((battery_data, battery_path)), power_profile)) => {
-                                (Some(battery_data), Some(battery_path), power_profile)
+                Ok(conn,) => {
+                    let (battery, battery_path, power_profile,) =
+                        match UPowerService::initialize_data(&conn,).await {
+                            Ok((Some((battery_data, battery_path,),), power_profile,),) => {
+                                (Some(battery_data,), Some(battery_path,), power_profile,)
                             }
-                            Ok((None, power_profile)) => (None, None, power_profile),
-                            Err(err) => {
+                            Ok((None, power_profile,),) => (None, None, power_profile,),
+                            Err(err,) => {
                                 error!("Failed to initialize upower service: {err}");
 
                                 return State::Error;
@@ -318,25 +325,25 @@ impl UPowerService {
                         power_profile,
                         conn: conn.clone(),
                     };
-                    let _ = publisher.send(ServiceEvent::Init(service)).await;
+                    let _ = publisher.send(ServiceEvent::Init(service,),).await;
 
-                    State::Active(conn, battery_path)
+                    State::Active(conn, battery_path,)
                 }
-                Err(err) => {
+                Err(err,) => {
                     error!("Failed to connect to system bus for upower: {err}");
                     State::Error
                 }
             },
-            State::Active(conn, battery_devices) => {
-                match UPowerService::events(&conn, &battery_devices).await {
-                    Ok(mut events) => {
-                        while let Some(event) = events.next().await {
-                            let _ = publisher.send(ServiceEvent::Update(event)).await;
+            State::Active(conn, battery_devices,) => {
+                match UPowerService::events(&conn, &battery_devices,).await {
+                    Ok(mut events,) => {
+                        while let Some(event,) = events.next().await {
+                            let _ = publisher.send(ServiceEvent::Update(event,),).await;
                         }
 
-                        State::Active(conn, battery_devices)
+                        State::Active(conn, battery_devices,)
                     }
-                    Err(err) => {
+                    Err(err,) => {
                         error!("Failed to listen for upower events: {err}");
 
                         State::Error
@@ -344,61 +351,54 @@ impl UPowerService {
                 }
             }
             State::Error => {
-                let _ = pending::<u8>().next().await;
+                let _ = pending::<u8,>().next().await;
 
                 State::Error
             }
         }
     }
 
-    pub async fn listen<P>(publisher: &mut P)
+    pub async fn listen<P,>(publisher: &mut P,)
     where
-        P: ServiceEventPublisher<Self> + Send,
+        P: ServiceEventPublisher<Self,> + Send,
     {
         let mut state = State::Init;
 
         loop {
-            state = Self::start_listening(state, publisher).await;
+            state = Self::start_listening(state, publisher,).await;
         }
     }
 
-    pub async fn run_command(self, command: PowerProfileCommand) -> ServiceEvent<Self> {
+    pub async fn run_command(self, command: PowerProfileCommand,) -> ServiceEvent<Self,>
+    {
         let conn = self.conn.clone();
         let power_profile = self.power_profile;
 
-        let powerprofiles = match PowerProfilesProxy::new(&conn).await {
-            Ok(proxy) => proxy,
-            Err(err) => {
+        let powerprofiles = match PowerProfilesProxy::new(&conn,).await {
+            Ok(proxy,) => proxy,
+            Err(err,) => {
                 error!("Failed to create PowerProfilesProxy: {err}");
-                return ServiceEvent::Error(());
+                return ServiceEvent::Error((),);
             }
         };
 
         let next_profile = match command {
             PowerProfileCommand::Toggle => match power_profile {
                 PowerProfile::Balanced => {
-                    if powerprofiles
-                        .set_active_profile("performance")
-                        .await
-                        .is_err()
-                    {
-                        return ServiceEvent::Error(());
+                    if powerprofiles.set_active_profile("performance",).await.is_err() {
+                        return ServiceEvent::Error((),);
                     }
                     PowerProfile::Performance
                 }
                 PowerProfile::Performance => {
-                    if powerprofiles
-                        .set_active_profile("power-saver")
-                        .await
-                        .is_err()
-                    {
-                        return ServiceEvent::Error(());
+                    if powerprofiles.set_active_profile("power-saver",).await.is_err() {
+                        return ServiceEvent::Error((),);
                     }
                     PowerProfile::PowerSaver
                 }
                 PowerProfile::PowerSaver => {
-                    if powerprofiles.set_active_profile("balanced").await.is_err() {
-                        return ServiceEvent::Error(());
+                    if powerprofiles.set_active_profile("balanced",).await.is_err() {
+                        return ServiceEvent::Error((),);
                     }
                     PowerProfile::Balanced
                 }
@@ -406,22 +406,25 @@ impl UPowerService {
             },
         };
 
-        ServiceEvent::Update(UPowerEvent::UpdatePowerProfile(next_profile))
+        ServiceEvent::Update(UPowerEvent::UpdatePowerProfile(next_profile,),)
     }
 }
 
-pub enum PowerProfileCommand {
+pub enum PowerProfileCommand
+{
     Toggle,
 }
 
-impl Service for UPowerService {
+impl Service for UPowerService
+{
     type Command = PowerProfileCommand;
 
-    fn command(&mut self, command: Self::Command) -> iced::Task<ServiceEvent<Self>> {
+    fn command(&mut self, command: Self::Command,) -> iced::Task<ServiceEvent<Self,>,>
+    {
         let service = self.clone();
 
         iced::Task::perform(
-            async move { UPowerService::run_command(service, command).await },
+            async move { UPowerService::run_command(service, command,).await },
             |event| event,
         )
     }

@@ -1,12 +1,12 @@
 /// Battery module view layer - Pure rendering, no business logic
 use hydebar_core::{
     components::icons::icon,
-    modules::battery::{BatteryData, IndicatorState},
     config::BatteryModuleConfig,
+    modules::battery::{BatteryData, IndicatorState},
 };
 use iced::{
-    Alignment, Element, Length, Theme,
-    widget::{row, text, container},
+    Alignment, Element, Theme,
+    widget::{container, row, text},
 };
 
 use crate::app::Message;
@@ -15,38 +15,36 @@ use crate::app::Message;
 pub fn render_battery_indicator(
     data: &BatteryData,
     config: &BatteryModuleConfig,
-) -> Element<'static, Message> {
-    let mut content = row![icon(data.icon.into())]
-        .align_y(Alignment::Center)
-        .spacing(4);
+) -> Element<'static, Message,>
+{
+    let mut content = row![icon(data.icon.into())].align_y(Alignment::Center,).spacing(4,);
 
     if config.show_percentage {
-        content = content.push(text(format!("{}%", data.capacity)));
+        content = content.push(text(format!("{}%", data.capacity),),);
     }
 
     let indicator_state = data.indicator_state;
-    container(content)
+    container(content,)
         .style(move |theme: &Theme| container::Style {
             text_color: Some(match indicator_state {
                 IndicatorState::Success => theme.palette().success,
                 IndicatorState::Warning => theme.extended_palette().danger.weak.color,
                 IndicatorState::Danger => theme.palette().danger,
                 IndicatorState::Normal => theme.palette().text,
-            }),
+            },),
             ..Default::default()
-        })
+        },)
         .into()
 }
 
 /// Render power profile indicator
-pub fn render_power_profile(
-    data: &BatteryData,
-) -> Element<'static, Message> {
-    container(icon(data.power_profile.into()))
+pub fn render_power_profile(data: &BatteryData,) -> Element<'static, Message,>
+{
+    container(icon(data.power_profile.into(),),)
         .style(|theme: &Theme| container::Style {
-            text_color: Some(theme.palette().primary),
+            text_color: Some(theme.palette().primary,),
             ..Default::default()
-        })
+        },)
         .into()
 }
 
@@ -54,17 +52,15 @@ pub fn render_power_profile(
 pub fn render_battery(
     data: &BatteryData,
     config: &BatteryModuleConfig,
-) -> Element<'static, Message> {
+) -> Element<'static, Message,>
+{
     let mut segments = vec![];
 
     if config.show_power_profile {
-        segments.push(render_power_profile(data));
+        segments.push(render_power_profile(data,),);
     }
 
-    segments.push(render_battery_indicator(data, config));
+    segments.push(render_battery_indicator(data, config,),);
 
-    row(segments)
-        .align_y(Alignment::Center)
-        .spacing(4)
-        .into()
+    row(segments,).align_y(Alignment::Center,).spacing(4,).into()
 }

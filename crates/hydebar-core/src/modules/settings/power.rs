@@ -1,42 +1,48 @@
+use iced::{
+    Element, Length,
+    widget::{button, column, horizontal_rule, row, text},
+};
+
 use crate::{
     components::icons::{Icons, icon},
     config::SettingsModuleConfig,
     style::ghost_button_style,
     utils,
 };
-use iced::{
-    Element, Length,
-    widget::{button, column, horizontal_rule, row, text},
-};
 
-#[derive(Debug, Clone)]
-pub enum PowerMessage {
-    Suspend(String),
-    Reboot(String),
-    Shutdown(String),
-    Logout(String),
+#[derive(Debug, Clone,)]
+pub enum PowerMessage
+{
+    Suspend(String,),
+    Reboot(String,),
+    Shutdown(String,),
+    Logout(String,),
 }
 
-impl PowerMessage {
-    pub fn update(self) {
+impl PowerMessage
+{
+    pub fn update(self,)
+    {
         match self {
-            PowerMessage::Suspend(cmd) => {
-                utils::launcher::suspend(cmd);
+            PowerMessage::Suspend(cmd,) => {
+                utils::launcher::suspend(cmd,);
             }
-            PowerMessage::Reboot(cmd) => {
-                utils::launcher::reboot(cmd);
+            PowerMessage::Reboot(cmd,) => {
+                utils::launcher::reboot(cmd,);
             }
-            PowerMessage::Shutdown(cmd) => {
-                utils::launcher::shutdown(cmd);
+            PowerMessage::Shutdown(cmd,) => {
+                utils::launcher::shutdown(cmd,);
             }
-            PowerMessage::Logout(cmd) => {
-                utils::launcher::logout(cmd);
+            PowerMessage::Logout(cmd,) => {
+                utils::launcher::logout(cmd,);
             }
         }
     }
 }
 
-pub fn power_menu<'a>(opacity: f32, config: &SettingsModuleConfig) -> Element<'a, PowerMessage> {
+pub fn power_menu<'a,>(opacity: f32, config: &SettingsModuleConfig,)
+-> Element<'a, PowerMessage,>
+{
     column!(
         button(row!(icon(Icons::Suspend), text("Suspend")).spacing(16))
             .padding([4, 12])
@@ -60,8 +66,8 @@ pub fn power_menu<'a>(opacity: f32, config: &SettingsModuleConfig) -> Element<'a
             .width(Length::Fill)
             .style(ghost_button_style(opacity)),
     )
-    .padding(8)
-    .width(Length::Fill)
-    .spacing(8)
+    .padding(8,)
+    .width(Length::Fill,)
+    .spacing(8,)
     .into()
 }

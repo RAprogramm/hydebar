@@ -1,8 +1,11 @@
-use std::collections::HashMap;
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter, Result as FmtResult},
+};
+
+use zbus::zvariant::OwnedValue;
 
 use super::dbus::MprisPlayerProxy;
-use zbus::zvariant::OwnedValue;
 
 /// Playback state reported by an MPRIS-compatible media player.
 ///
@@ -16,8 +19,9 @@ use zbus::zvariant::OwnedValue;
 /// ```
 ///
 /// Unknown variants default to [`PlaybackStatus::Playing`].
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlaybackStatus {
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq,)]
+pub enum PlaybackStatus
+{
     /// The player is actively playing media.
     #[default]
     Playing,
@@ -27,8 +31,10 @@ pub enum PlaybackStatus {
     Stopped,
 }
 
-impl From<String> for PlaybackStatus {
-    fn from(playback_status: String) -> PlaybackStatus {
+impl From<String,> for PlaybackStatus
+{
+    fn from(playback_status: String,) -> PlaybackStatus
+    {
         match playback_status.as_str() {
             "Playing" => PlaybackStatus::Playing,
             "Paused" => PlaybackStatus::Paused,
@@ -43,31 +49,36 @@ impl From<String> for PlaybackStatus {
 /// # Examples
 ///
 /// ```
-/// use crate::services::mpris::MprisPlayerMetadata;
 /// use std::collections::HashMap;
+///
 /// use zbus::zvariant::OwnedValue;
 ///
-/// let mut values = HashMap::new();
-/// values.insert("xesam:title".to_string(), OwnedValue::from("Example"));
+/// use crate::services::mpris::MprisPlayerMetadata;
 ///
-/// let metadata = MprisPlayerMetadata::from(values);
+/// let mut values = HashMap::new();
+/// values.insert("xesam:title".to_string(), OwnedValue::from("Example",),);
+///
+/// let metadata = MprisPlayerMetadata::from(values,);
 /// assert_eq!(metadata.title.as_deref(), Some("Example"));
 /// ```
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct MprisPlayerMetadata {
+#[derive(PartialEq, Eq, Debug, Clone,)]
+pub struct MprisPlayerMetadata
+{
     /// List of artists contributing to the current track.
-    pub artists: Option<Vec<String>>,
+    pub artists: Option<Vec<String,>,>,
     /// Title of the currently playing track.
-    pub title: Option<String>,
+    pub title:   Option<String,>,
 }
 
-impl Display for MprisPlayerMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let title = match (self.artists.as_ref(), self.title.as_ref()) {
-            (None, None) => String::new(),
-            (None, Some(track_title)) => track_title.clone(),
-            (Some(artists), None) => artists.join(", "),
-            (Some(artists), Some(track_title)) => {
+impl Display for MprisPlayerMetadata
+{
+    fn fmt(&self, f: &mut Formatter<'_,>,) -> FmtResult
+    {
+        let title = match (self.artists.as_ref(), self.title.as_ref(),) {
+            (None, None,) => String::new(),
+            (None, Some(track_title,),) => track_title.clone(),
+            (Some(artists,), None,) => artists.join(", ",),
+            (Some(artists,), Some(track_title,),) => {
                 format!("{} - {}", artists.join(", "), track_title)
             }
         };
@@ -76,44 +87,51 @@ impl Display for MprisPlayerMetadata {
     }
 }
 
-impl From<HashMap<String, OwnedValue>> for MprisPlayerMetadata {
-    fn from(value: HashMap<String, OwnedValue>) -> Self {
-        let artists = match value.get("xesam:artist") {
-            Some(entry) => entry.clone().try_into().ok(),
+impl From<HashMap<String, OwnedValue,>,> for MprisPlayerMetadata
+{
+    fn from(value: HashMap<String, OwnedValue,>,) -> Self
+    {
+        let artists = match value.get("xesam:artist",) {
+            Some(entry,) => entry.clone().try_into().ok(),
             None => None,
         };
-        let title = match value.get("xesam:title") {
-            Some(entry) => entry.clone().try_into().ok(),
+        let title = match value.get("xesam:title",) {
+            Some(entry,) => entry.clone().try_into().ok(),
             None => None,
         };
 
-        Self { artists, title }
+        Self {
+            artists,
+            title,
+        }
     }
 }
 
 /// Representation of a single MPRIS player instance known to the service.
-#[derive(Debug, Clone)]
-pub struct MprisPlayerData {
+#[derive(Debug, Clone,)]
+pub struct MprisPlayerData
+{
     /// Service name on the D-Bus session bus.
-    pub service: String,
+    pub service:      String,
     /// Cached metadata returned by the player.
-    pub metadata: Option<MprisPlayerMetadata>,
+    pub metadata:     Option<MprisPlayerMetadata,>,
     /// Cached volume level expressed as a percentage [0, 100].
-    pub volume: Option<f64>,
+    pub volume:       Option<f64,>,
     /// Current playback status as reported by the player.
-    pub state: PlaybackStatus,
-    pub(crate) proxy: MprisPlayerProxy<'static>,
+    pub state:        PlaybackStatus,
+    pub(crate) proxy: MprisPlayerProxy<'static,>,
 }
 
 /// Events produced by the MPRIS service.
-#[derive(Debug, Clone)]
-pub enum MprisPlayerEvent {
+#[derive(Debug, Clone,)]
+pub enum MprisPlayerEvent
+{
     /// Signals that the known players list should be refreshed entirely.
-    Refresh(Vec<MprisPlayerData>),
+    Refresh(Vec<MprisPlayerData,>,),
     /// Metadata for a specific service changed.
-    Metadata(String, Option<MprisPlayerMetadata>),
+    Metadata(String, Option<MprisPlayerMetadata,>,),
     /// Volume for a specific service changed.
-    Volume(String, Option<f64>),
+    Volume(String, Option<f64,>,),
     /// Playback state for a specific service changed.
-    State(String, PlaybackStatus),
+    State(String, PlaybackStatus,),
 }

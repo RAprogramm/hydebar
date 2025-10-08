@@ -1,6 +1,5 @@
 /// Module rendering implementation for App - GUI layer only
 use hydebar_core::{
-    HEIGHT,
     config::{AppearanceStyle, ModuleDef, ModuleName},
     modules::OnModulePress,
     position_button::position_button,
@@ -15,42 +14,43 @@ use log::error;
 
 use super::state::{App, Message};
 
-impl App {
+impl App
+{
     pub fn modules_section(
         &self,
         modules_def: &[ModuleDef],
         id: Id,
         opacity: f32,
-    ) -> Element<Message> {
-        let mut row = row!()
-            .height(Length::Shrink)
-            .align_y(Alignment::Center)
-            .spacing(4);
+    ) -> Element<Message,>
+    {
+        let mut row = row!().height(Length::Shrink,).align_y(Alignment::Center,).spacing(4,);
 
         for module_def in modules_def {
             row = row.push_maybe(match module_def {
-                ModuleDef::Single(module) => self.single_module_wrapper(module, id, opacity),
-                ModuleDef::Group(group) => self.group_module_wrapper(group, id, opacity),
-            });
+                ModuleDef::Single(module,) => self.single_module_wrapper(module, id, opacity,),
+                ModuleDef::Group(group,) => self.group_module_wrapper(group, id, opacity,),
+            },);
         }
 
         row.into()
     }
 
-    pub fn modules_subscriptions(&self, modules_def: &[ModuleDef]) -> Vec<Subscription<Message>> {
+    pub fn modules_subscriptions(&self, modules_def: &[ModuleDef],)
+    -> Vec<Subscription<Message,>,>
+    {
         let mut subscriptions = Vec::new();
 
         for module_def in modules_def {
             match module_def {
-                ModuleDef::Single(module) => {
-                    if let Some(subscription) = self.get_module_subscription(module) {
-                        subscriptions.push(subscription);
+                ModuleDef::Single(module,) => {
+                    if let Some(subscription,) = self.get_module_subscription(module,) {
+                        subscriptions.push(subscription,);
                     }
                 }
-                ModuleDef::Group(group) => {
+                ModuleDef::Group(group,) => {
                     for module in group {
-                        if let Some(subscription) = self.get_module_subscription(module) {
-                            subscriptions.push(subscription);
+                        if let Some(subscription,) = self.get_module_subscription(module,) {
+                            subscriptions.push(subscription,);
                         }
                     }
                 }
@@ -65,39 +65,38 @@ impl App {
         module_name: &ModuleName,
         id: Id,
         opacity: f32,
-    ) -> Option<Element<Message>> {
-        let module = self.get_module_view(module_name, id, opacity);
+    ) -> Option<Element<Message,>,>
+    {
+        let module = self.get_module_view(module_name, id, opacity,);
 
-        module.map(|(content, action)| match action {
-            Some(action) => {
+        module.map(|(content, action,)| match action {
+            Some(action,) => {
                 let button = position_button(
-                    container(content)
-                        .align_y(Alignment::Center)
-                        .height(Length::Fill),
+                    container(content,).align_y(Alignment::Center,).height(Length::Fill,),
                 )
-                .padding([2, 8])
-                .height(Length::Fill)
+                .padding([2, 8,],)
+                .height(Length::Fill,)
                 .style(module_button_style(
                     self.config.appearance.style,
                     self.config.appearance.opacity,
                     false,
-                ));
+                ),);
 
                 match action {
-                    OnModulePress::Action(action) => button.on_press(*action),
-                    OnModulePress::ToggleMenu(menu_type) => {
+                    OnModulePress::Action(action,) => button.on_press(*action,),
+                    OnModulePress::ToggleMenu(menu_type,) => {
                         button.on_press_with_position(move |button_ui_ref| {
-                            Message::ToggleMenu(menu_type.clone(), id, button_ui_ref)
-                        })
+                            Message::ToggleMenu(menu_type.clone(), id, button_ui_ref,)
+                        },)
                     }
                 }
                 .into()
             }
             _ => {
-                let container = container(content)
-                    .padding([2, 8])
-                    .height(Length::Fill)
-                    .align_y(Alignment::Center);
+                let container = container(content,)
+                    .padding([2, 8,],)
+                    .height(Length::Fill,)
+                    .align_y(Alignment::Center,);
 
                 match self.config.appearance.style {
                     AppearanceStyle::Solid | AppearanceStyle::Gradient => container.into(),
@@ -107,20 +106,20 @@ impl App {
                                 theme
                                     .palette()
                                     .background
-                                    .scale_alpha(self.config.appearance.opacity)
+                                    .scale_alpha(self.config.appearance.opacity,)
                                     .into(),
                             ),
                             border: Border {
-                                width: 0.0,
+                                width:  0.0,
                                 radius: 12.0.into(),
-                                color: Color::TRANSPARENT,
+                                color:  Color::TRANSPARENT,
                             },
                             ..container::Style::default()
-                        })
+                        },)
                         .into(),
                 }
             }
-        })
+        },)
     }
 
     fn group_module_wrapper(
@@ -128,11 +127,12 @@ impl App {
         group: &[ModuleName],
         id: Id,
         opacity: f32,
-    ) -> Option<Element<Message>> {
+    ) -> Option<Element<Message,>,>
+    {
         let modules = group
             .iter()
-            .filter_map(|module| self.get_module_view(module, id, opacity))
-            .collect::<Vec<_>>();
+            .filter_map(|module| self.get_module_view(module, id, opacity,),)
+            .collect::<Vec<_,>>();
 
         if modules.is_empty() {
             None
@@ -141,64 +141,64 @@ impl App {
                 let group = Row::with_children(
                     modules
                         .into_iter()
-                        .map(|(content, action)| match action {
-                            Some(action) => {
+                        .map(|(content, action,)| match action {
+                            Some(action,) => {
                                 let button = position_button(
-                                    container(content)
-                                        .align_y(Alignment::Center)
-                                        .height(Length::Fill),
+                                    container(content,)
+                                        .align_y(Alignment::Center,)
+                                        .height(Length::Fill,),
                                 )
-                                .padding([2, 8])
-                                .height(Length::Fill)
+                                .padding([2, 8,],)
+                                .height(Length::Fill,)
                                 .style(module_button_style(
                                     self.config.appearance.style,
                                     self.config.appearance.opacity,
                                     true,
-                                ));
+                                ),);
 
                                 match action {
-                                    OnModulePress::Action(action) => button.on_press(*action),
-                                    OnModulePress::ToggleMenu(menu_type) => button
+                                    OnModulePress::Action(action,) => button.on_press(*action,),
+                                    OnModulePress::ToggleMenu(menu_type,) => button
                                         .on_press_with_position(move |button_ui_ref| {
                                             Message::ToggleMenu(
                                                 menu_type.clone(),
                                                 id,
                                                 button_ui_ref,
                                             )
-                                        }),
+                                        },),
                                 }
                                 .into()
                             }
-                            _ => container(content)
-                                .padding([2, 8])
-                                .height(Length::Fill)
-                                .align_y(Alignment::Center)
+                            _ => container(content,)
+                                .padding([2, 8,],)
+                                .height(Length::Fill,)
+                                .align_y(Alignment::Center,)
                                 .into(),
-                        })
-                        .collect::<Vec<_>>(),
+                        },)
+                        .collect::<Vec<_,>>(),
                 );
 
                 match self.config.appearance.style {
                     AppearanceStyle::Solid | AppearanceStyle::Gradient => group.into(),
-                    AppearanceStyle::Islands => container(group)
+                    AppearanceStyle::Islands => container(group,)
                         .style(|theme| container::Style {
                             background: Some(
                                 theme
                                     .palette()
                                     .background
-                                    .scale_alpha(self.config.appearance.opacity)
+                                    .scale_alpha(self.config.appearance.opacity,)
                                     .into(),
                             ),
                             border: Border {
-                                width: 0.0,
+                                width:  0.0,
                                 radius: 12.0.into(),
-                                color: Color::TRANSPARENT,
+                                color:  Color::TRANSPARENT,
                             },
                             ..container::Style::default()
-                        })
+                        },)
                         .into(),
                 }
-            })
+            },)
         }
     }
 
@@ -207,72 +207,63 @@ impl App {
         module_name: &ModuleName,
         id: Id,
         opacity: f32,
-    ) -> Option<(Element<Message>, Option<OnModulePress<Message>>)> {
+    ) -> Option<(Element<Message,>, Option<OnModulePress<Message,>,>,),>
+    {
         use hydebar_core::modules::Module;
 
         match module_name {
-            ModuleName::AppLauncher => self.app_launcher.view(&self.config.app_launcher_cmd),
-            ModuleName::Custom(name) => self
+            ModuleName::AppLauncher => self.app_launcher.view(&self.config.app_launcher_cmd,),
+            ModuleName::Custom(name,) => self
                 .config
                 .custom_modules
                 .iter()
-                .find(|m| &m.name == name)
-                .and_then(|mc| self.custom.get(name).map(|cm| cm.view(mc)))
+                .find(|m| &m.name == name,)
+                .and_then(|mc| self.custom.get(name,).map(|cm| cm.view(mc,),),)
                 .unwrap_or_else(|| {
                     error!("Custom module `{name}` not found");
                     None
-                }),
-            ModuleName::Updates => self.updates.view(&self.config.updates),
-            ModuleName::Clipboard => self.clipboard.view(&self.config.clipboard_cmd),
+                },),
+            ModuleName::Updates => self.updates.view(&self.config.updates,),
+            ModuleName::Clipboard => self.clipboard.view(&self.config.clipboard_cmd,),
             ModuleName::Workspaces => self.workspaces.view((
                 &self.outputs,
                 id,
                 &self.config.workspaces,
                 &self.config.appearance.workspace_colors,
                 self.config.appearance.special_workspace_colors.as_deref(),
-            )),
-            ModuleName::WindowTitle => self.window_title.view(()),
-            ModuleName::SystemInfo => self.system_info.view(&self.config.system),
-            ModuleName::KeyboardLayout => self.keyboard_layout.view(&self.config.keyboard_layout),
-            ModuleName::KeyboardSubmap => self.keyboard_submap.view(()),
-            ModuleName::Tray => self.tray.view((id, opacity)),
-            ModuleName::Clock => {
-                Some((
-                    crate::views::clock::render_clock(self.clock.data(), &self.config.clock.format),
-                    None,
-                ))
-            }
-            ModuleName::Battery => {
-                self.battery.data().map(|data| {
-                    (
-                        crate::views::battery::render_battery(data, &self.config.battery),
-                        None,
-                    )
-                })
-            }
-            ModuleName::Privacy => self.privacy.view(()),
-            ModuleName::Settings => self.settings.view(()),
-            ModuleName::MediaPlayer => self.media_player.view(&self.config.media_player),
+            ),),
+            ModuleName::WindowTitle => self.window_title.view((),),
+            ModuleName::SystemInfo => self.system_info.view(&self.config.system,),
+            ModuleName::KeyboardLayout => self.keyboard_layout.view(&self.config.keyboard_layout,),
+            ModuleName::KeyboardSubmap => self.keyboard_submap.view((),),
+            ModuleName::Tray => self.tray.view((id, opacity,),),
+            ModuleName::Clock => Some((
+                crate::views::clock::render_clock(self.clock.data(), &self.config.clock.format,),
+                None,
+            ),),
+            ModuleName::Battery => self.battery.data().map(|data| {
+                (crate::views::battery::render_battery(data, &self.config.battery,), None,)
+            },),
+            ModuleName::Privacy => self.privacy.view((),),
+            ModuleName::Settings => self.settings.view((),),
+            ModuleName::MediaPlayer => self.media_player.view(&self.config.media_player,),
         }
     }
 
-    fn get_module_subscription(&self, module_name: &ModuleName) -> Option<Subscription<Message>> {
+    fn get_module_subscription(&self, module_name: &ModuleName,)
+    -> Option<Subscription<Message,>,>
+    {
         use hydebar_core::modules::Module;
 
         match module_name {
             ModuleName::AppLauncher => self.app_launcher.subscription(),
-            ModuleName::Custom(name) => {
-                let Some(module) = self.custom.get(name) else {
+            ModuleName::Custom(name,) => {
+                let Some(module,) = self.custom.get(name,) else {
                     error!("Custom module `{name}` not found");
                     return None;
                 };
 
-                if self
-                    .config
-                    .custom_modules
-                    .iter()
-                    .any(|definition| &definition.name == name)
-                {
+                if self.config.custom_modules.iter().any(|definition| &definition.name == name,) {
                     module.subscription()
                 } else {
                     error!("Custom module def `{name}` not found");

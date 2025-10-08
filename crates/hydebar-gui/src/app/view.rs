@@ -16,34 +16,39 @@ use iced::{
     window::Id,
 };
 
+use super::state::{App, Message};
 use crate::centerbox;
 
-use super::state::{App, Message};
-
-impl App {
-    pub fn title(&self, _id: Id) -> String {
-        String::from("hydebar")
+impl App
+{
+    pub fn title(&self, _id: Id,) -> String
+    {
+        String::from("hydebar",)
     }
 
-    pub fn theme(&self, _id: Id) -> Theme {
-        hydebar_theme(&self.config.appearance)
+    pub fn theme(&self, _id: Id,) -> Theme
+    {
+        hydebar_theme(&self.config.appearance,)
     }
 
-    pub fn style(&self, theme: &Theme) -> Appearance {
+    pub fn style(&self, theme: &Theme,) -> Appearance
+    {
         Appearance {
             background_color: Color::TRANSPARENT,
-            text_color: theme.palette().text,
-            icon_color: theme.palette().text,
+            text_color:       theme.palette().text,
+            icon_color:       theme.palette().text,
         }
     }
 
-    pub fn scale_factor(&self, _id: Id) -> f64 {
+    pub fn scale_factor(&self, _id: Id,) -> f64
+    {
         self.config.appearance.scale_factor
     }
 
-    pub fn view(&self, id: Id) -> Element<Message> {
-        match self.outputs.has(id) {
-            Some(HasOutput::Main) => {
+    pub fn view(&self, id: Id,) -> Element<Message,>
+    {
+        match self.outputs.has(id,) {
+            Some(HasOutput::Main,) => {
                 let left = self.modules_section(
                     &self.config.modules.left,
                     id,
@@ -60,24 +65,20 @@ impl App {
                     self.config.appearance.opacity,
                 );
 
-                let centerbox = centerbox::Centerbox::new([left, center, right])
-                    .spacing(4)
-                    .width(Length::Fill)
-                    .align_items(Alignment::Center)
-                    .height(
-                        if self.config.appearance.style == AppearanceStyle::Islands {
-                            HEIGHT
-                        } else {
-                            HEIGHT - 8.
-                        } as f32,
-                    )
-                    .padding(
-                        if self.config.appearance.style == AppearanceStyle::Islands {
-                            [4, 4]
-                        } else {
-                            [0, 0]
-                        },
-                    );
+                let centerbox = centerbox::Centerbox::new([left, center, right,],)
+                    .spacing(4,)
+                    .width(Length::Fill,)
+                    .align_items(Alignment::Center,)
+                    .height(if self.config.appearance.style == AppearanceStyle::Islands {
+                        HEIGHT
+                    } else {
+                        HEIGHT - 8.
+                    } as f32,)
+                    .padding(if self.config.appearance.style == AppearanceStyle::Islands {
+                        [4, 4,]
+                    } else {
+                        [0, 0,]
+                    },);
 
                 container(centerbox)
                     .style(|t| container::Style {
@@ -145,12 +146,12 @@ impl App {
                     })
                     .into()
             }
-            Some(HasOutput::Menu(menu_info)) => match menu_info {
-                Some((MenuType::Updates, button_ui_ref)) => menu_wrapper(
+            Some(HasOutput::Menu(menu_info,),) => match menu_info {
+                Some((MenuType::Updates, button_ui_ref,),) => menu_wrapper(
                     id,
                     self.updates
-                        .menu_view(id, self.config.appearance.menu.opacity)
-                        .map(Message::Updates),
+                        .menu_view(id, self.config.appearance.menu.opacity,)
+                        .map(Message::Updates,),
                     MenuSize::Small,
                     *button_ui_ref,
                     self.config.position,
@@ -158,13 +159,13 @@ impl App {
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
                     Message::None,
-                    Message::CloseMenu(id),
+                    Message::CloseMenu(id,),
                 ),
-                Some((MenuType::Tray(name), button_ui_ref)) => menu_wrapper(
+                Some((MenuType::Tray(name,), button_ui_ref,),) => menu_wrapper(
                     id,
                     self.tray
-                        .menu_view(name, self.config.appearance.menu.opacity)
-                        .map(Message::Tray),
+                        .menu_view(name, self.config.appearance.menu.opacity,)
+                        .map(Message::Tray,),
                     MenuSize::Small,
                     *button_ui_ref,
                     self.config.position,
@@ -172,9 +173,9 @@ impl App {
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
                     Message::None,
-                    Message::CloseMenu(id),
+                    Message::CloseMenu(id,),
                 ),
-                Some((MenuType::Settings, button_ui_ref)) => menu_wrapper(
+                Some((MenuType::Settings, button_ui_ref,),) => menu_wrapper(
                     id,
                     self.settings
                         .menu_view(
@@ -183,7 +184,7 @@ impl App {
                             self.config.appearance.menu.opacity,
                             self.config.position,
                         )
-                        .map(Message::Settings),
+                        .map(Message::Settings,),
                     MenuSize::Medium,
                     *button_ui_ref,
                     self.config.position,
@@ -191,16 +192,13 @@ impl App {
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
                     Message::None,
-                    Message::CloseMenu(id),
+                    Message::CloseMenu(id,),
                 ),
-                Some((MenuType::MediaPlayer, button_ui_ref)) => menu_wrapper(
+                Some((MenuType::MediaPlayer, button_ui_ref,),) => menu_wrapper(
                     id,
                     self.media_player
-                        .menu_view(
-                            &self.config.media_player,
-                            self.config.appearance.menu.opacity,
-                        )
-                        .map(Message::MediaPlayer),
+                        .menu_view(&self.config.media_player, self.config.appearance.menu.opacity,)
+                        .map(Message::MediaPlayer,),
                     MenuSize::Large,
                     *button_ui_ref,
                     self.config.position,
@@ -208,11 +206,11 @@ impl App {
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
                     Message::None,
-                    Message::CloseMenu(id),
+                    Message::CloseMenu(id,),
                 ),
-                Some((MenuType::SystemInfo, button_ui_ref)) => menu_wrapper(
+                Some((MenuType::SystemInfo, button_ui_ref,),) => menu_wrapper(
                     id,
-                    self.system_info.menu_view().map(Message::SystemInfo),
+                    self.system_info.menu_view().map(Message::SystemInfo,),
                     MenuSize::Medium,
                     *button_ui_ref,
                     self.config.position,
@@ -220,7 +218,7 @@ impl App {
                     self.config.appearance.menu.opacity,
                     self.config.appearance.menu.backdrop,
                     Message::None,
-                    Message::CloseMenu(id),
+                    Message::CloseMenu(id,),
                 ),
                 None => Row::new().into(),
             },

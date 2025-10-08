@@ -3,8 +3,9 @@ use iced::{
     widget::{Text, text},
 };
 
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
-pub enum Icons {
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq,)]
+pub enum Icons
+{
     #[default]
     None,
     AppLauncher,
@@ -77,8 +78,10 @@ pub enum Icons {
     RightChevron,
 }
 
-impl From<Icons> for &'static str {
-    fn from(icon: Icons) -> &'static str {
+impl From<Icons,> for &'static str
+{
+    fn from(icon: Icons,) -> &'static str
+    {
         match icon {
             Icons::None => "",
             Icons::AppLauncher => "󱗼",
@@ -153,11 +156,13 @@ impl From<Icons> for &'static str {
     }
 }
 
-pub fn icon<'a>(r#type: Icons) -> Text<'a> {
-    text(std::convert::Into::<&'static str>::into(r#type))
-        .font(Font::with_name("Symbols Nerd Font"))
+pub fn icon<'a,>(r#type: Icons,) -> Text<'a,>
+{
+    text(std::convert::Into::<&'static str,>::into(r#type,),)
+        .font(Font::with_name("Symbols Nerd Font",),)
 }
 
-pub fn icon_raw<'a>(s: String) -> Text<'a> {
-    text(s).font(Font::with_name("Symbols Nerd Font"))
+pub fn icon_raw<'a,>(s: String,) -> Text<'a,>
+{
+    text(s,).font(Font::with_name("Symbols Nerd Font",),)
 }

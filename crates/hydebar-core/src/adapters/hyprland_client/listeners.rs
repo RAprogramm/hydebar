@@ -17,16 +17,17 @@ const WORKSPACE_EVENTS_OP: &str = "workspace_events";
 const KEYBOARD_EVENTS_OP: &str = "keyboard_events";
 
 pub(crate) fn spawn_window_listener(
-    config: Arc<HyprlandClientConfig>,
-) -> Result<HyprlandEventStream<HyprlandWindowEvent>, HyprlandError> {
-    let handle =
-        Handle::try_current().map_err(|_| HyprlandError::runtime_unavailable(WINDOW_EVENTS_OP))?;
-    let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
+    config: Arc<HyprlandClientConfig,>,
+) -> Result<HyprlandEventStream<HyprlandWindowEvent,>, HyprlandError,>
+{
+    let handle = Handle::try_current()
+        .map_err(|_| HyprlandError::runtime_unavailable(WINDOW_EVENTS_OP,),)?;
+    let (tx, rx,) = mpsc::channel(CHANNEL_CAPACITY,);
     let listener_timeout = config.listener_timeout;
     let retry_backoff = config.retry_backoff;
 
     handle.spawn(async move {
-        let mut tx = tx;
+        let tx = tx;
         loop {
             let mut listener = AsyncEventListener::new();
 
@@ -130,20 +131,21 @@ pub(crate) fn spawn_window_listener(
         }
     });
 
-    Ok(Box::pin(ReceiverStream::new(rx)))
+    Ok(Box::pin(ReceiverStream::new(rx,),),)
 }
 
 pub(crate) fn spawn_workspace_listener(
-    config: Arc<HyprlandClientConfig>,
-) -> Result<HyprlandEventStream<HyprlandWorkspaceEvent>, HyprlandError> {
+    config: Arc<HyprlandClientConfig,>,
+) -> Result<HyprlandEventStream<HyprlandWorkspaceEvent,>, HyprlandError,>
+{
     let handle = Handle::try_current()
-        .map_err(|_| HyprlandError::runtime_unavailable(WORKSPACE_EVENTS_OP))?;
-    let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
+        .map_err(|_| HyprlandError::runtime_unavailable(WORKSPACE_EVENTS_OP,),)?;
+    let (tx, rx,) = mpsc::channel(CHANNEL_CAPACITY,);
     let listener_timeout = config.listener_timeout;
     let retry_backoff = config.retry_backoff;
 
     handle.spawn(async move {
-        let mut tx = tx;
+        let tx = tx;
         loop {
             let mut listener = AsyncEventListener::new();
 
@@ -370,21 +372,22 @@ pub(crate) fn spawn_workspace_listener(
         }
     });
 
-    Ok(Box::pin(ReceiverStream::new(rx)))
+    Ok(Box::pin(ReceiverStream::new(rx,),),)
 }
 
 pub(crate) fn spawn_keyboard_listener(
     client: HyprlandClient,
-    config: Arc<HyprlandClientConfig>,
-) -> Result<HyprlandEventStream<HyprlandKeyboardEvent>, HyprlandError> {
+    config: Arc<HyprlandClientConfig,>,
+) -> Result<HyprlandEventStream<HyprlandKeyboardEvent,>, HyprlandError,>
+{
     let handle = Handle::try_current()
-        .map_err(|_| HyprlandError::runtime_unavailable(KEYBOARD_EVENTS_OP))?;
-    let (tx, rx) = mpsc::channel(CHANNEL_CAPACITY);
+        .map_err(|_| HyprlandError::runtime_unavailable(KEYBOARD_EVENTS_OP,),)?;
+    let (tx, rx,) = mpsc::channel(CHANNEL_CAPACITY,);
     let listener_timeout = config.listener_timeout;
     let retry_backoff = config.retry_backoff;
 
     handle.spawn(async move {
-        let mut tx = tx;
+        let tx = tx;
         loop {
             let mut listener = AsyncEventListener::new();
 
@@ -530,5 +533,5 @@ pub(crate) fn spawn_keyboard_listener(
         }
     });
 
-    Ok(Box::pin(ReceiverStream::new(rx)))
+    Ok(Box::pin(ReceiverStream::new(rx,),),)
 }

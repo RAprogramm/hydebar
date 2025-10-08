@@ -1,7 +1,8 @@
 use crate::services::network::{ConnectivityState, DeviceState};
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DeviceType {
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq,)]
+pub enum DeviceType
+{
     Ethernet,
     Wifi,
     Bluetooth,
@@ -13,8 +14,10 @@ pub enum DeviceType {
     Unknown,
 }
 
-impl From<u32> for DeviceType {
-    fn from(device_type: u32) -> DeviceType {
+impl From<u32,> for DeviceType
+{
+    fn from(device_type: u32,) -> DeviceType
+    {
         match device_type {
             1 => DeviceType::Ethernet,
             2 => DeviceType::Wifi,
@@ -28,8 +31,10 @@ impl From<u32> for DeviceType {
     }
 }
 
-impl From<u32> for ConnectivityState {
-    fn from(state: u32) -> ConnectivityState {
+impl From<u32,> for ConnectivityState
+{
+    fn from(state: u32,) -> ConnectivityState
+    {
         match state {
             1 => ConnectivityState::None,
             2 => ConnectivityState::Portal,
@@ -40,8 +45,10 @@ impl From<u32> for ConnectivityState {
     }
 }
 
-impl From<String> for ConnectivityState {
-    fn from(state: String) -> ConnectivityState {
+impl From<String,> for ConnectivityState
+{
+    fn from(state: String,) -> ConnectivityState
+    {
         match state.as_str() {
             "inactive" | "disconnected" => ConnectivityState::None,
             "portal" => ConnectivityState::Portal,
@@ -52,15 +59,17 @@ impl From<String> for ConnectivityState {
     }
 }
 
-impl From<Vec<ConnectivityState>> for ConnectivityState {
-    fn from(states: Vec<ConnectivityState>) -> ConnectivityState {
+impl From<Vec<ConnectivityState,>,> for ConnectivityState
+{
+    fn from(states: Vec<ConnectivityState,>,) -> ConnectivityState
+    {
         if states.is_empty() {
             return ConnectivityState::Unknown;
         }
 
         let mut state = states[0];
-        for s in states.iter().skip(1) {
-            if Into::<u32>::into(*s) >= state.into() {
+        for s in states.iter().skip(1,) {
+            if Into::<u32,>::into(*s,) >= state.into() {
                 state = *s;
             }
         }
@@ -69,8 +78,10 @@ impl From<Vec<ConnectivityState>> for ConnectivityState {
     }
 }
 
-impl From<ConnectivityState> for u32 {
-    fn from(val: ConnectivityState) -> Self {
+impl From<ConnectivityState,> for u32
+{
+    fn from(val: ConnectivityState,) -> Self
+    {
         match val {
             ConnectivityState::None => 1,
             ConnectivityState::Portal => 2,
@@ -81,8 +92,10 @@ impl From<ConnectivityState> for u32 {
     }
 }
 
-impl From<u32> for DeviceState {
-    fn from(device_state: u32) -> Self {
+impl From<u32,> for DeviceState
+{
+    fn from(device_state: u32,) -> Self
+    {
         match device_state {
             10 => DeviceState::Unmanaged,
             20 => DeviceState::Unavailable,
