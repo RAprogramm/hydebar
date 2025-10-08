@@ -32,6 +32,7 @@ pub enum ModuleName
     Settings,
     MediaPlayer,
     Notifications,
+    Screenshot,
     Custom(String,),
 }
 
@@ -72,6 +73,7 @@ impl<'de,> Deserialize<'de,> for ModuleName
                     "Settings" => ModuleName::Settings,
                     "MediaPlayer" => ModuleName::MediaPlayer,
                     "Notifications" => ModuleName::Notifications,
+                    "Screenshot" => ModuleName::Screenshot,
                     other => ModuleName::Custom(other.to_string(),),
                 },)
             }

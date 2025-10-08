@@ -22,6 +22,7 @@ use hydebar_core::{
         media_player::MediaPlayer,
         notifications::Notifications,
         privacy::Privacy,
+        screenshot::Screenshot,
         settings::Settings,
         system_info::SystemInfo,
         tray::{TrayMessage, TrayModule},
@@ -66,6 +67,7 @@ pub struct App
     pub settings:              Settings,
     pub media_player:          MediaPlayer,
     pub notifications:         Notifications,
+    pub screenshot:            Screenshot,
 }
 
 #[derive(Debug, Clone,)]
@@ -94,6 +96,7 @@ pub enum Message
     Settings(modules::settings::Message,),
     MediaPlayer(modules::media_player::Message,),
     Notifications(modules::notifications::NotificationsMessage,),
+    Screenshot(modules::screenshot::ScreenshotMessage,),
     OutputEvent((OutputEvent, WlOutput,),),
     LaunchCommand(String,),
     CustomUpdate(String, modules::custom_module::Message,),
@@ -136,6 +139,14 @@ impl From<modules::notifications::NotificationsMessage,> for Message
     fn from(msg: modules::notifications::NotificationsMessage,) -> Self
     {
         Message::Notifications(msg,)
+    }
+}
+
+impl From<modules::screenshot::ScreenshotMessage,> for Message
+{
+    fn from(msg: modules::screenshot::ScreenshotMessage,) -> Self
+    {
+        Message::Screenshot(msg,)
     }
 }
 
@@ -199,6 +210,7 @@ impl App
                 settings: Settings::default(),
                 media_player: MediaPlayer::default(),
                 notifications: Notifications::default(),
+                screenshot: Screenshot::default(),
                 config,
             };
 

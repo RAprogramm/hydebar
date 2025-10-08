@@ -7,6 +7,7 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
+dirs.workspace = true
 freedesktop-icons.workspace = true
 futures.workspace = true
 hydebar-proto = { path = "../hydebar-proto" }

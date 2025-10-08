@@ -25,6 +25,7 @@ pub enum MenuType
     MediaPlayer,
     SystemInfo,
     Notifications,
+    Screenshot,
 }
 
 #[derive(Clone, Debug,)]

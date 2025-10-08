@@ -275,6 +275,10 @@ impl App
                 self.notifications.update(msg,);
                 Task::none()
             }
+            Message::Screenshot(msg,) => {
+                self.screenshot.update(msg,);
+                Task::none()
+            }
         }
     }
 
@@ -380,6 +384,10 @@ impl App
         register(
             "notifications",
             modules::Module::<Message,>::register(&mut self.notifications, ctx, (),),
+        );
+        register(
+            "screenshot",
+            modules::Module::<Message,>::register(&mut self.screenshot, ctx, (),),
         );
 
         for definition in &self.config.custom_modules {

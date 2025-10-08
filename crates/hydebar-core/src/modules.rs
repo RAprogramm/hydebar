@@ -15,6 +15,7 @@ pub mod keyboard_submap;
 pub mod media_player;
 pub mod notifications;
 pub mod privacy;
+pub mod screenshot;
 pub mod settings;
 pub mod system_info;
 pub mod tray;
