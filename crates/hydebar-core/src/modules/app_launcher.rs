@@ -38,3 +38,56 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::num::NonZeroUsize;
+    use crate::event_bus::EventBus;
+
+    #[test]
+    fn default_creates_instance() {
+        let launcher = AppLauncher::default();
+        assert!(matches!(launcher, AppLauncher));
+    }
+
+    #[test]
+    fn clone_creates_copy() {
+        let launcher = AppLauncher::default();
+        let cloned = launcher.clone();
+        assert!(matches!(cloned, AppLauncher));
+    }
+
+    #[test]
+    fn register_succeeds() {
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+        let ctx = ModuleContext::new(bus.sender(), runtime.handle().clone());
+        let mut launcher = AppLauncher::default();
+
+        let result = <AppLauncher as Module<()>>::register(&mut launcher, &ctx, ());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn view_returns_some_when_config_present() {
+        let launcher = AppLauncher::default();
+        let config = Some("wofi".to_string());
+
+        let result = <AppLauncher as Module<()>>::view(&launcher, &config);
+        assert!(result.is_some());
+
+        if let Some((_, action)) = result {
+            assert!(action.is_none());
+        }
+    }
+
+    #[test]
+    fn view_returns_none_when_config_absent() {
+        let launcher = AppLauncher::default();
+        let config = None;
+
+        let result = <AppLauncher as Module<()>>::view(&launcher, &config);
+        assert!(result.is_none());
+    }
+}
