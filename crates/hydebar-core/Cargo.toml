@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 chrono.workspace = true
 dirs.workspace = true
 freedesktop-icons.workspace = true

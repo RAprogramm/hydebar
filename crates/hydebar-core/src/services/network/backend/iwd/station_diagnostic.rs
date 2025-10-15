@@ -19,11 +19,13 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
-#[proxy(interface = "net.connman.iwd.StationDiagnostic", assume_defaults = true)]
-pub trait StationDiagnostic
-{
+#[proxy(
+    interface = "net.connman.iwd.StationDiagnostic",
+    assume_defaults = true
+)]
+pub trait StationDiagnostic {
     /// GetDiagnostics method
     fn get_diagnostics(
-        &self,
-    ) -> zbus::Result<std::collections::HashMap<String, zbus::zvariant::OwnedValue,>,>;
+        &self
+    ) -> zbus::Result<std::collections::HashMap<String, zbus::zvariant::OwnedValue>>;
 }

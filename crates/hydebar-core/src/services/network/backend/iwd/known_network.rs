@@ -20,30 +20,29 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
 #[proxy(interface = "net.connman.iwd.KnownNetwork", assume_defaults = true)]
-pub trait KnownNetwork
-{
+pub trait KnownNetwork {
     /// Forget method
-    fn forget(&self,) -> zbus::Result<(),>;
+    fn forget(&self) -> zbus::Result<()>;
 
     /// AutoConnect property
     #[zbus(property)]
-    fn auto_connect(&self,) -> zbus::Result<bool,>;
+    fn auto_connect(&self) -> zbus::Result<bool>;
     #[zbus(property)]
-    fn set_auto_connect(&self, value: bool,) -> zbus::Result<(),>;
+    fn set_auto_connect(&self, value: bool) -> zbus::Result<()>;
 
     /// Hidden property
     #[zbus(property)]
-    fn hidden(&self,) -> zbus::Result<bool,>;
+    fn hidden(&self) -> zbus::Result<bool>;
 
     /// LastConnectedTime property
     #[zbus(property)]
-    fn last_connected_time(&self,) -> zbus::Result<String,>;
+    fn last_connected_time(&self) -> zbus::Result<String>;
 
     /// Name property
     #[zbus(property)]
-    fn name(&self,) -> zbus::Result<String,>;
+    fn name(&self) -> zbus::Result<String>;
 
     /// Type property
     #[zbus(property)]
-    fn type_(&self,) -> zbus::Result<String,>;
+    fn type_(&self) -> zbus::Result<String>;
 }

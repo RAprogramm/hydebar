@@ -20,9 +20,8 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
 #[proxy(interface = "net.connman.iwd.BasicServiceSet", assume_defaults = true)]
-pub trait BasicServiceSet
-{
+pub trait BasicServiceSet {
     /// Address property
     #[zbus(property)]
-    fn address(&self,) -> zbus::Result<String,>;
+    fn address(&self) -> zbus::Result<String>;
 }

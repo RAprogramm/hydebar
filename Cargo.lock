@@ -2368,7 +2368,6 @@ dependencies = [
 name = "hydebar-core"
 version = "0.6.7"
 dependencies = [
- "anyhow",
  "chrono",
  "dirs 6.0.0",
  "freedesktop-icons",

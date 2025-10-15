@@ -5,7 +5,6 @@ use iced::{Element, widget::text};
 use crate::app::Message;
 
 /// Render clock with given format
-pub fn render_clock(data: &ClockData, format: &str,) -> Element<'static, Message,>
-{
-    text(data.format(format,),).into()
+pub fn render_clock(data: &ClockData, format: &str) -> Element<'static, Message> {
+    text(data.format(format)).into()
 }

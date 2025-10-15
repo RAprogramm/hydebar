@@ -1,6 +1,6 @@
 use iced::{
     Alignment, Element, Theme,
-    widget::{Container, container, row, text},
+    widget::{Container, container, row, text}
 };
 
 use super::{Message, quick_setting_button};
@@ -8,105 +8,100 @@ use crate::{
     components::icons::{Icons, icon},
     services::{
         ServiceEvent,
-        upower::{BatteryData, BatteryStatus, PowerProfile, UPowerService},
+        upower::{BatteryData, BatteryStatus, PowerProfile, UPowerService}
     },
-    utils::{IndicatorState, format_duration},
+    utils::{IndicatorState, format_duration}
 };
 
-#[derive(Clone, Debug,)]
-pub enum UPowerMessage
-{
-    Event(ServiceEvent<UPowerService,>,),
-    TogglePowerProfile,
+#[derive(Clone, Debug)]
+pub enum UPowerMessage {
+    Event(ServiceEvent<UPowerService>),
+    TogglePowerProfile
 }
 
-impl BatteryData
-{
-    pub fn indicator<Message: 'static,>(&self,) -> Element<'static, Message,>
-    {
+impl BatteryData {
+    pub fn indicator<Message: 'static>(&self) -> Element<'static, Message> {
         let icon_type = self.get_icon();
         let state = self.get_indicator_state();
 
         container(
             row!(icon(icon_type), text(format!("{}%", self.capacity)))
-                .spacing(4,)
-                .align_y(Alignment::Center,),
+                .spacing(4)
+                .align_y(Alignment::Center)
         )
         .style(move |theme: &Theme| container::Style {
             text_color: Some(match state {
                 IndicatorState::Success => theme.palette().success,
                 IndicatorState::Danger => theme.palette().danger,
-                _ => theme.palette().text,
-            },),
+                _ => theme.palette().text
+            }),
             ..Default::default()
-        },)
+        })
         .into()
     }
 
-    pub fn settings_indicator<'a, Message: 'static,>(&self,) -> Container<'a, Message,>
-    {
+    pub fn settings_indicator<'a, Message: 'static>(&self) -> Container<'a, Message> {
         let state = self.get_indicator_state();
 
         container({
             let battery_info = container(
-                row!(icon(self.get_icon()), text(format!("{}%", self.capacity))).spacing(4,),
+                row!(icon(self.get_icon()), text(format!("{}%", self.capacity))).spacing(4)
             )
             .style(move |theme: &Theme| container::Style {
                 text_color: Some(match state {
                     IndicatorState::Success => theme.palette().success,
                     IndicatorState::Danger => theme.palette().danger,
-                    _ => theme.palette().text,
-                },),
+                    _ => theme.palette().text
+                }),
                 ..Default::default()
-            },);
+            });
 
             match self.status {
-                BatteryStatus::Charging(remaining,) if self.capacity < 95 => {
-                    row!(battery_info, text(format!("Full in {}", format_duration(&remaining))))
-                        .spacing(16,)
-                }
-                BatteryStatus::Discharging(remaining,) if self.capacity < 95 => {
-                    row!(battery_info, text(format!("Empty in {}", format_duration(&remaining))))
-                        .spacing(16,)
-                }
-                _ => row!(battery_info),
+                BatteryStatus::Charging(remaining) if self.capacity < 95 => row!(
+                    battery_info,
+                    text(format!("Full in {}", format_duration(&remaining)))
+                )
+                .spacing(16),
+                BatteryStatus::Discharging(remaining) if self.capacity < 95 => row!(
+                    battery_info,
+                    text(format!("Empty in {}", format_duration(&remaining)))
+                )
+                .spacing(16),
+                _ => row!(battery_info)
             }
-        },)
-        .padding([8, 4,],)
+        })
+        .padding([8, 4])
     }
 }
 
-impl PowerProfile
-{
-    pub fn indicator<Message: 'static,>(&self,) -> Option<Element<'static, Message,>,>
-    {
+impl PowerProfile {
+    pub fn indicator<Message: 'static>(&self) -> Option<Element<'static, Message>> {
         match self {
             PowerProfile::Balanced => None,
             PowerProfile::Performance => Some(
-                container(icon(Icons::Performance,),)
+                container(icon(Icons::Performance))
                     .style(|theme: &Theme| container::Style {
-                        text_color: Some(theme.palette().danger,),
+                        text_color: Some(theme.palette().danger),
                         ..Default::default()
-                    },)
-                    .into(),
+                    })
+                    .into()
             ),
             PowerProfile::PowerSaver => Some(
-                container(icon(Icons::PowerSaver,),)
+                container(icon(Icons::PowerSaver))
                     .style(|theme: &Theme| container::Style {
-                        text_color: Some(theme.palette().success,),
+                        text_color: Some(theme.palette().success),
                         ..Default::default()
-                    },)
-                    .into(),
+                    })
+                    .into()
             ),
-            PowerProfile::Unknown => None,
+            PowerProfile::Unknown => None
         }
     }
 
     pub fn get_quick_setting_button(
         &self,
-        opacity: f32,
-    ) -> Option<(Element<'_, Message,>, Option<Element<'_, Message,>,>,),>
-    {
+        opacity: f32
+    ) -> Option<(Element<'_, Message>, Option<Element<'_, Message>>)> {
         if !matches!(self, PowerProfile::Unknown) {
             Some((
                 quick_setting_button(
@@ -115,17 +110,17 @@ impl PowerProfile
                         PowerProfile::Balanced => "Balanced",
                         PowerProfile::Performance => "Performance",
                         PowerProfile::PowerSaver => "Power Saver",
-                        PowerProfile::Unknown => "",
+                        PowerProfile::Unknown => ""
                     }
                     .to_string(),
                     None,
                     true,
-                    Message::UPower(UPowerMessage::TogglePowerProfile,),
+                    Message::UPower(UPowerMessage::TogglePowerProfile),
                     None,
-                    opacity,
+                    opacity
                 ),
-                None,
-            ),)
+                None
+            ))
         } else {
             None
         }

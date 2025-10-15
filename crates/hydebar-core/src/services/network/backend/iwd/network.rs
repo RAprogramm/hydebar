@@ -20,32 +20,31 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
 #[proxy(interface = "net.connman.iwd.Network", assume_defaults = true)]
-pub trait Network
-{
+pub trait Network {
     /// Connect method
-    fn connect(&self,) -> zbus::Result<(),>;
+    fn connect(&self) -> zbus::Result<()>;
 
     /// Connected property
     #[zbus(property)]
-    fn connected(&self,) -> zbus::Result<bool,>;
+    fn connected(&self) -> zbus::Result<bool>;
 
     /// Device property
     #[zbus(property)]
-    fn device(&self,) -> zbus::Result<zbus::zvariant::OwnedObjectPath,>;
+    fn device(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     /// ExtendedServiceSet property
     #[zbus(property)]
-    fn extended_service_set(&self,) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath,>,>;
+    fn extended_service_set(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
 
     /// KnownNetwork property
     #[zbus(property)]
-    fn known_network(&self,) -> zbus::Result<zbus::zvariant::OwnedObjectPath,>;
+    fn known_network(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     /// Name property
     #[zbus(property)]
-    fn name(&self,) -> zbus::Result<String,>;
+    fn name(&self) -> zbus::Result<String>;
 
     /// Type property
     #[zbus(property)]
-    fn type_(&self,) -> zbus::Result<String,>;
+    fn type_(&self) -> zbus::Result<String>;
 }

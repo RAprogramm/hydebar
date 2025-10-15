@@ -19,30 +19,32 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
-#[proxy(interface = "net.connman.iwd.DeviceProvisioning", assume_defaults = true)]
-pub trait DeviceProvisioning
-{
+#[proxy(
+    interface = "net.connman.iwd.DeviceProvisioning",
+    assume_defaults = true
+)]
+pub trait DeviceProvisioning {
     /// ConfigureEnrollee method
-    fn configure_enrollee(&self, uri: &str,) -> zbus::Result<(),>;
+    fn configure_enrollee(&self, uri: &str) -> zbus::Result<()>;
 
     /// StartConfigurator method
-    fn start_configurator(&self,) -> zbus::Result<String,>;
+    fn start_configurator(&self) -> zbus::Result<String>;
 
     /// StartEnrollee method
-    fn start_enrollee(&self,) -> zbus::Result<String,>;
+    fn start_enrollee(&self) -> zbus::Result<String>;
 
     /// Stop method
-    fn stop(&self,) -> zbus::Result<(),>;
+    fn stop(&self) -> zbus::Result<()>;
 
     /// Role property
     #[zbus(property)]
-    fn role(&self,) -> zbus::Result<String,>;
+    fn role(&self) -> zbus::Result<String>;
 
     /// Started property
     #[zbus(property)]
-    fn started(&self,) -> zbus::Result<bool,>;
+    fn started(&self) -> zbus::Result<bool>;
 
     /// URI property
     #[zbus(property, name = "URI")]
-    fn uri(&self,) -> zbus::Result<String,>;
+    fn uri(&self) -> zbus::Result<String>;
 }

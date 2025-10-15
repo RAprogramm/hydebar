@@ -20,29 +20,28 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
 #[proxy(interface = "net.connman.iwd.Device", assume_defaults = true)]
-pub trait Device
-{
+pub trait Device {
     /// Adapter property
     #[zbus(property)]
-    fn adapter(&self,) -> zbus::Result<zbus::zvariant::OwnedObjectPath,>;
+    fn adapter(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     /// Address property
     #[zbus(property)]
-    fn address(&self,) -> zbus::Result<String,>;
+    fn address(&self) -> zbus::Result<String>;
 
     /// Mode property
     #[zbus(property)]
-    fn mode(&self,) -> zbus::Result<String,>;
+    fn mode(&self) -> zbus::Result<String>;
     #[zbus(property)]
-    fn set_mode(&self, value: &str,) -> zbus::Result<(),>;
+    fn set_mode(&self, value: &str) -> zbus::Result<()>;
 
     /// Name property
     #[zbus(property)]
-    fn name(&self,) -> zbus::Result<String,>;
+    fn name(&self) -> zbus::Result<String>;
 
     /// Powered property
     #[zbus(property)]
-    fn powered(&self,) -> zbus::Result<bool,>;
+    fn powered(&self) -> zbus::Result<bool>;
     #[zbus(property)]
-    fn set_powered(&self, value: bool,) -> zbus::Result<(),>;
+    fn set_powered(&self, value: bool) -> zbus::Result<()>;
 }

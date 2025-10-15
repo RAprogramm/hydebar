@@ -1,6 +1,6 @@
 use std::{
     process::{ExitStatus, Output},
-    sync::Arc,
+    sync::Arc
 };
 
 use log::error;
@@ -20,50 +20,45 @@ use tokio::process::Command;
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let runtime = tokio::runtime::Runtime::new()?;
-/// let command = Arc::from("true",);
+/// let command = Arc::from("true");
 /// runtime.block_on(async move {
-///     let output = run_shell_command_with_output(&command,).await?;
+///     let output = run_shell_command_with_output(&command).await?;
 ///     assert!(output.status.success());
-///     Ok::<(), LauncherError,>((),)
-/// },)?;
-/// Ok((),)
+///     Ok::<(), LauncherError>(())
+/// })?;
+/// Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq,)]
-pub enum LauncherError
-{
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LauncherError {
     /// The command could not be spawned by the operating system.
-    Spawn
-    {
+    Spawn {
         /// The attempted command string.
-        command: Arc<str,>,
+        command: Arc<str>,
         /// Additional context provided by the OS error.
-        context: Arc<str,>,
+        context: Arc<str>
     },
     /// The command executed but returned a non-zero exit status.
-    NonZeroExit
-    {
+    NonZeroExit {
         /// The attempted command string.
-        command: Arc<str,>,
+        command: Arc<str>,
         /// The exit status returned by the process.
-        status:  ExitStatus,
-    },
+        status:  ExitStatus
+    }
 }
 
-impl std::fmt::Display for LauncherError
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_,>,) -> std::fmt::Result
-    {
+impl std::fmt::Display for LauncherError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Spawn {
                 command,
-                context,
+                context
             } => {
                 write!(f, "failed to spawn `{}`: {}", command, context)
             }
             Self::NonZeroExit {
                 command,
-                status,
+                status
             } => {
                 write!(f, "command `{}` exited with status {}", command, status)
             }
@@ -73,21 +68,18 @@ impl std::fmt::Display for LauncherError
 
 impl std::error::Error for LauncherError {}
 
-impl LauncherError
-{
-    fn spawn_error(command: Arc<str,>, error: std::io::Error,) -> Self
-    {
+impl LauncherError {
+    fn spawn_error(command: Arc<str>, error: std::io::Error) -> Self {
         Self::Spawn {
             command,
-            context: Arc::from(error.to_string(),),
+            context: Arc::from(error.to_string())
         }
     }
 
-    fn exit_error(command: Arc<str,>, status: ExitStatus,) -> Self
-    {
+    fn exit_error(command: Arc<str>, status: ExitStatus) -> Self {
         Self::NonZeroExit {
             command,
-            status,
+            status
         }
     }
 }
@@ -98,30 +90,27 @@ impl LauncherError
 ///
 /// Returns [`LauncherError::Spawn`] if the process cannot be created or
 /// [`LauncherError::NonZeroExit`] when the command finishes unsuccessfully.
-pub async fn run_shell_command_with_output(command: &Arc<str,>,)
--> Result<Output, LauncherError,>
-{
-    let mut process = Command::new("bash",);
-    process.arg("-c",).arg(command.as_ref(),);
+pub async fn run_shell_command_with_output(command: &Arc<str>) -> Result<Output, LauncherError> {
+    let mut process = Command::new("bash");
+    process.arg("-c").arg(command.as_ref());
 
     let output = process
         .output()
         .await
-        .map_err(|error| LauncherError::spawn_error(command.clone(), error,),)?;
+        .map_err(|error| LauncherError::spawn_error(command.clone(), error))?;
 
     if output.status.success() {
-        Ok(output,)
+        Ok(output)
     } else {
-        Err(LauncherError::exit_error(command.clone(), output.status,),)
+        Err(LauncherError::exit_error(command.clone(), output.status))
     }
 }
 
-fn spawn_and_log(command: String, context: &'static str,)
-{
+fn spawn_and_log(command: String, context: &'static str) {
     tokio::spawn(async move {
-        let command_arc: Arc<str,> = Arc::from(command,);
-        match run_shell_command_with_output(&command_arc,).await {
-            Ok(output,) => {
+        let command_arc: Arc<str> = Arc::from(command);
+        match run_shell_command_with_output(&command_arc).await {
+            Ok(output) => {
                 if !output.stderr.is_empty() {
                     error!(
                         "{context} command produced stderr: {}",
@@ -129,11 +118,11 @@ fn spawn_and_log(command: String, context: &'static str,)
                     );
                 }
             }
-            Err(error,) => {
+            Err(error) => {
                 error!("{context} command failed: {error}");
             }
         }
-    },);
+    });
 }
 
 /// Execute an arbitrary shell command without awaiting its completion.
@@ -146,93 +135,84 @@ fn spawn_and_log(command: String, context: &'static str,)
 /// ```no_run
 /// use hydebar::utils::launcher;
 ///
-/// launcher::execute_command("notify-send hydebar 'Hello'".to_owned(),);
+/// launcher::execute_command("notify-send hydebar 'Hello'".to_owned());
 /// ```
-pub fn execute_command(command: String,)
-{
-    spawn_and_log(command, "launcher",);
+pub fn execute_command(command: String) {
+    spawn_and_log(command, "launcher");
 }
 
 /// Execute the configured suspend command in the background.
-pub fn suspend(command: String,)
-{
-    spawn_and_log(command, "suspend",);
+pub fn suspend(command: String) {
+    spawn_and_log(command, "suspend");
 }
 
 /// Execute the configured shutdown command in the background.
-pub fn shutdown(command: String,)
-{
-    spawn_and_log(command, "shutdown",);
+pub fn shutdown(command: String) {
+    spawn_and_log(command, "shutdown");
 }
 
 /// Execute the configured reboot command in the background.
-pub fn reboot(command: String,)
-{
-    spawn_and_log(command, "reboot",);
+pub fn reboot(command: String) {
+    spawn_and_log(command, "reboot");
 }
 
 /// Execute the configured logout command in the background.
-pub fn logout(command: String,)
-{
-    spawn_and_log(command, "logout",);
+pub fn logout(command: String) {
+    spawn_and_log(command, "logout");
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use std::{sync::Arc, time::Duration};
 
     use super::{LauncherError, run_shell_command_with_output};
 
     #[tokio::test]
-    async fn reports_successful_status() -> Result<(), Box<dyn std::error::Error,>,>
-    {
-        let command = Arc::from("true",);
+    async fn reports_successful_status() -> Result<(), Box<dyn std::error::Error>> {
+        let command = Arc::from("true");
 
         let output = tokio::time::timeout(
-            Duration::from_secs(5,),
-            run_shell_command_with_output(&command,),
+            Duration::from_secs(5),
+            run_shell_command_with_output(&command)
         )
         .await??;
 
         assert!(output.status.success());
 
-        Ok((),)
+        Ok(())
     }
 
     #[tokio::test]
-    async fn reports_non_zero_exit_as_error() -> Result<(), Box<dyn std::error::Error,>,>
-    {
-        let command = Arc::from("exit 42",);
+    async fn reports_non_zero_exit_as_error() -> Result<(), Box<dyn std::error::Error>> {
+        let command = Arc::from("exit 42");
 
         let outcome = tokio::time::timeout(
-            Duration::from_secs(5,),
-            run_shell_command_with_output(&command,),
+            Duration::from_secs(5),
+            run_shell_command_with_output(&command)
         )
         .await?;
 
         match outcome {
             Err(LauncherError::NonZeroExit {
                 status, ..
-            },) => {
+            }) => {
                 assert_eq!(status.code(), Some(42));
             }
             other => {
-                return Err(format!("unexpected outcome: {other:?}").into(),);
+                return Err(format!("unexpected outcome: {other:?}").into());
             }
         }
 
-        Ok((),)
+        Ok(())
     }
 
     #[tokio::test]
-    async fn captures_command_output() -> Result<(), Box<dyn std::error::Error,>,>
-    {
-        let command = Arc::from("printf foo",);
+    async fn captures_command_output() -> Result<(), Box<dyn std::error::Error>> {
+        let command = Arc::from("printf foo");
 
         let output = tokio::time::timeout(
-            Duration::from_secs(5,),
-            run_shell_command_with_output(&command,),
+            Duration::from_secs(5),
+            run_shell_command_with_output(&command)
         )
         .await??;
 
@@ -240,6 +220,6 @@ mod tests
         assert!(output.stderr.is_empty());
         assert!(output.status.success());
 
-        Ok((),)
+        Ok(())
     }
 }

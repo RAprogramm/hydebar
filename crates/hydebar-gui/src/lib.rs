@@ -7,9 +7,8 @@ pub mod app;
 
 pub use app::{App, Message};
 
-pub fn get_log_spec(log_level: &str,) -> LogSpecification
-{
-    LogSpecification::env_or_parse(log_level,).unwrap_or_else(|err| {
+pub fn get_log_spec(log_level: &str) -> LogSpecification {
+    LogSpecification::env_or_parse(log_level).unwrap_or_else(|err| {
         panic!("Failed to parse log level: {err}");
-    },)
+    })
 }
