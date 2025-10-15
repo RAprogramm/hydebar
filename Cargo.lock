@@ -4908,9 +4908,9 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "reqwest"
-version = "0.12.23"
+version = "0.12.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d429f34c8092b2d42c7c93cec323bb4adeb7c67698f70839adec842ec10c7ceb"
+checksum = "9d0946410b9f7b082a427e4ef5c8ff541a88b357bc6c637c40db3a68ac70a36f"
 dependencies = [
  "base64",
  "bytes",
@@ -6731,7 +6731,7 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
- "parking_lot 0.12.4",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "smallvec",
@@ -6759,7 +6759,7 @@ dependencies = [
  "log",
  "naga",
  "once_cell",
- "parking_lot 0.12.4",
+ "parking_lot 0.11.2",
  "profiling",
  "raw-window-handle",
  "rustc-hash 1.1.0",
@@ -6800,7 +6800,7 @@ dependencies = [
  "ndk-sys 0.5.0+25.2.9519653",
  "objc",
  "once_cell",
- "parking_lot 0.12.4",
+ "parking_lot 0.11.2",
  "profiling",
  "range-alloc",
  "raw-window-handle",
