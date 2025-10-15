@@ -19,18 +19,20 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
-#[proxy(interface = "net.connman.iwd.SimpleConfiguration", assume_defaults = true)]
-pub trait SimpleConfiguration
-{
+#[proxy(
+    interface = "net.connman.iwd.SimpleConfiguration",
+    assume_defaults = true
+)]
+pub trait SimpleConfiguration {
     /// Cancel method
-    fn cancel(&self,) -> zbus::Result<(),>;
+    fn cancel(&self) -> zbus::Result<()>;
 
     /// GeneratePin method
-    fn generate_pin(&self,) -> zbus::Result<String,>;
+    fn generate_pin(&self) -> zbus::Result<String>;
 
     /// PushButton method
-    fn push_button(&self,) -> zbus::Result<(),>;
+    fn push_button(&self) -> zbus::Result<()>;
 
     /// StartPin method
-    fn start_pin(&self, pin: &str,) -> zbus::Result<(),>;
+    fn start_pin(&self, pin: &str) -> zbus::Result<()>;
 }

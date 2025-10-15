@@ -14,15 +14,13 @@ use crate::event_bus::{BusEvent, EventBusError, EventSender, ModuleEvent};
 /// ensures that futures aborted through [`Handle::spawn`] tear down without
 /// panicking, and because event publication is synchronous, no pending
 /// publishes are left behind when a task is cancelled.
-#[derive(Debug, Clone,)]
-pub struct ModuleContext
-{
+#[derive(Debug, Clone)]
+pub struct ModuleContext {
     event_sender:   EventSender,
-    runtime_handle: Handle,
+    runtime_handle: Handle
 }
 
-impl ModuleContext
-{
+impl ModuleContext {
     /// Create a new context bound to the provided event sender and runtime
     /// handle.
     ///
@@ -32,15 +30,14 @@ impl ModuleContext
     /// # use hydebar_core::{event_bus::EventBus, module_context::ModuleContext};
     /// # use std::num::NonZeroUsize;
     /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    /// let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
-    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
+    /// let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
     /// # drop(context);
     /// ```
-    pub fn new(event_sender: EventSender, runtime_handle: Handle,) -> Self
-    {
+    pub fn new(event_sender: EventSender, runtime_handle: Handle) -> Self {
         Self {
             event_sender,
-            runtime_handle,
+            runtime_handle
         }
     }
 
@@ -59,13 +56,12 @@ impl ModuleContext
     /// # use hydebar_core::{event_bus::EventBus, module_context::ModuleContext};
     /// # use std::num::NonZeroUsize;
     /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    /// let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
-    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
+    /// let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
     /// let handle = context.runtime_handle();
-    /// handle.spawn(async {},);
+    /// handle.spawn(async {});
     /// ```
-    pub fn runtime_handle(&self,) -> &Handle
-    {
+    pub fn runtime_handle(&self) -> &Handle {
         &self.runtime_handle
     }
 
@@ -82,13 +78,12 @@ impl ModuleContext
     /// # use hydebar_core::{event_bus::EventBus, module_context::ModuleContext};
     /// # use std::num::NonZeroUsize;
     /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    /// let bus = EventBus::new(NonZeroUsize::new(1,).expect("capacity",),);
-    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
-    /// context.request_redraw().expect("queued",);
+    /// let bus = EventBus::new(NonZeroUsize::new(1).expect("capacity"));
+    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+    /// context.request_redraw().expect("queued");
     /// ```
-    pub fn request_redraw(&self,) -> Result<(), EventBusError,>
-    {
-        self.event_sender.try_send(BusEvent::Redraw,)
+    pub fn request_redraw(&self) -> Result<(), EventBusError> {
+        self.event_sender.try_send(BusEvent::Redraw)
     }
 
     /// Toggle the popup menu visibility.
@@ -104,18 +99,16 @@ impl ModuleContext
     /// # use hydebar_core::{event_bus::EventBus, module_context::ModuleContext};
     /// # use std::num::NonZeroUsize;
     /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    /// let bus = EventBus::new(NonZeroUsize::new(1,).expect("capacity",),);
-    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
-    /// context.toggle_popup().expect("queued",);
+    /// let bus = EventBus::new(NonZeroUsize::new(1).expect("capacity"));
+    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+    /// context.toggle_popup().expect("queued");
     /// ```
-    pub fn toggle_popup(&self,) -> Result<(), EventBusError,>
-    {
-        self.event_sender.try_send(BusEvent::PopupToggle,)
+    pub fn toggle_popup(&self) -> Result<(), EventBusError> {
+        self.event_sender.try_send(BusEvent::PopupToggle)
     }
 
-    fn publish_module_event(&self, event: ModuleEvent,) -> Result<(), EventBusError,>
-    {
-        self.event_sender.try_send(BusEvent::Module(event,),)
+    fn publish_module_event(&self, event: ModuleEvent) -> Result<(), EventBusError> {
+        self.event_sender.try_send(BusEvent::Module(event))
     }
 
     /// Build a type-safe module event sender from the provided conversion
@@ -134,18 +127,21 @@ impl ModuleContext
     /// # use hydebar_core::modules;
     /// # use std::num::NonZeroUsize;
     /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    /// let bus = EventBus::new(NonZeroUsize::new(2,).expect("capacity",),);
-    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
-    /// let sender = context.module_sender(ModuleEvent::Updates,);
-    /// sender.try_send(modules::updates::Message::CheckNow,).expect("queued",);
+    /// let bus = EventBus::new(NonZeroUsize::new(2).expect("capacity"));
+    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+    /// let sender = context.module_sender(ModuleEvent::Updates);
+    /// sender
+    ///     .try_send(modules::updates::Message::CheckNow)
+    ///     .expect("queued");
     /// ```
-    pub fn module_sender<T, F,>(&self, convert: F,) -> ModuleEventSender<T,>
+    pub fn module_sender<T, F>(&self, convert: F) -> ModuleEventSender<T>
     where
         T: Send + 'static,
-        F: Fn(T,) -> ModuleEvent + Send + Sync + 'static,
+        F: Fn(T) -> ModuleEvent + Send + Sync + 'static
     {
         ModuleEventSender {
-            context: self.clone(), convert: Arc::new(convert,),
+            context: self.clone(),
+            convert: Arc::new(convert)
         }
     }
 }
@@ -160,41 +156,39 @@ impl ModuleContext
 /// # use hydebar_core::modules;
 /// # use std::num::NonZeroUsize;
 /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-/// let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
-/// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
-/// let sender = context.module_sender(ModuleEvent::Updates,);
-/// sender.try_send(modules::updates::Message::CheckNow,).expect("queued",);
+/// let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+/// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+/// let sender = context.module_sender(ModuleEvent::Updates);
+/// sender
+///     .try_send(modules::updates::Message::CheckNow)
+///     .expect("queued");
 /// ```
-pub struct ModuleEventSender<T,>
-{
+pub struct ModuleEventSender<T> {
     context: ModuleContext,
-    convert: Arc<dyn Fn(T,) -> ModuleEvent + Send + Sync,>,
+    convert: Arc<dyn Fn(T) -> ModuleEvent + Send + Sync>
 }
 
-impl<T,> Clone for ModuleEventSender<T,>
-{
-    fn clone(&self,) -> Self
-    {
+impl<T> Clone for ModuleEventSender<T> {
+    fn clone(&self) -> Self {
         Self {
-            context: self.context.clone(), convert: Arc::clone(&self.convert,),
+            context: self.context.clone(),
+            convert: Arc::clone(&self.convert)
         }
     }
 }
 
-impl<T,> std::fmt::Debug for ModuleEventSender<T,>
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_,>,) -> std::fmt::Result
-    {
-        f.debug_struct("ModuleEventSender",)
-            .field("context", &self.context,)
-            .field("convert", &"<function>",)
+impl<T> std::fmt::Debug for ModuleEventSender<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModuleEventSender")
+            .field("context", &self.context)
+            .field("convert", &"<function>")
             .finish()
     }
 }
 
-impl<T,> ModuleEventSender<T,>
+impl<T> ModuleEventSender<T>
 where
-    T: Send + 'static,
+    T: Send + 'static
 {
     /// Convert the payload into a [`ModuleEvent`] and enqueue it on the bus.
     ///
@@ -211,21 +205,21 @@ where
     /// # use hydebar_core::modules;
     /// # use std::num::NonZeroUsize;
     /// # let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    /// let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
-    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone(),);
-    /// let sender = context.module_sender(ModuleEvent::Updates,);
-    /// sender.try_send(modules::updates::Message::CheckNow,).expect("queued",);
+    /// let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
+    /// let context = ModuleContext::new(bus.sender(), runtime.handle().clone());
+    /// let sender = context.module_sender(ModuleEvent::Updates);
+    /// sender
+    ///     .try_send(modules::updates::Message::CheckNow)
+    ///     .expect("queued");
     /// ```
-    pub fn try_send(&self, payload: T,) -> Result<(), EventBusError,>
-    {
-        let event = (self.convert)(payload,);
-        self.context.publish_module_event(event,)
+    pub fn try_send(&self, payload: T) -> Result<(), EventBusError> {
+        let event = (self.convert)(payload);
+        self.context.publish_module_event(event)
     }
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use std::num::NonZeroUsize;
 
     use tokio::runtime::Runtime;
@@ -233,55 +227,56 @@ mod tests
     use super::ModuleContext;
     use crate::{
         event_bus::{BusEvent, EventBus, ModuleEvent},
-        modules,
+        modules
     };
 
     #[test]
-    fn request_redraw_enqueues_event()
-    {
-        let runtime = Runtime::new().expect("runtime",);
-        let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
+    fn request_redraw_enqueues_event() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
         let sender = bus.sender();
         let mut receiver = bus.receiver();
-        let context = ModuleContext::new(sender, runtime.handle().clone(),);
+        let context = ModuleContext::new(sender, runtime.handle().clone());
 
-        context.request_redraw().expect("redraw enqueued",);
+        context.request_redraw().expect("redraw enqueued");
 
-        let event = receiver.try_recv().expect("receive",);
+        let event = receiver.try_recv().expect("receive");
         assert!(matches!(event, Some(BusEvent::Redraw)));
     }
 
     #[test]
-    fn toggle_popup_enqueues_event()
-    {
-        let runtime = Runtime::new().expect("runtime",);
-        let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
+    fn toggle_popup_enqueues_event() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
         let sender = bus.sender();
         let mut receiver = bus.receiver();
-        let context = ModuleContext::new(sender, runtime.handle().clone(),);
+        let context = ModuleContext::new(sender, runtime.handle().clone());
 
-        context.toggle_popup().expect("popup enqueued",);
+        context.toggle_popup().expect("popup enqueued");
 
-        let event = receiver.try_recv().expect("receive",);
+        let event = receiver.try_recv().expect("receive");
         assert!(matches!(event, Some(BusEvent::PopupToggle)));
     }
 
     #[test]
-    fn module_sender_enqueues_module_event()
-    {
-        let runtime = Runtime::new().expect("runtime",);
-        let bus = EventBus::new(NonZeroUsize::new(4,).expect("capacity",),);
+    fn module_sender_enqueues_module_event() {
+        let runtime = Runtime::new().expect("runtime");
+        let bus = EventBus::new(NonZeroUsize::new(4).expect("capacity"));
         let sender = bus.sender();
         let mut receiver = bus.receiver();
-        let context = ModuleContext::new(sender, runtime.handle().clone(),);
+        let context = ModuleContext::new(sender, runtime.handle().clone());
 
-        let updates_sender = context.module_sender(ModuleEvent::Updates,);
-        updates_sender.try_send(modules::updates::Message::CheckNow,).expect("module enqueued",);
+        let updates_sender = context.module_sender(ModuleEvent::Updates);
+        updates_sender
+            .try_send(modules::updates::Message::CheckNow)
+            .expect("module enqueued");
 
-        let event = receiver.try_recv().expect("receive",);
+        let event = receiver.try_recv().expect("receive");
         assert!(matches!(
             event,
-            Some(BusEvent::Module(ModuleEvent::Updates(modules::updates::Message::CheckNow)))
+            Some(BusEvent::Module(ModuleEvent::Updates(
+                modules::updates::Message::CheckNow
+            )))
         ));
     }
 }

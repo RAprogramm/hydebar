@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}
 };
 
 use flexi_logger::LoggerHandle;
@@ -29,10 +29,10 @@ use hydebar_core::{
         updates::Updates,
         weather::Weather,
         window_title::WindowTitle,
-        workspaces::Workspaces,
+        workspaces::Workspaces
     },
     outputs::Outputs,
-    position_button::ButtonUIRef,
+    position_button::ButtonUIRef
 };
 use hydebar_proto::{config::Config, ports::hyprland::HyprlandPort};
 use iced::{Task, event::wayland::OutputEvent, window::Id};
@@ -41,19 +41,18 @@ use wayland_client::protocol::wl_output::WlOutput;
 
 use super::{bus::BusFlushOutcome, micro_ticker::MicroTicker};
 
-pub struct App
-{
+pub struct App {
     pub(super) config_path:    PathBuf,
     pub(super) logger:         LoggerHandle,
-    pub(super) _hyprland:      Arc<dyn HyprlandPort,>,
-    pub(super) config_manager: Arc<ConfigManager,>,
-    pub(super) bus_receiver:   Arc<Mutex<EventReceiver,>,>,
+    pub(super) _hyprland:      Arc<dyn HyprlandPort>,
+    pub(super) config_manager: Arc<ConfigManager>,
+    pub(super) bus_receiver:   Arc<Mutex<EventReceiver>>,
     pub(super) micro_ticker:   MicroTicker,
     pub(super) module_context: ModuleContext,
-    pub config:                Arc<Config,>,
+    pub config:                Arc<Config>,
     pub outputs:               Outputs,
     pub app_launcher:          AppLauncher,
-    pub custom:                HashMap<String, Custom,>,
+    pub custom:                HashMap<String, Custom>,
     pub updates:               Updates,
     pub clipboard:             Clipboard,
     pub workspaces:            Workspaces,
@@ -69,103 +68,89 @@ pub struct App
     pub media_player:          MediaPlayer,
     pub notifications:         Notifications,
     pub screenshot:            Screenshot,
-    pub weather:               Weather,
+    pub weather:               Weather
 }
 
-#[derive(Debug, Clone,)]
-pub enum Message
-{
+#[derive(Debug, Clone)]
+pub enum Message {
     None,
     MicroTick,
-    BusFlushed(BusFlushOutcome,),
-    ConfigChanged(ConfigApplied,),
-    ConfigDegraded(ConfigDegradation,),
-    ToggleMenu(MenuType, Id, ButtonUIRef,),
-    CloseMenu(Id,),
+    BusFlushed(BusFlushOutcome),
+    ConfigChanged(ConfigApplied),
+    ConfigDegraded(ConfigDegradation),
+    ToggleMenu(MenuType, Id, ButtonUIRef),
+    CloseMenu(Id),
     CloseAllMenus,
     OpenLauncher,
     OpenClipboard,
-    Updates(modules::updates::Message,),
-    Workspaces(modules::workspaces::Message,),
-    WindowTitle(modules::window_title::Message,),
-    SystemInfo(modules::system_info::Message,),
-    KeyboardLayout(modules::keyboard_layout::Message,),
-    KeyboardSubmap(modules::keyboard_submap::Message,),
-    Tray(TrayMessage,),
-    Clock(modules::clock::Message,),
-    Battery(modules::battery::Message,),
-    Privacy(modules::privacy::PrivacyMessage,),
-    Settings(modules::settings::Message,),
-    MediaPlayer(modules::media_player::Message,),
-    Notifications(modules::notifications::NotificationsMessage,),
-    Screenshot(modules::screenshot::ScreenshotMessage,),
-    Weather(modules::weather::Message,),
-    OutputEvent((OutputEvent, WlOutput,),),
-    LaunchCommand(String,),
-    CustomUpdate(String, modules::custom_module::Message,),
+    Updates(modules::updates::Message),
+    Workspaces(modules::workspaces::Message),
+    WindowTitle(modules::window_title::Message),
+    SystemInfo(modules::system_info::Message),
+    KeyboardLayout(modules::keyboard_layout::Message),
+    KeyboardSubmap(modules::keyboard_submap::Message),
+    Tray(TrayMessage),
+    Clock(modules::clock::Message),
+    Battery(modules::battery::Message),
+    Privacy(modules::privacy::PrivacyMessage),
+    Settings(modules::settings::Message),
+    MediaPlayer(modules::media_player::Message),
+    Notifications(modules::notifications::NotificationsMessage),
+    Screenshot(modules::screenshot::ScreenshotMessage),
+    Weather(modules::weather::Message),
+    OutputEvent((OutputEvent, WlOutput)),
+    LaunchCommand(String),
+    CustomUpdate(String, modules::custom_module::Message)
 }
 
-impl From<modules::settings::Message,> for Message
-{
-    fn from(msg: modules::settings::Message,) -> Self
-    {
-        Message::Settings(msg,)
+impl From<modules::settings::Message> for Message {
+    fn from(msg: modules::settings::Message) -> Self {
+        Message::Settings(msg)
     }
 }
 
-impl From<modules::system_info::Message,> for Message
-{
-    fn from(msg: modules::system_info::Message,) -> Self
-    {
-        Message::SystemInfo(msg,)
+impl From<modules::system_info::Message> for Message {
+    fn from(msg: modules::system_info::Message) -> Self {
+        Message::SystemInfo(msg)
     }
 }
 
-impl From<modules::updates::Message,> for Message
-{
-    fn from(msg: modules::updates::Message,) -> Self
-    {
-        Message::Updates(msg,)
+impl From<modules::updates::Message> for Message {
+    fn from(msg: modules::updates::Message) -> Self {
+        Message::Updates(msg)
     }
 }
 
-impl From<modules::workspaces::Message,> for Message
-{
-    fn from(msg: modules::workspaces::Message,) -> Self
-    {
-        Message::Workspaces(msg,)
+impl From<modules::workspaces::Message> for Message {
+    fn from(msg: modules::workspaces::Message) -> Self {
+        Message::Workspaces(msg)
     }
 }
 
-impl From<modules::notifications::NotificationsMessage,> for Message
-{
-    fn from(msg: modules::notifications::NotificationsMessage,) -> Self
-    {
-        Message::Notifications(msg,)
+impl From<modules::notifications::NotificationsMessage> for Message {
+    fn from(msg: modules::notifications::NotificationsMessage) -> Self {
+        Message::Notifications(msg)
     }
 }
 
-impl From<modules::screenshot::ScreenshotMessage,> for Message
-{
-    fn from(msg: modules::screenshot::ScreenshotMessage,) -> Self
-    {
-        Message::Screenshot(msg,)
+impl From<modules::screenshot::ScreenshotMessage> for Message {
+    fn from(msg: modules::screenshot::ScreenshotMessage) -> Self {
+        Message::Screenshot(msg)
     }
 }
 
 type AppDependencies = (
     LoggerHandle,
-    Arc<Config,>,
-    Arc<ConfigManager,>,
+    Arc<Config>,
+    Arc<ConfigManager>,
     PathBuf,
-    Arc<dyn HyprlandPort,>,
+    Arc<dyn HyprlandPort>,
     EventSender,
     Handle,
-    EventReceiver,
+    EventReceiver
 );
 
-impl App
-{
+impl App {
     pub fn new(
         (
             logger,
@@ -175,27 +160,25 @@ impl App
             hyprland,
             event_sender,
             runtime_handle,
-            bus_receiver,
-        ): AppDependencies,
-    ) -> impl FnOnce() -> (Self, Task<Message,>,)
-    {
+            bus_receiver
+        ): AppDependencies
+    ) -> impl FnOnce() -> (Self, Task<Message>) {
         move || {
-            let (outputs, task,) =
-                Outputs::new(config.appearance.style, config.position, &config,);
+            let (outputs, task) = Outputs::new(config.appearance.style, config.position, &config);
 
             let custom = config
                 .custom_modules
                 .iter()
-                .map(|o| (o.name.clone(), Custom::default(),),)
+                .map(|o| (o.name.clone(), Custom::default()))
                 .collect();
-            let module_context = ModuleContext::new(event_sender, runtime_handle,);
-            let hyprland_clone = Arc::clone(&hyprland,);
+            let module_context = ModuleContext::new(event_sender, runtime_handle);
+            let hyprland_clone = Arc::clone(&hyprland);
             let mut app = App {
                 config_path,
                 logger,
                 _hyprland: hyprland,
                 config_manager,
-                bus_receiver: Arc::new(Mutex::new(bus_receiver,),),
+                bus_receiver: Arc::new(Mutex::new(bus_receiver)),
                 micro_ticker: MicroTicker::default(),
                 module_context,
                 outputs,
@@ -203,11 +186,11 @@ impl App
                 custom,
                 updates: Updates::default(),
                 clipboard: Clipboard,
-                workspaces: Workspaces::new(Arc::clone(&hyprland_clone,), &config.workspaces,),
-                window_title: WindowTitle::new(Arc::clone(&hyprland_clone,), &config.window_title,),
+                workspaces: Workspaces::new(Arc::clone(&hyprland_clone), &config.workspaces),
+                window_title: WindowTitle::new(Arc::clone(&hyprland_clone), &config.window_title),
                 system_info: SystemInfo::default(),
-                keyboard_layout: KeyboardLayout::new(Arc::clone(&hyprland_clone,),),
-                keyboard_submap: KeyboardSubmap::new(hyprland_clone,),
+                keyboard_layout: KeyboardLayout::new(Arc::clone(&hyprland_clone)),
+                keyboard_submap: KeyboardSubmap::new(hyprland_clone),
                 tray: TrayModule::default(),
                 clock: Clock::default(),
                 battery: Battery::default(),
@@ -220,21 +203,20 @@ impl App
                     config.weather.location.clone(),
                     config.weather.api_key.clone(),
                     config.weather.use_celsius,
-                    config.weather.update_interval_minutes,
+                    config.weather.update_interval_minutes
                 ),
-                config,
+                config
             };
 
             app.register_modules();
 
-            (app, task,)
+            (app, task)
         }
     }
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use std::{num::NonZeroUsize, sync::OnceLock};
 
     use flexi_logger::LoggerHandle;
@@ -243,81 +225,78 @@ mod tests
 
     use super::*;
 
-    fn test_logger() -> LoggerHandle
-    {
-        static LOGGER: OnceLock<LoggerHandle,> = OnceLock::new();
+    fn test_logger() -> LoggerHandle {
+        static LOGGER: OnceLock<LoggerHandle> = OnceLock::new();
         LOGGER
             .get_or_init(|| {
-                flexi_logger::Logger::try_with_env_or_str("off",)
-                    .expect("failed to configure test logger",)
+                flexi_logger::Logger::try_with_env_or_str("off")
+                    .expect("failed to configure test logger")
                     .start()
-                    .expect("failed to start test logger",)
-            },)
+                    .expect("failed to start test logger")
+            })
             .clone()
     }
 
     #[test]
-    fn app_stores_injected_hyprland_port()
-    {
+    fn app_stores_injected_hyprland_port() {
         let logger = test_logger();
         let config = Config::default();
         let path = PathBuf::new();
-        let mock = Arc::new(MockHyprlandPort::default(),);
-        let mock_port: Arc<dyn HyprlandPort,> = mock.clone();
+        let mock = Arc::new(MockHyprlandPort::default());
+        let mock_port: Arc<dyn HyprlandPort> = mock.clone();
 
-        let config_manager = Arc::new(ConfigManager::new(config.clone(),),);
-        let capacity = NonZeroUsize::new(16,).expect("non-zero",);
-        let bus = EventBus::new(capacity,);
-        let runtime = tokio::runtime::Runtime::new().expect("runtime",);
+        let config_manager = Arc::new(ConfigManager::new(config.clone()));
+        let capacity = NonZeroUsize::new(16).expect("non-zero");
+        let bus = EventBus::new(capacity);
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let event_sender = bus.sender();
         let runtime_handle = runtime.handle().clone();
         let bus_receiver = bus.receiver();
 
-        let (app, _,) = App::new((
+        let (app, _) = App::new((
             logger,
-            Arc::new(config,),
-            Arc::clone(&config_manager,),
+            Arc::new(config),
+            Arc::clone(&config_manager),
             path,
-            Arc::clone(&mock_port,),
+            Arc::clone(&mock_port),
             event_sender,
             runtime_handle,
-            bus_receiver,
-        ),)();
+            bus_receiver
+        ))();
 
         assert!(Arc::ptr_eq(&app._hyprland, &mock_port));
     }
 
     #[test]
-    fn keyboard_layout_change_triggers_port_call()
-    {
+    fn keyboard_layout_change_triggers_port_call() {
         let logger = test_logger();
         let config = Config::default();
         let path = PathBuf::new();
-        let mock = Arc::new(MockHyprlandPort::default(),);
-        let mock_port: Arc<dyn HyprlandPort,> = mock.clone();
+        let mock = Arc::new(MockHyprlandPort::default());
+        let mock_port: Arc<dyn HyprlandPort> = mock.clone();
 
-        let config_manager = Arc::new(ConfigManager::new(config.clone(),),);
-        let capacity = NonZeroUsize::new(16,).expect("non-zero",);
-        let bus = EventBus::new(capacity,);
-        let runtime = tokio::runtime::Runtime::new().expect("runtime",);
+        let config_manager = Arc::new(ConfigManager::new(config.clone()));
+        let capacity = NonZeroUsize::new(16).expect("non-zero");
+        let bus = EventBus::new(capacity);
+        let runtime = tokio::runtime::Runtime::new().expect("runtime");
         let event_sender = bus.sender();
         let runtime_handle = runtime.handle().clone();
         let bus_receiver = bus.receiver();
 
-        let (mut app, _,) = App::new((
+        let (mut app, _) = App::new((
             logger,
-            Arc::new(config,),
-            Arc::clone(&config_manager,),
+            Arc::new(config),
+            Arc::clone(&config_manager),
             path,
             mock_port,
             event_sender,
             runtime_handle,
-            bus_receiver,
-        ),)();
+            bus_receiver
+        ))();
 
         let _ = app.update(Message::KeyboardLayout(
-            hydebar_core::modules::keyboard_layout::Message::ChangeLayout,
-        ),);
+            hydebar_core::modules::keyboard_layout::Message::ChangeLayout
+        ));
 
         assert_eq!(mock.switch_layout_calls(), 1);
     }

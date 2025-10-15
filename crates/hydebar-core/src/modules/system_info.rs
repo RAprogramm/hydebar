@@ -12,40 +12,34 @@ use super::{Module, ModuleError, OnModulePress};
 use crate::{ModuleContext, event_bus::ModuleEvent};
 
 /// Messages published by the system information module.
-#[derive(Debug, Clone,)]
-pub enum Message
-{
-    Update,
+#[derive(Debug, Clone)]
+pub enum Message {
+    Update
 }
 
 /// Module responsible for sampling and presenting local system metrics.
-pub struct SystemInfo
-{
+pub struct SystemInfo {
     sampler: SystemInfoSampler,
     data:    SystemInfoData,
-    polling: runtime::PollingTask,
+    polling: runtime::PollingTask
 }
 
-impl Default for SystemInfo
-{
-    fn default() -> Self
-    {
+impl Default for SystemInfo {
+    fn default() -> Self {
         let mut sampler = SystemInfoSampler::new();
         let data = sampler.sample();
 
         Self {
             sampler,
             data,
-            polling: runtime::PollingTask::new(),
+            polling: runtime::PollingTask::new()
         }
     }
 }
 
-impl SystemInfo
-{
+impl SystemInfo {
     /// React to module messages by updating cached metrics when necessary.
-    pub fn update(&mut self, message: Message,)
-    {
+    pub fn update(&mut self, message: Message) {
         match message {
             Message::Update => {
                 self.data = self.sampler.sample();
@@ -54,36 +48,33 @@ impl SystemInfo
     }
 
     /// Render the menu entry exposing detailed system information.
-    pub fn menu_view(&self,) -> Element<'_, Message,>
-    {
-        view::build_menu_view(&self.data,)
+    pub fn menu_view(&self) -> Element<'_, Message> {
+        view::build_menu_view(&self.data)
     }
 }
 
-impl<M,> Module<M,> for SystemInfo
+impl<M> Module<M> for SystemInfo
 where
-    M: 'static + Clone + From<Message,>,
+    M: 'static + Clone + From<Message>
 {
-    type ViewData<'a,> = &'a SystemModuleConfig;
-    type RegistrationData<'a,> = ();
+    type ViewData<'a> = &'a SystemModuleConfig;
+    type RegistrationData<'a> = ();
 
     fn register(
         &mut self,
         ctx: &ModuleContext,
-        _: Self::RegistrationData<'_,>,
-    ) -> Result<(), ModuleError,>
-    {
-        let sender = ctx.module_sender(ModuleEvent::SystemInfo,);
-        self.polling.spawn(ctx, sender,);
+        _: Self::RegistrationData<'_>
+    ) -> Result<(), ModuleError> {
+        let sender = ctx.module_sender(ModuleEvent::SystemInfo);
+        self.polling.spawn(ctx, sender);
 
-        Ok((),)
+        Ok(())
     }
 
     fn view(
         &self,
-        config: Self::ViewData<'_,>,
-    ) -> Option<(Element<'static, M,>, Option<OnModulePress<M,>,>,),>
-    {
-        view::build_indicator_view(&self.data, config,)
+        config: Self::ViewData<'_>
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
+        view::build_indicator_view(&self.data, config)
     }
 }

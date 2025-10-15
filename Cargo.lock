@@ -897,9 +897,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.48"
+version = "4.5.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2134bb3ea021b78629caa971416385309e0131b351b25e01dc16fb54e1b5fae"
+checksum = "f4512b90fa68d3a9932cea5184017c5d200f5921df706d45e853537dea51508f"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -907,9 +907,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.48"
+version = "4.5.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ba64afa3c0a6df7fa517765e31314e983f51dda798ffba27b988194fb65dc9"
+checksum = "0025e98baa12e766c67ba13ff4695a887a1eba19569aad00a472546795bd6730"
 dependencies = [
  "anstream",
  "anstyle",
@@ -919,9 +919,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.47"
+version = "4.5.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbfd7eae0b0f1a6e63d4b13c9c478de77c2eb546fba158ad50b4203dc24b9f9c"
+checksum = "2a0b5487afeab2deb2ff4e03a807ad1a03ac532ff5a2cee5d86884440c7f7671"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1169,7 +1169,7 @@ dependencies = [
 [[package]]
 name = "cosmic-text"
 version = "0.14.2"
-source = "git+https://github.com/pop-os/cosmic-text.git#e04bfd098f58958b09f0cf5e14a67f87e49dbaec"
+source = "git+https://github.com/pop-os/cosmic-text.git#646e04389e1c2e03a85e61946ace06d8fada1fa1"
 dependencies = [
  "bitflags 2.9.4",
  "fontdb 0.23.0",
@@ -1179,7 +1179,7 @@ dependencies = [
  "rangemap",
  "rustc-hash 1.1.0",
  "self_cell",
- "skrifa 0.36.0",
+ "skrifa 0.37.0",
  "smol_str",
  "swash",
  "sys-locale",
@@ -1787,6 +1787,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "font-types"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "511e2c18a516c666d27867d2f9821f76e7d591f762e9fc41dd6cc5c90fe54b0b"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "fontconfig-parser"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2212,14 +2221,14 @@ dependencies = [
 
 [[package]]
 name = "harfrust"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75a4c970f1a00edc1626f1e3cc039492b15b73df28b9fff70f95404a571b4fae"
+checksum = "1f3fd23d35c2d8bcf34a1f0e9ea8c0ad263f0c8a9a47108eee23aac76e71645a"
 dependencies = [
  "bitflags 2.9.4",
  "bytemuck",
  "core_maths",
- "read-fonts 0.34.0",
+ "read-fonts 0.35.0",
  "smallvec",
 ]
 
@@ -2368,7 +2377,6 @@ dependencies = [
 name = "hydebar-core"
 version = "0.6.7"
 dependencies = [
- "anyhow",
  "chrono",
  "dirs 6.0.0",
  "freedesktop-icons",
@@ -2565,7 +2573,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "dnd",
  "iced_accessibility",
@@ -2583,7 +2591,7 @@ dependencies = [
 [[package]]
 name = "iced_accessibility"
 version = "0.1.0"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -2592,7 +2600,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "bitflags 2.9.4",
  "bytes",
@@ -2615,7 +2623,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "futures",
  "iced_core",
@@ -2641,7 +2649,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "bitflags 2.9.4",
  "bytemuck",
@@ -2663,7 +2671,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -2675,7 +2683,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "bytes",
  "cosmic-client-toolkit",
@@ -2690,7 +2698,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -2706,7 +2714,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "as-raw-xcb-connection",
  "bitflags 2.9.4",
@@ -2737,7 +2745,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "cosmic-client-toolkit",
  "dnd",
@@ -2756,7 +2764,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.14.0-dev"
-source = "git+https://github.com/pop-os/iced#521a04d7e7589fdd61b314c92155277bf350d944"
+source = "git+https://github.com/pop-os/iced#8cbf2b70ad229a4bc5b7055e3d0a9eef265bd10d"
 dependencies = [
  "cosmic-client-toolkit",
  "dnd",
@@ -3459,9 +3467,9 @@ dependencies = [
 
 [[package]]
 name = "masterror"
-version = "0.24.17"
+version = "0.24.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27ce242729b7655d355493d6afc4e29d097b9386acc912158bd7da5d34ac533a"
+checksum = "8d52fc243a3eac202b1cda38b908dc4cafafb9e779b1e76d781fe9b51635d1f8"
 dependencies = [
  "http",
  "itoa",
@@ -4789,18 +4797,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04ca636dac446b5664bd16c069c00a9621806895b8bb02c2dc68542b23b8f25d"
 dependencies = [
  "bytemuck",
- "font-types",
+ "font-types 0.9.0",
 ]
 
 [[package]]
 name = "read-fonts"
-version = "0.34.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8941f8e9d5f8ad3aebea330d01ac68c0167600eb31a86ecd86e97be4d13b51f5"
+checksum = "6717cf23b488adf64b9d711329542ba34de147df262370221940dfabc2c91358"
 dependencies = [
  "bytemuck",
  "core_maths",
- "font-types",
+ "font-types 0.10.0",
 ]
 
 [[package]]
@@ -5413,12 +5421,12 @@ dependencies = [
 
 [[package]]
 name = "skrifa"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37004372610e83ee2a4c69c7d896b41f33da6a3dc1a4fe07dd9b2629a549b1dc"
+checksum = "8c31071dedf532758ecf3fed987cdb4bd9509f900e026ab684b4ecb81ea49841"
 dependencies = [
  "bytemuck",
- "read-fonts 0.34.0",
+ "read-fonts 0.35.0",
 ]
 
 [[package]]
@@ -6845,7 +6853,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

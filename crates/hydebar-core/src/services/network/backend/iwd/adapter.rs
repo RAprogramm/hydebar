@@ -20,27 +20,26 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
 #[proxy(interface = "net.connman.iwd.Adapter", assume_defaults = true)]
-pub trait Adapter
-{
+pub trait Adapter {
     /// Model property
     #[zbus(property)]
-    fn model(&self,) -> zbus::Result<String,>;
+    fn model(&self) -> zbus::Result<String>;
 
     /// Name property
     #[zbus(property)]
-    fn name(&self,) -> zbus::Result<String,>;
+    fn name(&self) -> zbus::Result<String>;
 
     /// Powered property
     #[zbus(property)]
-    fn powered(&self,) -> zbus::Result<bool,>;
+    fn powered(&self) -> zbus::Result<bool>;
     #[zbus(property)]
-    fn set_powered(&self, value: bool,) -> zbus::Result<(),>;
+    fn set_powered(&self, value: bool) -> zbus::Result<()>;
 
     /// SupportedModes property
     #[zbus(property)]
-    fn supported_modes(&self,) -> zbus::Result<Vec<String,>,>;
+    fn supported_modes(&self) -> zbus::Result<Vec<String>>;
 
     /// Vendor property
     #[zbus(property)]
-    fn vendor(&self,) -> zbus::Result<String,>;
+    fn vendor(&self) -> zbus::Result<String>;
 }

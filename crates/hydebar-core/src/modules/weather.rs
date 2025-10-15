@@ -1,70 +1,63 @@
 use std::time::Duration;
 
 use log::error;
+use masterror::{AppError, AppResult};
 use serde::Deserialize;
 use tokio::{task::JoinHandle, time::interval};
 
 use crate::{ModuleContext, ModuleEventSender, event_bus::ModuleEvent};
 
 /// OpenWeatherMap API response structures
-#[derive(Debug, Clone, Deserialize,)]
-pub struct WeatherResponse
-{
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeatherResponse {
     pub main:    MainWeather,
-    pub weather: Vec<WeatherCondition,>,
-    pub wind:    Wind,
+    pub weather: Vec<WeatherCondition>,
+    pub wind:    Wind
 }
 
-#[derive(Debug, Clone, Deserialize,)]
-pub struct MainWeather
-{
+#[derive(Debug, Clone, Deserialize)]
+pub struct MainWeather {
     pub temp:     f64,
-    pub humidity: u32,
+    pub humidity: u32
 }
 
-#[derive(Debug, Clone, Deserialize,)]
-pub struct WeatherCondition
-{
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeatherCondition {
     pub description: String,
-    pub icon:        String,
+    pub icon:        String
 }
 
-#[derive(Debug, Clone, Deserialize,)]
-pub struct Wind
-{
-    pub speed: f64,
+#[derive(Debug, Clone, Deserialize)]
+pub struct Wind {
+    pub speed: f64
 }
 
 /// Weather data for rendering
-#[derive(Debug, Clone,)]
-pub struct WeatherData
-{
+#[derive(Debug, Clone)]
+pub struct WeatherData {
     pub temperature:  String,
     pub description:  String,
     pub humidity:     String,
     pub wind_speed:   String,
     pub location:     String,
     pub use_celsius:  bool,
-    pub last_updated: chrono::DateTime<chrono::Local,>,
+    pub last_updated: chrono::DateTime<chrono::Local>
 }
 
-impl WeatherData
-{
-    pub fn new(location: String, use_celsius: bool,) -> Self
-    {
+impl WeatherData {
+    pub fn new(location: String, use_celsius: bool) -> Self {
         Self {
-            temperature: String::from("--",),
-            description: String::from("Loading...",),
-            humidity: String::from("--",),
-            wind_speed: String::from("--",),
+            temperature: String::from("--"),
+            description: String::from("Loading..."),
+            humidity: String::from("--"),
+            wind_speed: String::from("--"),
             location,
             use_celsius,
-            last_updated: chrono::Local::now(),
+            last_updated: chrono::Local::now()
         }
     }
 
-    pub fn from_response(response: WeatherResponse, location: String, use_celsius: bool,) -> Self
-    {
+    pub fn from_response(response: WeatherResponse, location: String, use_celsius: bool) -> Self {
         // OpenWeatherMap returns temperature in Kelvin by default
         let temp_kelvin = response.main.temp;
         let temperature = if use_celsius {
@@ -76,8 +69,8 @@ impl WeatherData
         let description = response
             .weather
             .first()
-            .map(|w| w.description.clone(),)
-            .unwrap_or_else(|| String::from("Unknown",),);
+            .map(|w| w.description.clone())
+            .unwrap_or_else(|| String::from("Unknown"));
 
         Self {
             temperature,
@@ -86,174 +79,162 @@ impl WeatherData
             wind_speed: format!("{:.1} m/s", response.wind.speed),
             location,
             use_celsius,
-            last_updated: chrono::Local::now(),
+            last_updated: chrono::Local::now()
         }
     }
 
-    pub fn display_temp(&self,) -> &str
-    {
+    pub fn display_temp(&self) -> &str {
         &self.temperature
     }
 
-    pub fn display_description(&self,) -> &str
-    {
+    pub fn display_description(&self) -> &str {
         &self.description
     }
 }
 
 /// Events emitted by the weather module
-#[derive(Debug, Clone,)]
-pub enum WeatherEvent
-{
-    Updated(WeatherData,),
-    Error(String,),
+#[derive(Debug, Clone)]
+pub enum WeatherEvent {
+    Updated(WeatherData),
+    Error(String)
 }
 
 /// Message type for GUI communication
-#[derive(Debug, Clone,)]
-pub enum Message
-{
-    Update(WeatherData,),
-    Error(String,),
-    Refresh,
+#[derive(Debug, Clone)]
+pub enum Message {
+    Update(WeatherData),
+    Error(String),
+    Refresh
 }
 
 /// Weather module - business logic only, no GUI!
-#[derive(Debug,)]
-pub struct Weather
-{
+#[derive(Debug)]
+pub struct Weather {
     data:            WeatherData,
-    api_key:         Option<String,>,
+    api_key:         Option<String>,
     update_interval: Duration,
-    sender:          Option<ModuleEventSender<WeatherEvent,>,>,
-    task:            Option<JoinHandle<(),>,>,
+    sender:          Option<ModuleEventSender<WeatherEvent>>,
+    task:            Option<JoinHandle<()>>
 }
 
-impl Weather
-{
+impl Weather {
     pub fn new(
         location: String,
-        api_key: Option<String,>,
+        api_key: Option<String>,
         use_celsius: bool,
-        update_interval_minutes: u64,
-    ) -> Self
-    {
+        update_interval_minutes: u64
+    ) -> Self {
         Self {
-            data: WeatherData::new(location, use_celsius,),
+            data: WeatherData::new(location, use_celsius),
             api_key,
-            update_interval: Duration::from_secs(update_interval_minutes * 60,),
+            update_interval: Duration::from_secs(update_interval_minutes * 60),
             sender: None,
-            task: None,
+            task: None
         }
     }
 
     /// Get current weather data for rendering
-    pub fn data(&self,) -> &WeatherData
-    {
+    pub fn data(&self) -> &WeatherData {
         &self.data
     }
 
     /// Initialize with module context
-    pub fn register(&mut self, ctx: &ModuleContext,)
-    {
+    pub fn register(&mut self, ctx: &ModuleContext) {
         self.sender = Some(ctx.module_sender(|event: WeatherEvent| match event {
-            WeatherEvent::Updated(data,) => ModuleEvent::Weather(Message::Update(data,),),
-            WeatherEvent::Error(err,) => ModuleEvent::Weather(Message::Error(err,),),
-        },),);
+            WeatherEvent::Updated(data) => ModuleEvent::Weather(Message::Update(data)),
+            WeatherEvent::Error(err) => ModuleEvent::Weather(Message::Error(err))
+        }));
 
-        if let Some(task,) = self.task.take() {
+        if let Some(task) = self.task.take() {
             task.abort();
         }
 
-        if let Some(sender,) = self.sender.clone() {
+        if let Some(sender) = self.sender.clone() {
             let interval_duration = self.update_interval;
             let location = self.data.location.clone();
             let use_celsius = self.data.use_celsius;
             let api_key = self.api_key.clone();
 
             self.task = Some(ctx.runtime_handle().spawn(async move {
-                let mut ticker = interval(interval_duration,);
+                let mut ticker = interval(interval_duration);
 
                 loop {
                     ticker.tick().await;
 
-                    match Self::fetch_weather(&location, &api_key,).await {
-                        Ok(response,) => {
+                    match Self::fetch_weather(&location, &api_key).await {
+                        Ok(response) => {
                             let data = WeatherData::from_response(
                                 response,
                                 location.clone(),
-                                use_celsius,
+                                use_celsius
                             );
-                            if let Err(err,) = sender.try_send(WeatherEvent::Updated(data,),) {
+                            if let Err(err) = sender.try_send(WeatherEvent::Updated(data)) {
                                 error!("Failed to publish weather update: {err}");
                             }
                         }
-                        Err(err,) => {
+                        Err(err) => {
                             error!("Failed to fetch weather: {err}");
-                            if let Err(e,) =
-                                sender.try_send(WeatherEvent::Error(err.to_string(),),)
-                            {
+                            if let Err(e) = sender.try_send(WeatherEvent::Error(err.to_string())) {
                                 error!("Failed to publish weather error: {e}");
                             }
                         }
                     }
                 }
-            },),);
+            }));
         }
 
         // Trigger immediate fetch
-        if let Some(sender,) = &self.sender {
+        if let Some(sender) = &self.sender {
             let location = self.data.location.clone();
             let use_celsius = self.data.use_celsius;
             let api_key = self.api_key.clone();
             let update_sender = sender.clone();
 
             ctx.runtime_handle().spawn(async move {
-                match Self::fetch_weather(&location, &api_key,).await {
-                    Ok(response,) => {
-                        let data = WeatherData::from_response(response, location, use_celsius,);
-                        let _ = update_sender.try_send(WeatherEvent::Updated(data,),);
+                match Self::fetch_weather(&location, &api_key).await {
+                    Ok(response) => {
+                        let data = WeatherData::from_response(response, location, use_celsius);
+                        let _ = update_sender.try_send(WeatherEvent::Updated(data));
                     }
-                    Err(err,) => {
-                        let _ = update_sender.try_send(WeatherEvent::Error(err.to_string(),),);
+                    Err(err) => {
+                        let _ = update_sender.try_send(WeatherEvent::Error(err.to_string()));
                     }
                 }
-            },);
+            });
         }
     }
 
     /// Update weather state from GUI message
-    pub fn update(&mut self, message: Message,)
-    {
+    pub fn update(&mut self, message: Message) {
         match message {
-            Message::Update(data,) => {
+            Message::Update(data) => {
                 self.data = data;
             }
-            Message::Error(err,) => {
+            Message::Error(err) => {
                 error!("Weather module error: {err}");
                 self.data.description = format!("Error: {err}");
             }
             Message::Refresh => {
                 // Trigger manual refresh
-                if let Some(sender,) = &self.sender {
+                if let Some(sender) = &self.sender {
                     let location = self.data.location.clone();
                     let use_celsius = self.data.use_celsius;
                     let api_key = self.api_key.clone();
                     let update_sender = sender.clone();
 
                     tokio::spawn(async move {
-                        match Self::fetch_weather(&location, &api_key,).await {
-                            Ok(response,) => {
+                        match Self::fetch_weather(&location, &api_key).await {
+                            Ok(response) => {
                                 let data =
-                                    WeatherData::from_response(response, location, use_celsius,);
-                                let _ = update_sender.try_send(WeatherEvent::Updated(data,),);
+                                    WeatherData::from_response(response, location, use_celsius);
+                                let _ = update_sender.try_send(WeatherEvent::Updated(data));
                             }
-                            Err(err,) => {
+                            Err(err) => {
                                 let _ =
-                                    update_sender.try_send(WeatherEvent::Error(err.to_string(),),);
+                                    update_sender.try_send(WeatherEvent::Error(err.to_string()));
                             }
                         }
-                    },);
+                    });
                 }
             }
         }
@@ -262,41 +243,42 @@ impl Weather
     /// Fetch weather data from OpenWeatherMap API
     async fn fetch_weather(
         location: &str,
-        api_key: &Option<String,>,
-    ) -> anyhow::Result<WeatherResponse,>
-    {
+        api_key: &Option<String>
+    ) -> AppResult<WeatherResponse> {
         let api_key = api_key
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("OpenWeatherMap API key not configured"),)?;
+            .ok_or_else(|| AppError::internal("OpenWeatherMap API key not configured"))?;
 
         let url = format!(
             "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}",
             location, api_key
         );
-        let response = reqwest::get(&url,).await?.json::<WeatherResponse>().await?;
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| AppError::internal(format!("Failed to fetch weather: {}", e)))?
+            .json::<WeatherResponse>()
+            .await
+            .map_err(|e| AppError::internal(format!("Failed to parse weather response: {}", e)))?;
 
-        Ok(response,)
+        Ok(response)
     }
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
     use super::*;
 
     #[test]
-    fn weather_data_new()
-    {
-        let data = WeatherData::new(String::from("London",), true,);
+    fn weather_data_new() {
+        let data = WeatherData::new(String::from("London"), true);
         assert_eq!(data.location, "London");
         assert_eq!(data.temperature, "--");
         assert!(data.use_celsius);
     }
 
     #[test]
-    fn weather_data_display()
-    {
-        let data = WeatherData::new(String::from("London",), true,);
+    fn weather_data_display() {
+        let data = WeatherData::new(String::from("London"), true);
         assert_eq!(data.display_temp(), "--");
         assert_eq!(data.display_description(), "Loading...");
     }

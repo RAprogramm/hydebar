@@ -39,7 +39,6 @@ wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 itertools = "0.14"
 hex_color = { version = "3", features = ["serde"] }
-anyhow = "1"
 udev = { version = "0.9", features = ["send", "sync"] }
 toml = "0.9"
 freedesktop-icons = "0.4"

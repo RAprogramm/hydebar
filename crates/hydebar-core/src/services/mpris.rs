@@ -20,132 +20,126 @@ use ipc::{IpcEvent, build_event_stream, collect_players};
 
 /// Service storing the currently discovered MPRIS players and their cached
 /// state.
-#[derive(Debug, Clone,)]
-pub struct MprisPlayerService
-{
-    data: Vec<MprisPlayerData,>,
-    conn: Connection,
+#[derive(Debug, Clone)]
+pub struct MprisPlayerService {
+    data: Vec<MprisPlayerData>,
+    conn: Connection
 }
 
-impl Deref for MprisPlayerService
-{
-    type Target = Vec<MprisPlayerData,>;
+impl Deref for MprisPlayerService {
+    type Target = Vec<MprisPlayerData>;
 
-    fn deref(&self,) -> &Self::Target
-    {
+    fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
 /// Publishes events emitted by the MPRIS service.
-pub(crate) trait MprisEventPublisher
-{
+pub(crate) trait MprisEventPublisher {
     /// Sends a [`ServiceEvent`] to consumers.
     fn send(
         &mut self,
-        event: ServiceEvent<MprisPlayerService,>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError,>,> + Send + '_,>,>;
+        event: ServiceEvent<MprisPlayerService>
+    ) -> Pin<Box<dyn Future<Output = Result<(), ModuleError>> + Send + '_>>;
 }
 
 /// Internal state machine for the MPRIS listener runtime.
-#[derive(Debug, Clone,)]
-pub(crate) enum ListenerState
-{
+#[derive(Debug, Clone)]
+pub(crate) enum ListenerState {
     /// No connection has been established yet.
     Init,
     /// The service is actively listening for events on the provided connection.
-    Active(Connection,),
+    Active(Connection)
 }
 
-impl ReadOnlyService for MprisPlayerService
-{
+impl ReadOnlyService for MprisPlayerService {
     type UpdateEvent = MprisPlayerEvent;
     type Error = ModuleError;
 
-    fn update(&mut self, event: Self::UpdateEvent,)
-    {
+    fn update(&mut self, event: Self::UpdateEvent) {
         match event {
-            MprisPlayerEvent::Refresh(data,) => self.data = data,
-            MprisPlayerEvent::Metadata(service, metadata,) => {
-                if let Some(entry,) = self.data.iter_mut().find(|d| d.service == service,) {
+            MprisPlayerEvent::Refresh(data) => self.data = data,
+            MprisPlayerEvent::Metadata(service, metadata) => {
+                if let Some(entry) = self.data.iter_mut().find(|d| d.service == service) {
                     entry.metadata = metadata;
                 }
             }
-            MprisPlayerEvent::Volume(service, volume,) => {
-                if let Some(entry,) = self.data.iter_mut().find(|d| d.service == service,) {
+            MprisPlayerEvent::Volume(service, volume) => {
+                if let Some(entry) = self.data.iter_mut().find(|d| d.service == service) {
                     entry.volume = volume;
                 }
             }
-            MprisPlayerEvent::State(service, state,) => {
-                if let Some(entry,) = self.data.iter_mut().find(|d| d.service == service,) {
+            MprisPlayerEvent::State(service, state) => {
+                if let Some(entry) = self.data.iter_mut().find(|d| d.service == service) {
                     entry.state = state;
                 }
             }
         }
     }
 
-    fn subscribe() -> Subscription<ServiceEvent<Self,>,>
-    {
+    fn subscribe() -> Subscription<ServiceEvent<Self>> {
         Subscription::none()
     }
 }
 
-impl MprisPlayerService
-{
+impl MprisPlayerService {
     /// Starts or resumes the MPRIS listener depending on the provided `state`.
-    pub(crate) async fn start_listening<P,>(
+    pub(crate) async fn start_listening<P>(
         state: ListenerState,
-        publisher: &mut P,
-    ) -> Result<ListenerState, ModuleError,>
+        publisher: &mut P
+    ) -> Result<ListenerState, ModuleError>
     where
-        P: MprisEventPublisher,
+        P: MprisEventPublisher
     {
         #[cfg(all(test, feature = "enable-broken-tests"))]
-        if let Some(callback,) = test_support::current_start_listening_override() {
+        if let Some(callback) = test_support::current_start_listening_override() {
             let publisher = publisher as &mut dyn MprisEventPublisher;
-            return (callback)(state, publisher,).await;
+            return (callback)(state, publisher).await;
         }
 
-        Self::start_listening_internal(state, publisher,).await
+        Self::start_listening_internal(state, publisher).await
     }
 
-    async fn start_listening_internal<P,>(
+    async fn start_listening_internal<P>(
         state: ListenerState,
-        publisher: &mut P,
-    ) -> Result<ListenerState, ModuleError,>
+        publisher: &mut P
+    ) -> Result<ListenerState, ModuleError>
     where
-        P: MprisEventPublisher,
+        P: MprisEventPublisher
     {
         match state {
             ListenerState::Init => {
                 let conn = Connection::session()
                     .await
-                    .map_err(|err| module_error("failed to connect to session bus", err,),)?;
+                    .map_err(|err| module_error("failed to connect to session bus", err))?;
 
-                match collect_players(&conn,).await {
-                    Ok(data,) => {
+                match collect_players(&conn).await {
+                    Ok(data) => {
                         info!("MPRIS player service initialized");
 
                         publisher
                             .send(ServiceEvent::Init(MprisPlayerService {
                                 data,
-                                conn: conn.clone(),
-                            },),)
+                                conn: conn.clone()
+                            }))
                             .await?;
 
-                        Ok(ListenerState::Active(conn,),)
+                        Ok(ListenerState::Active(conn))
                     }
-                    Err(err,) => {
+                    Err(err) => {
                         error!("Failed to initialize MPRIS player service: {err}");
-                        Err(module_error("failed to initialize MPRIS player service", err,),)
+                        Err(module_error(
+                            "failed to initialize MPRIS player service",
+                            err
+                        ))
                     }
                 }
             }
-            ListenerState::Active(conn,) => match build_event_stream(&conn,).await {
-                Ok(events,) => {
-                    let mut chunks = events.ready_chunks(10,);
+            ListenerState::Active(conn) => match build_event_stream(&conn).await {
+                Ok(events) => {
+                    let mut chunks = events.ready_chunks(10);
 
-                    while let Some(chunk,) = chunks.next().await {
+                    while let Some(chunk) = chunks.next().await {
                         debug!("MPRIS player service receive events: {chunk:?}");
 
                         let mut need_refresh = false;
@@ -156,55 +150,55 @@ impl MprisPlayerService
                                     debug!("MPRIS player service name owner changed");
                                     need_refresh = true;
                                 }
-                                IpcEvent::Metadata(service, metadata,) => {
+                                IpcEvent::Metadata(service, metadata) => {
                                     debug!(
                                         "MPRIS player service {service} metadata changed: {metadata:?}"
                                     );
                                     publisher
                                         .send(ServiceEvent::Update(MprisPlayerEvent::Metadata(
-                                            service, metadata,
-                                        ),),)
+                                            service, metadata
+                                        )))
                                         .await?;
                                 }
-                                IpcEvent::Volume(service, volume,) => {
+                                IpcEvent::Volume(service, volume) => {
                                     debug!(
                                         "MPRIS player service {service} volume changed: {volume:?}"
                                     );
                                     publisher
                                         .send(ServiceEvent::Update(MprisPlayerEvent::Volume(
-                                            service, volume,
-                                        ),),)
+                                            service, volume
+                                        )))
                                         .await?;
                                 }
-                                IpcEvent::State(service, state,) => {
+                                IpcEvent::State(service, state) => {
                                     debug!(
                                         "MPRIS player service {service} playback status changed: {state:?}"
                                     );
                                     publisher
                                         .send(ServiceEvent::Update(MprisPlayerEvent::State(
-                                            service, state,
-                                        ),),)
+                                            service, state
+                                        )))
                                         .await?;
                                 }
                             }
                         }
 
                         if need_refresh {
-                            match collect_players(&conn,).await {
-                                Ok(data,) => {
+                            match collect_players(&conn).await {
+                                Ok(data) => {
                                     debug!("Refreshing MPRIS player data");
                                     publisher
                                         .send(ServiceEvent::Update(MprisPlayerEvent::Refresh(
-                                            data,
-                                        ),),)
+                                            data
+                                        )))
                                         .await?;
                                 }
-                                Err(err,) => {
+                                Err(err) => {
                                     error!("Failed to fetch MPRIS player data: {err}");
                                     return Err(module_error(
                                         "failed to refresh MPRIS player data",
-                                        err,
-                                    ),);
+                                        err
+                                    ));
                                 }
                             }
 
@@ -212,162 +206,151 @@ impl MprisPlayerService
                         }
                     }
 
-                    Ok(ListenerState::Active(conn,),)
+                    Ok(ListenerState::Active(conn))
                 }
-                Err(err,) => {
+                Err(err) => {
                     error!("Failed to listen for MPRIS player events: {err}");
-                    Err(module_error("failed to listen for MPRIS player events", err,),)
+                    Err(module_error(
+                        "failed to listen for MPRIS player events",
+                        err
+                    ))
                 }
-            },
+            }
         }
     }
 
     /// Executes a command against the currently cached player list.
     pub(crate) async fn execute_command(
-        service: Option<MprisPlayerService,>,
-        command: MprisPlayerCommand,
-    ) -> Result<Vec<MprisPlayerData,>, ModuleError,>
-    {
+        service: Option<MprisPlayerService>,
+        command: MprisPlayerCommand
+    ) -> Result<Vec<MprisPlayerData>, ModuleError> {
         #[cfg(all(test, feature = "enable-broken-tests"))]
-        if let Some(callback,) = test_support::current_execute_command_override() {
-            return (callback)(service, command,).await;
+        if let Some(callback) = test_support::current_execute_command_override() {
+            return (callback)(service, command).await;
         }
 
-        let service = service.ok_or_else(|| {
-            ModuleError::registration("MPRIS player service is not initialised",)
-        },)?;
+        let service = service
+            .ok_or_else(|| ModuleError::registration("MPRIS player service is not initialised"))?;
 
-        execute_player_command(&service.conn, &service.data, command,).await
+        execute_player_command(&service.conn, &service.data, command).await
     }
 }
 
-impl Service for MprisPlayerService
-{
+impl Service for MprisPlayerService {
     type Command = MprisPlayerCommand;
 
-    fn command(&mut self, command: Self::Command,) -> Task<ServiceEvent<Self,>,>
-    {
-        let service = Some(self.clone(),);
+    fn command(&mut self, command: Self::Command) -> Task<ServiceEvent<Self>> {
+        let service = Some(self.clone());
 
         Task::perform(
             async move {
-                match MprisPlayerService::execute_command(service, command,).await {
-                    Ok(data,) => ServiceEvent::Update(MprisPlayerEvent::Refresh(data,),),
-                    Err(error,) => ServiceEvent::Error(error,),
+                match MprisPlayerService::execute_command(service, command).await {
+                    Ok(data) => ServiceEvent::Update(MprisPlayerEvent::Refresh(data)),
+                    Err(error) => ServiceEvent::Error(error)
                 }
             },
-            |event| event,
+            |event| event
         )
     }
 }
 
 // TODO: Fix broken tests
 #[cfg(all(test, feature = "enable-broken-tests"))]
-pub mod test_support
-{
+pub mod test_support {
     use std::{
         sync::{Arc, Mutex, OnceLock},
-        time::Duration,
+        time::Duration
     };
 
     use super::*;
 
     pub type StartListeningFuture =
-        Pin<Box<dyn Future<Output = Result<ListenerState, ModuleError,>,> + Send,>,>;
+        Pin<Box<dyn Future<Output = Result<ListenerState, ModuleError>> + Send>>;
     pub type StartListeningCallback = Arc<
-        dyn Fn(ListenerState, &mut dyn MprisEventPublisher,) -> StartListeningFuture + Send + Sync,
+        dyn Fn(ListenerState, &mut dyn MprisEventPublisher) -> StartListeningFuture + Send + Sync
     >;
 
     pub type ExecuteCommandFuture =
-        Pin<Box<dyn Future<Output = Result<Vec<MprisPlayerData,>, ModuleError,>,> + Send,>,>;
+        Pin<Box<dyn Future<Output = Result<Vec<MprisPlayerData>, ModuleError>> + Send>>;
     pub type ExecuteCommandCallback = Arc<
-        dyn Fn(Option<MprisPlayerService,>, MprisPlayerCommand,) -> ExecuteCommandFuture
+        dyn Fn(Option<MprisPlayerService>, MprisPlayerCommand) -> ExecuteCommandFuture
             + Send
-            + Sync,
+            + Sync
     >;
 
-    static START_LISTENING_OVERRIDE: OnceLock<Mutex<Option<StartListeningCallback,>,>,> =
+    static START_LISTENING_OVERRIDE: OnceLock<Mutex<Option<StartListeningCallback>>> =
         OnceLock::new();
-    static EXECUTE_COMMAND_OVERRIDE: OnceLock<Mutex<Option<ExecuteCommandCallback,>,>,> =
+    static EXECUTE_COMMAND_OVERRIDE: OnceLock<Mutex<Option<ExecuteCommandCallback>>> =
         OnceLock::new();
 
-    fn start_listening_override() -> &'static Mutex<Option<StartListeningCallback,>,>
-    {
-        START_LISTENING_OVERRIDE.get_or_init(|| Mutex::new(None,),)
+    fn start_listening_override() -> &'static Mutex<Option<StartListeningCallback>> {
+        START_LISTENING_OVERRIDE.get_or_init(|| Mutex::new(None))
     }
 
-    fn execute_command_override() -> &'static Mutex<Option<ExecuteCommandCallback,>,>
-    {
-        EXECUTE_COMMAND_OVERRIDE.get_or_init(|| Mutex::new(None,),)
+    fn execute_command_override() -> &'static Mutex<Option<ExecuteCommandCallback>> {
+        EXECUTE_COMMAND_OVERRIDE.get_or_init(|| Mutex::new(None))
     }
 
-    pub fn install_start_listening_override(callback: StartListeningCallback,) -> OverrideGuard
-    {
-        *start_listening_override().lock().expect("start listening override mutex poisoned",) =
-            Some(callback,);
+    pub fn install_start_listening_override(callback: StartListeningCallback) -> OverrideGuard {
+        *start_listening_override()
+            .lock()
+            .expect("start listening override mutex poisoned") = Some(callback);
         OverrideGuard {
-            target: OverrideTarget::StartListening,
+            target: OverrideTarget::StartListening
         }
     }
 
-    pub fn install_execute_command_override(callback: ExecuteCommandCallback,) -> OverrideGuard
-    {
-        *execute_command_override().lock().expect("execute command override mutex poisoned",) =
-            Some(callback,);
+    pub fn install_execute_command_override(callback: ExecuteCommandCallback) -> OverrideGuard {
+        *execute_command_override()
+            .lock()
+            .expect("execute command override mutex poisoned") = Some(callback);
         OverrideGuard {
-            target: OverrideTarget::ExecuteCommand,
+            target: OverrideTarget::ExecuteCommand
         }
     }
 
-    pub(crate) fn current_start_listening_override() -> Option<StartListeningCallback,>
-    {
+    pub(crate) fn current_start_listening_override() -> Option<StartListeningCallback> {
         start_listening_override()
             .lock()
-            .expect("start listening override mutex poisoned",)
+            .expect("start listening override mutex poisoned")
             .clone()
     }
 
-    pub(crate) fn current_execute_command_override() -> Option<ExecuteCommandCallback,>
-    {
+    pub(crate) fn current_execute_command_override() -> Option<ExecuteCommandCallback> {
         execute_command_override()
             .lock()
-            .expect("execute command override mutex poisoned",)
+            .expect("execute command override mutex poisoned")
             .clone()
     }
 
-    pub struct OverrideGuard
-    {
-        target: OverrideTarget,
+    pub struct OverrideGuard {
+        target: OverrideTarget
     }
 
-    enum OverrideTarget
-    {
+    enum OverrideTarget {
         StartListening,
-        ExecuteCommand,
+        ExecuteCommand
     }
 
-    impl Drop for OverrideGuard
-    {
-        fn drop(&mut self,)
-        {
+    impl Drop for OverrideGuard {
+        fn drop(&mut self) {
             match self.target {
                 OverrideTarget::StartListening => {
                     *start_listening_override()
                         .lock()
-                        .expect("start listening override mutex poisoned",) = None;
+                        .expect("start listening override mutex poisoned") = None;
                 }
                 OverrideTarget::ExecuteCommand => {
                     *execute_command_override()
                         .lock()
-                        .expect("execute command override mutex poisoned",) = None;
+                        .expect("execute command override mutex poisoned") = None;
                 }
             }
         }
     }
 
-    pub async fn yield_once()
-    {
-        yield_now().await;
-        tokio::time::sleep(Duration::from_millis(1,),).await;
+    pub async fn yield_once() {
+        tokio::task::yield_now().await;
+        tokio::time::sleep(Duration::from_millis(1)).await;
     }
 }

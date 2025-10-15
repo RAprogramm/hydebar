@@ -19,15 +19,17 @@
 //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
-#[proxy(interface = "net.connman.iwd.p2p.ServiceManager", assume_defaults = true)]
-pub trait ServiceManager
-{
+#[proxy(
+    interface = "net.connman.iwd.p2p.ServiceManager",
+    assume_defaults = true
+)]
+pub trait ServiceManager {
     /// RegisterDisplayService method
     fn register_display_service(
         &self,
-        properties: std::collections::HashMap<&str, &zbus::zvariant::Value<'_,>,>,
-    ) -> zbus::Result<(),>;
+        properties: std::collections::HashMap<&str, &zbus::zvariant::Value<'_>>
+    ) -> zbus::Result<()>;
 
     /// UnregisterDisplayService method
-    fn unregister_display_service(&self,) -> zbus::Result<(),>;
+    fn unregister_display_service(&self) -> zbus::Result<()>;
 }

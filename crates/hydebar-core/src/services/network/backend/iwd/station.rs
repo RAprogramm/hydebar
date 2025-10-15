@@ -20,57 +20,54 @@
 //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
 use zbus::proxy;
 #[proxy(interface = "net.connman.iwd.Station", assume_defaults = true)]
-pub trait Station
-{
+pub trait Station {
     /// ConnectHiddenNetwork method
-    fn connect_hidden_network(&self, name: &str,) -> zbus::Result<(),>;
+    fn connect_hidden_network(&self, name: &str) -> zbus::Result<()>;
 
     /// Disconnect method
-    fn disconnect(&self,) -> zbus::Result<(),>;
+    fn disconnect(&self) -> zbus::Result<()>;
 
     /// GetHiddenAccessPoints method
-    fn get_hidden_access_points(&self,) -> zbus::Result<Vec<(String, i16, String,),>,>;
+    fn get_hidden_access_points(&self) -> zbus::Result<Vec<(String, i16, String)>>;
 
     /// GetOrderedNetworks method
-    fn get_ordered_networks(
-        &self,
-    ) -> zbus::Result<Vec<(zbus::zvariant::OwnedObjectPath, i16,),>,>;
+    fn get_ordered_networks(&self) -> zbus::Result<Vec<(zbus::zvariant::OwnedObjectPath, i16)>>;
 
     /// RegisterSignalLevelAgent method
     fn register_signal_level_agent(
         &self,
-        path: &zbus::zvariant::ObjectPath<'_,>,
-        levels: &[i16],
-    ) -> zbus::Result<(),>;
+        path: &zbus::zvariant::ObjectPath<'_>,
+        levels: &[i16]
+    ) -> zbus::Result<()>;
 
     /// Scan method
-    fn scan(&self,) -> zbus::Result<(),>;
+    fn scan(&self) -> zbus::Result<()>;
 
     /// UnregisterSignalLevelAgent method
     fn unregister_signal_level_agent(
         &self,
-        path: &zbus::zvariant::ObjectPath<'_,>,
-    ) -> zbus::Result<(),>;
+        path: &zbus::zvariant::ObjectPath<'_>
+    ) -> zbus::Result<()>;
 
     /// Affinities property
     #[zbus(property)]
-    fn affinities(&self,) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath,>,>;
+    fn affinities(&self) -> zbus::Result<Vec<zbus::zvariant::OwnedObjectPath>>;
     #[zbus(property)]
-    fn set_affinities(&self, value: &[&zbus::zvariant::ObjectPath<'_,>],) -> zbus::Result<(),>;
+    fn set_affinities(&self, value: &[&zbus::zvariant::ObjectPath<'_>]) -> zbus::Result<()>;
 
     /// ConnectedAccessPoint property
     #[zbus(property)]
-    fn connected_access_point(&self,) -> zbus::Result<zbus::zvariant::OwnedObjectPath,>;
+    fn connected_access_point(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     /// ConnectedNetwork property
     #[zbus(property)]
-    fn connected_network(&self,) -> zbus::Result<zbus::zvariant::OwnedObjectPath,>;
+    fn connected_network(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     /// Scanning property
     #[zbus(property)]
-    fn scanning(&self,) -> zbus::Result<bool,>;
+    fn scanning(&self) -> zbus::Result<bool>;
 
     /// State property
     #[zbus(property)]
-    fn state(&self,) -> zbus::Result<String,>;
+    fn state(&self) -> zbus::Result<String>;
 }

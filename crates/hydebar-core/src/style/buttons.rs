@@ -1,7 +1,7 @@
 use iced::{
     Background, Border, Color, Theme,
     theme::palette,
-    widget::button::{self, Status},
+    widget::button::{self, Status}
 };
 
 use crate::config::{AppearanceColor, AppearanceStyle};
@@ -11,9 +11,8 @@ use crate::config::{AppearanceColor, AppearanceStyle};
 pub fn module_button_style(
     style: AppearanceStyle,
     opacity: f32,
-    transparent: bool,
-) -> impl Fn(&Theme, Status,) -> button::Style
-{
+    transparent: bool
+) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme, status| {
         let mut base = button::Style {
             background: match style {
@@ -22,12 +21,14 @@ pub fn module_button_style(
                     if transparent {
                         None
                     } else {
-                        Some(theme.palette().background.scale_alpha(opacity,).into(),)
+                        Some(theme.palette().background.scale_alpha(opacity).into())
                     }
                 }
             },
             border: Border {
-                width: 0.0, radius: 12.0.into(), color: Color::TRANSPARENT,
+                width:  0.0,
+                radius: 12.0.into(),
+                color:  Color::TRANSPARENT
             },
             text_color: theme.palette().text,
             ..button::Style::default()
@@ -36,23 +37,30 @@ pub fn module_button_style(
             Status::Active => base,
             Status::Hovered => {
                 base.background = Some(
-                    theme.extended_palette().background.weak.color.scale_alpha(opacity,).into(),
+                    theme
+                        .extended_palette()
+                        .background
+                        .weak
+                        .color
+                        .scale_alpha(opacity)
+                        .into()
                 );
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
 
 /// Builds a ghost button style closure that fades in on hover.
-pub fn ghost_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
-{
+pub fn ghost_button_style(opacity: f32) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme, status| {
         let mut base = button::Style {
             background: None,
             border: Border {
-                width: 0.0, radius: 4.0.into(), color: Color::TRANSPARENT,
+                width:  0.0,
+                radius: 4.0.into(),
+                color:  Color::TRANSPARENT
             },
             text_color: theme.palette().text,
             ..button::Style::default()
@@ -61,25 +69,30 @@ pub fn ghost_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::
             Status::Active => base,
             Status::Hovered => {
                 base.background = Some(
-                    theme.extended_palette().background.weak.color.scale_alpha(opacity,).into(),
+                    theme
+                        .extended_palette()
+                        .background
+                        .weak
+                        .color
+                        .scale_alpha(opacity)
+                        .into()
                 );
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
 
 /// Builds an outline button style closure that highlights borders on hover.
-pub fn outline_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
-{
+pub fn outline_button_style(opacity: f32) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme, status| {
         let mut base = button::Style {
             background: None,
             border: Border {
                 width:  2.0,
                 radius: 32.0.into(),
-                color:  theme.extended_palette().background.weak.color,
+                color:  theme.extended_palette().background.weak.color
             },
             text_color: theme.palette().text,
             ..button::Style::default()
@@ -88,25 +101,38 @@ pub fn outline_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button
             Status::Active => base,
             Status::Hovered => {
                 base.background = Some(
-                    theme.extended_palette().background.weak.color.scale_alpha(opacity,).into(),
+                    theme
+                        .extended_palette()
+                        .background
+                        .weak
+                        .color
+                        .scale_alpha(opacity)
+                        .into()
                 );
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
 
 /// Builds the confirm button style closure with filled background.
-pub fn confirm_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
-{
+pub fn confirm_button_style(opacity: f32) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme, status| {
         let mut base = button::Style {
             background: Some(
-                theme.extended_palette().background.weak.color.scale_alpha(opacity,).into(),
+                theme
+                    .extended_palette()
+                    .background
+                    .weak
+                    .color
+                    .scale_alpha(opacity)
+                    .into()
             ),
             border: Border {
-                width: 2.0, radius: 32.0.into(), color: Color::TRANSPARENT,
+                width:  2.0,
+                radius: 32.0.into(),
+                color:  Color::TRANSPARENT
             },
             text_color: theme.palette().text,
             ..button::Style::default()
@@ -115,25 +141,38 @@ pub fn confirm_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button
             Status::Active => base,
             Status::Hovered => {
                 base.background = Some(
-                    theme.extended_palette().background.strong.color.scale_alpha(opacity,).into(),
+                    theme
+                        .extended_palette()
+                        .background
+                        .strong
+                        .color
+                        .scale_alpha(opacity)
+                        .into()
                 );
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
 
 /// Builds the rounded settings button style closure.
-pub fn settings_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> button::Style
-{
+pub fn settings_button_style(opacity: f32) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme, status| {
         let mut base = button::Style {
             background: Some(
-                theme.extended_palette().background.weak.color.scale_alpha(opacity,).into(),
+                theme
+                    .extended_palette()
+                    .background
+                    .weak
+                    .color
+                    .scale_alpha(opacity)
+                    .into()
             ),
             border: Border {
-                width: 0.0, radius: 32.0.into(), color: Color::TRANSPARENT,
+                width:  0.0,
+                radius: 32.0.into(),
+                color:  Color::TRANSPARENT
             },
             text_color: theme.palette().text,
             ..button::Style::default()
@@ -142,11 +181,17 @@ pub fn settings_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> butto
             Status::Active => base,
             Status::Hovered => {
                 base.background = Some(
-                    theme.extended_palette().background.strong.color.scale_alpha(opacity,).into(),
+                    theme
+                        .extended_palette()
+                        .background
+                        .strong
+                        .color
+                        .scale_alpha(opacity)
+                        .into()
                 );
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
@@ -154,38 +199,40 @@ pub fn settings_button_style(opacity: f32,) -> impl Fn(&Theme, Status,) -> butto
 /// Builds the workspace button style closure, handling optional colours.
 pub fn workspace_button_style(
     is_empty: bool,
-    colors: Option<Option<AppearanceColor,>,>,
-) -> impl Fn(&Theme, Status,) -> button::Style
-{
+    colors: Option<Option<AppearanceColor>>
+) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme: &Theme, status: Status| {
-        let (bg_color, fg_color,) = colors
+        let (bg_color, fg_color) = colors
             .map(|c| {
                 c.map_or(
                     (
                         theme.extended_palette().primary.base.color,
-                        theme.extended_palette().primary.base.text,
+                        theme.extended_palette().primary.base.text
                     ),
                     |c| {
                         let color = palette::Primary::generate(
                             c.get_base(),
                             theme.palette().background,
-                            c.get_text().unwrap_or(theme.palette().text,),
+                            c.get_text().unwrap_or(theme.palette().text)
                         );
-                        (color.base.color, color.base.text,)
-                    },
+                        (color.base.color, color.base.text)
+                    }
                 )
-            },)
-            .unwrap_or((theme.extended_palette().background.weak.color, theme.palette().text,),);
+            })
+            .unwrap_or((
+                theme.extended_palette().background.weak.color,
+                theme.palette().text
+            ));
         let mut base = button::Style {
             background: Some(Background::Color(if is_empty {
                 theme.extended_palette().background.weak.color
             } else {
                 bg_color
-            },),),
+            })),
             border: Border {
                 width:  if is_empty { 1.0 } else { 0.0 },
                 color:  bg_color,
-                radius: 16.0.into(),
+                radius: 16.0.into()
             },
             text_color: if is_empty {
                 theme.extended_palette().background.weak.text
@@ -197,33 +244,33 @@ pub fn workspace_button_style(
         match status {
             Status::Active => base,
             Status::Hovered => {
-                let (bg_color, fg_color,) = colors
+                let (bg_color, fg_color) = colors
                     .map(|c| {
                         c.map_or(
                             (
                                 theme.extended_palette().primary.strong.color,
-                                theme.extended_palette().primary.strong.text,
+                                theme.extended_palette().primary.strong.text
                             ),
                             |c| {
                                 let color = palette::Primary::generate(
                                     c.get_base(),
                                     theme.palette().background,
-                                    c.get_text().unwrap_or(theme.palette().text,),
+                                    c.get_text().unwrap_or(theme.palette().text)
                                 );
-                                (color.strong.color, color.strong.text,)
-                            },
+                                (color.strong.color, color.strong.text)
+                            }
                         )
-                    },)
+                    })
                     .unwrap_or((
                         theme.extended_palette().background.strong.color,
-                        theme.palette().text,
-                    ),);
+                        theme.palette().text
+                    ));
 
                 base.background = Some(Background::Color(if is_empty {
                     theme.extended_palette().background.strong.color
                 } else {
                     bg_color
-                },),);
+                }));
                 base.text_color = if is_empty {
                     theme.extended_palette().background.weak.text
                 } else {
@@ -231,7 +278,7 @@ pub fn workspace_button_style(
                 };
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
@@ -239,9 +286,8 @@ pub fn workspace_button_style(
 /// Builds the quick settings button style closure with active feedback.
 pub fn quick_settings_button_style(
     is_active: bool,
-    opacity: f32,
-) -> impl Fn(&Theme, Status,) -> button::Style
-{
+    opacity: f32
+) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme: &Theme, status: Status| {
         let mut base = button::Style {
             background: Some(
@@ -250,11 +296,13 @@ pub fn quick_settings_button_style(
                 } else {
                     theme.extended_palette().background.weak.color
                 }
-                .scale_alpha(opacity,)
-                .into(),
+                .scale_alpha(opacity)
+                .into()
             ),
             border: Border {
-                width: 0.0, radius: 32.0.into(), color: Color::TRANSPARENT,
+                width:  0.0,
+                radius: 32.0.into(),
+                color:  Color::TRANSPARENT
             },
             text_color: if is_active {
                 theme.extended_palette().primary.base.text
@@ -273,12 +321,12 @@ pub fn quick_settings_button_style(
                     } else {
                         theme.extended_palette().background.strong.color
                     }
-                    .scale_alpha(opacity,)
-                    .into(),
+                    .scale_alpha(opacity)
+                    .into()
                 );
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
@@ -286,14 +334,15 @@ pub fn quick_settings_button_style(
 /// Builds the submenu button style closure used inside quick settings menus.
 pub fn quick_settings_submenu_button_style(
     is_active: bool,
-    opacity: f32,
-) -> impl Fn(&Theme, Status,) -> button::Style
-{
+    opacity: f32
+) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme: &Theme, status: Status| {
         let mut base = button::Style {
             background: None,
             border: Border {
-                width: 0.0, radius: 16.0.into(), color: Color::TRANSPARENT,
+                width:  0.0,
+                radius: 16.0.into(),
+                color:  Color::TRANSPARENT
             },
             text_color: if is_active {
                 theme.extended_palette().primary.base.text
@@ -306,124 +355,147 @@ pub fn quick_settings_submenu_button_style(
             Status::Active => base,
             Status::Hovered => {
                 base.background = Some(
-                    theme.extended_palette().background.weak.color.scale_alpha(opacity,).into(),
+                    theme
+                        .extended_palette()
+                        .background
+                        .weak
+                        .color
+                        .scale_alpha(opacity)
+                        .into()
                 );
                 base.text_color = theme.palette().text;
                 base
             }
-            _ => base,
+            _ => base
         }
     }
 }
 
 // TODO: Fix broken tests
 #[cfg(all(test, feature = "enable-broken-tests"))]
-mod tests
-{
+mod tests {
     use iced::{Background, Theme};
 
     use super::*;
 
-    fn color(background: Option<Background,>,) -> Color
-    {
-        match background.expect("background should be set",) {
-            Background::Color(color,) => color,
-            other => panic!("unexpected background: {other:?}"),
+    fn color(background: Option<Background>) -> Color {
+        match background.expect("background should be set") {
+            Background::Color(color) => color,
+            other => panic!("unexpected background: {other:?}")
         }
     }
 
     #[test]
-    fn module_button_style_respects_transparency()
-    {
+    fn module_button_style_respects_transparency() {
         let theme = Theme::default();
-        let style_fn = module_button_style(AppearanceStyle::Islands, 0.5, true,);
+        let style_fn = module_button_style(AppearanceStyle::Islands, 0.5, true);
 
-        let active = style_fn(&theme, Status::Active,);
+        let active = style_fn(&theme, Status::Active);
         assert!(active.background.is_none());
 
-        let hover_fn = module_button_style(AppearanceStyle::Islands, 0.5, false,);
-        let hovered = hover_fn(&theme, Status::Hovered,);
+        let hover_fn = module_button_style(AppearanceStyle::Islands, 0.5, false);
+        let hovered = hover_fn(&theme, Status::Hovered);
         assert_eq!(
             color(hovered.background),
-            theme.extended_palette().background.weak.color.scale_alpha(0.5)
+            theme
+                .extended_palette()
+                .background
+                .weak
+                .color
+                .scale_alpha(0.5)
         );
     }
 
     #[test]
-    fn ghost_button_style_sets_hover_background()
-    {
+    fn ghost_button_style_sets_hover_background() {
         let theme = Theme::default();
-        let style_fn = ghost_button_style(0.4,);
+        let style_fn = ghost_button_style(0.4);
 
-        let hovered = style_fn(&theme, Status::Hovered,);
+        let hovered = style_fn(&theme, Status::Hovered);
         assert_eq!(
             color(hovered.background),
-            theme.extended_palette().background.weak.color.scale_alpha(0.4)
+            theme
+                .extended_palette()
+                .background
+                .weak
+                .color
+                .scale_alpha(0.4)
         );
     }
 
     #[test]
-    fn outline_button_style_has_border()
-    {
+    fn outline_button_style_has_border() {
         let theme = Theme::default();
-        let style_fn = outline_button_style(0.2,);
-        let active = style_fn(&theme, Status::Active,);
+        let style_fn = outline_button_style(0.2);
+        let active = style_fn(&theme, Status::Active);
 
         assert_eq!(active.border.width, 2.0);
         assert_eq!(active.border.radius, 32.0.into());
-        assert_eq!(active.border.color, theme.extended_palette().background.weak.color);
-    }
-
-    #[test]
-    fn confirm_button_style_hoveres_to_strong_background()
-    {
-        let theme = Theme::default();
-        let style_fn = confirm_button_style(0.8,);
-
-        let hovered = style_fn(&theme, Status::Hovered,);
         assert_eq!(
-            color(hovered.background),
-            theme.extended_palette().background.strong.color.scale_alpha(0.8)
+            active.border.color,
+            theme.extended_palette().background.weak.color
         );
     }
 
     #[test]
-    fn settings_button_style_hoveres_to_strong_background()
-    {
+    fn confirm_button_style_hoveres_to_strong_background() {
         let theme = Theme::default();
-        let style_fn = settings_button_style(0.6,);
+        let style_fn = confirm_button_style(0.8);
 
-        let hovered = style_fn(&theme, Status::Hovered,);
+        let hovered = style_fn(&theme, Status::Hovered);
         assert_eq!(
             color(hovered.background),
-            theme.extended_palette().background.strong.color.scale_alpha(0.6)
+            theme
+                .extended_palette()
+                .background
+                .strong
+                .color
+                .scale_alpha(0.8)
         );
     }
 
     #[test]
-    fn workspace_button_style_handles_empty_state()
-    {
+    fn settings_button_style_hoveres_to_strong_background() {
         let theme = Theme::default();
-        let style_fn = workspace_button_style(true, None,);
+        let style_fn = settings_button_style(0.6);
 
-        let active = style_fn(&theme, Status::Active,);
-        assert_eq!(color(active.background), theme.extended_palette().background.weak.color);
+        let hovered = style_fn(&theme, Status::Hovered);
+        assert_eq!(
+            color(hovered.background),
+            theme
+                .extended_palette()
+                .background
+                .strong
+                .color
+                .scale_alpha(0.6)
+        );
+    }
+
+    #[test]
+    fn workspace_button_style_handles_empty_state() {
+        let theme = Theme::default();
+        let style_fn = workspace_button_style(true, None);
+
+        let active = style_fn(&theme, Status::Active);
+        assert_eq!(
+            color(active.background),
+            theme.extended_palette().background.weak.color
+        );
         assert_eq!(active.border.width, 1.0);
     }
 
     #[test]
-    fn workspace_button_style_uses_custom_colors()
-    {
+    fn workspace_button_style_uses_custom_colors() {
         let theme = Theme::default();
         let custom_color = AppearanceColor::Complete {
-            base:   hex_color::HexColor::rgb(200, 100, 50,),
-            strong: Some(hex_color::HexColor::rgb(210, 110, 60,),),
-            weak:   Some(hex_color::HexColor::rgb(190, 90, 40,),),
-            text:   Some(hex_color::HexColor::rgb(10, 20, 30,),),
+            base:   hex_color::HexColor::rgb(200, 100, 50),
+            strong: Some(hex_color::HexColor::rgb(210, 110, 60)),
+            weak:   Some(hex_color::HexColor::rgb(190, 90, 40)),
+            text:   Some(hex_color::HexColor::rgb(10, 20, 30))
         };
-        let style_fn = workspace_button_style(false, Some(Some(custom_color,),),);
+        let style_fn = workspace_button_style(false, Some(Some(custom_color)));
 
-        let hovered = style_fn(&theme, Status::Hovered,);
+        let hovered = style_fn(&theme, Status::Hovered);
         assert_eq!(hovered.border.radius, 16.0.into());
         assert_eq!(color(hovered.background).a, 1.0);
         // Text color is generated by palette::Primary::generate, not used
@@ -431,18 +503,22 @@ mod tests
     }
 
     #[test]
-    fn quick_settings_button_style_switches_palette()
-    {
+    fn quick_settings_button_style_switches_palette() {
         let theme = Theme::default();
-        let inactive = quick_settings_button_style(false, 0.5,);
-        let active = quick_settings_button_style(true, 0.5,);
+        let inactive = quick_settings_button_style(false, 0.5);
+        let active = quick_settings_button_style(true, 0.5);
 
-        let inactive_hover = inactive(&theme, Status::Hovered,);
-        let active_hover = active(&theme, Status::Hovered,);
+        let inactive_hover = inactive(&theme, Status::Hovered);
+        let active_hover = active(&theme, Status::Hovered);
 
         assert_eq!(
             color(inactive_hover.background),
-            theme.extended_palette().background.strong.color.scale_alpha(0.5)
+            theme
+                .extended_palette()
+                .background
+                .strong
+                .color
+                .scale_alpha(0.5)
         );
         assert_eq!(
             color(active_hover.background),
@@ -451,16 +527,20 @@ mod tests
     }
 
     #[test]
-    fn quick_settings_submenu_button_style_hover_changes_text_color()
-    {
+    fn quick_settings_submenu_button_style_hover_changes_text_color() {
         let theme = Theme::default();
-        let style_fn = quick_settings_submenu_button_style(false, 0.4,);
+        let style_fn = quick_settings_submenu_button_style(false, 0.4);
 
-        let hovered = style_fn(&theme, Status::Hovered,);
+        let hovered = style_fn(&theme, Status::Hovered);
         assert_eq!(hovered.text_color, theme.palette().text);
         assert_eq!(
             color(hovered.background),
-            theme.extended_palette().background.weak.color.scale_alpha(0.4)
+            theme
+                .extended_palette()
+                .background
+                .weak
+                .color
+                .scale_alpha(0.4)
         );
     }
 }
