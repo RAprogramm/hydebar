@@ -3467,9 +3467,9 @@ dependencies = [
 
 [[package]]
 name = "masterror"
-version = "0.24.17"
+version = "0.24.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27ce242729b7655d355493d6afc4e29d097b9386acc912158bd7da5d34ac533a"
+checksum = "8d52fc243a3eac202b1cda38b908dc4cafafb9e779b1e76d781fe9b51635d1f8"
 dependencies = [
  "http",
  "itoa",
