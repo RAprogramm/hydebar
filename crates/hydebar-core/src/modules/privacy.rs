@@ -189,6 +189,7 @@ where
 // rewritten to use concrete types
 
 #[cfg(test)]
+#[allow(dead_code)]
 async fn recv_event(receiver: &mut crate::event_bus::EventReceiver) -> BusEvent {
     loop {
         if let Some(event) = receiver
@@ -203,6 +204,7 @@ async fn recv_event(receiver: &mut crate::event_bus::EventReceiver) -> BusEvent 
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 struct CancellationProbe {
     flag: Arc<AtomicBool>
 }
