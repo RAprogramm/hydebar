@@ -58,7 +58,10 @@ pub enum Icons {
     Reboot,
     Suspend,
     Logout,
+    LeftArrow,
     RightArrow,
+    LeftChevron,
+    RightChevron,
     Brightness,
     Point,
     Close,
@@ -73,8 +76,7 @@ pub enum Icons {
     IpAddress,
     DownloadSpeed,
     UploadSpeed,
-    Copy,
-    RightChevron
+    Copy
 }
 
 impl From<Icons> for &'static str {
@@ -132,7 +134,10 @@ impl From<Icons> for &'static str {
             Icons::Reboot => "󰑐",
             Icons::Suspend => "󰤄",
             Icons::Logout => "󰗽",
+            Icons::LeftArrow => "󰁍",
             Icons::RightArrow => "󰁔",
+            Icons::LeftChevron => "󰅁",
+            Icons::RightChevron => "󰅂",
             Icons::Brightness => "󰃠",
             Icons::Point => "",
             Icons::Close => "󰅖",
@@ -147,8 +152,7 @@ impl From<Icons> for &'static str {
             Icons::IpAddress => "󰩠",
             Icons::DownloadSpeed => "󰛴",
             Icons::UploadSpeed => "󰛶",
-            Icons::Copy => "󰆏",
-            Icons::RightChevron => "󰅂"
+            Icons::Copy => "󰆏"
         }
     }
 }
