@@ -46,6 +46,6 @@ impl MicroTicker {
 
 impl Default for MicroTicker {
     fn default() -> Self {
-        Self::new(Duration::from_millis(16), Duration::from_millis(33), 3)
+        Self::new(Duration::from_millis(100), Duration::from_millis(500), 10)
     }
 }

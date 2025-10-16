@@ -120,7 +120,7 @@ async fn run() -> Result<(), MainError> {
 
     let hyprland: Arc<dyn HyprlandPort> = Arc::new(HyprlandClient::new());
 
-    let bus_capacity = NonZeroUsize::new(256).ok_or(MainError::BusCapacity)?;
+    let bus_capacity = NonZeroUsize::new(64).ok_or(MainError::BusCapacity)?;
     let event_bus = EventBus::new(bus_capacity);
     let event_sender = event_bus.sender();
     let runtime_handle = Handle::current();

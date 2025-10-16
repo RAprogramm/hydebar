@@ -33,9 +33,10 @@ impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::MicroTick => {
-                // Update menu animations
-                self.outputs
-                    .tick_menu_animations(&self.config.appearance.animations);
+                if self.outputs.menu_is_open() {
+                    self.outputs
+                        .tick_menu_animations(&self.config.appearance.animations);
+                }
 
                 Task::perform(
                     drain_bus(Arc::clone(&self.bus_receiver)),

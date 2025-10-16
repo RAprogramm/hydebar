@@ -121,8 +121,10 @@ mod tests {
 
     #[test]
     fn validate_rejects_duplicate_custom_modules() {
-        let mut config = Config::default();
-        config.custom_modules = vec![custom_module("foo"), custom_module("foo")];
+        let config = Config {
+            custom_modules: vec![custom_module("foo"), custom_module("foo")],
+            ..Default::default()
+        };
 
         let error = config
             .validate()
@@ -135,9 +137,14 @@ mod tests {
 
     #[test]
     fn validate_rejects_missing_custom_module_reference() {
-        let mut config = Config::default();
-        config.custom_modules = vec![custom_module("foo")];
-        config.modules.left = vec![ModuleDef::Single(ModuleName::Custom("bar".to_owned()))];
+        let config = Config {
+            custom_modules: vec![custom_module("foo")],
+            modules:        Modules {
+                left: vec![ModuleDef::Single(ModuleName::Custom("bar".to_owned()))],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
         let error = config
             .validate()

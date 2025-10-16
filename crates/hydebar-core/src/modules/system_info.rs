@@ -27,7 +27,7 @@ pub struct SystemInfo {
 impl Default for SystemInfo {
     fn default() -> Self {
         let mut sampler = SystemInfoSampler::new();
-        let data = sampler.sample();
+        let data = sampler.sample_with_extras();
 
         Self {
             sampler,
@@ -42,7 +42,7 @@ impl SystemInfo {
     pub fn update(&mut self, message: Message) {
         match message {
             Message::Update => {
-                self.data = self.sampler.sample();
+                self.data = self.sampler.sample_with_extras();
             }
         }
     }

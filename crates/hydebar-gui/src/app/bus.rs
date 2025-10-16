@@ -39,7 +39,7 @@ pub(super) async fn drain_bus(receiver: Arc<Mutex<EventReceiver>>) -> BusFlushOu
         }
     };
 
-    let mut events = Vec::new();
+    let mut events = Vec::with_capacity(16);
     let mut had_error = false;
 
     loop {
