@@ -139,6 +139,12 @@ impl From<modules::screenshot::ScreenshotMessage> for Message {
     }
 }
 
+impl From<modules::clock::Message> for Message {
+    fn from(msg: modules::clock::Message) -> Self {
+        Message::Clock(msg)
+    }
+}
+
 type AppDependencies = (
     LoggerHandle,
     Arc<Config>,

@@ -101,6 +101,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::{super::CustomModuleDef, *};
+    use crate::config::Modules;
 
     fn custom_module(name: &str) -> CustomModuleDef {
         CustomModuleDef {

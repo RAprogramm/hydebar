@@ -249,6 +249,18 @@ impl App {
                         Message::None,
                         Message::CloseMenu(id)
                     ),
+                    Some((MenuType::Calendar, button_ui_ref)) => menu_wrapper(
+                        id,
+                        self.clock.menu_view().map(Message::Clock),
+                        MenuSize::Small,
+                        *button_ui_ref,
+                        self.config.position,
+                        self.config.appearance.style,
+                        animated_opacity,
+                        self.config.appearance.menu.backdrop,
+                        Message::None,
+                        Message::CloseMenu(id)
+                    ),
                     None => Row::new().into()
                 }
             }

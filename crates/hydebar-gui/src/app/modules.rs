@@ -235,10 +235,7 @@ impl App {
             ModuleName::KeyboardLayout => self.keyboard_layout.view(&self.config.keyboard_layout),
             ModuleName::KeyboardSubmap => self.keyboard_submap.view(()),
             ModuleName::Tray => self.tray.view((id, opacity)),
-            ModuleName::Clock => Some((
-                crate::views::clock::render_clock(self.clock.data(), &self.config.clock.format),
-                None
-            )),
+            ModuleName::Clock => self.clock.view(&self.config.clock.format),
             ModuleName::Battery => self.battery.data().map(|data| {
                 (
                     crate::views::battery::render_battery(data, &self.config.battery),

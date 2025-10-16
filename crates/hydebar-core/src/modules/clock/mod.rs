@@ -1,11 +1,18 @@
+mod calendar;
+mod view;
+
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
+use iced::Element;
 use log::error;
 use tokio::{task::JoinHandle, time::interval};
 
+pub use calendar::{CalendarData, CalendarError, CalendarState, DayInfo};
+
 use crate::{
-    ModuleContext, ModuleEventSender, event_bus::ModuleEvent, modules::weather::WeatherData
+    ModuleContext, ModuleEventSender, event_bus::ModuleEvent, menu::MenuType,
+    modules::{Module, ModuleError, OnModulePress, weather::WeatherData}
 };
 
 /// Clock data for rendering
@@ -53,25 +60,29 @@ pub enum ClockEvent {
 #[derive(Debug, Clone)]
 pub enum Message {
     Update,
-    UpdateWeather(WeatherData)
+    UpdateWeather(WeatherData),
+    PreviousMonth,
+    NextMonth,
 }
 
 /// Clock module - business logic only, no GUI!
 #[derive(Debug)]
 pub struct Clock {
-    data:          ClockData,
-    tick_interval: Duration,
-    sender:        Option<ModuleEventSender<ClockEvent>>,
-    task:          Option<JoinHandle<()>>
+    data:           ClockData,
+    tick_interval:  Duration,
+    sender:         Option<ModuleEventSender<ClockEvent>>,
+    task:           Option<JoinHandle<()>>,
+    calendar_state: CalendarState,
 }
 
 impl Default for Clock {
     fn default() -> Self {
         Self {
-            data:          ClockData::new(),
-            tick_interval: Duration::from_secs(5),
-            sender:        None,
-            task:          None
+            data:           ClockData::new(),
+            tick_interval:  Duration::from_secs(5),
+            sender:         None,
+            task:           None,
+            calendar_state: CalendarState::default(),
         }
     }
 }
@@ -84,6 +95,11 @@ impl Clock {
     /// Get current clock data for rendering
     pub fn data(&self) -> &ClockData {
         &self.data
+    }
+
+    /// Get current calendar state for rendering
+    pub fn calendar_state(&self) -> &CalendarState {
+        &self.calendar_state
     }
 
     /// Initialize with module context and time format
@@ -131,7 +147,18 @@ impl Clock {
             Message::UpdateWeather(weather) => {
                 self.data.update_weather(weather);
             }
+            Message::PreviousMonth => {
+                self.calendar_state.previous_month();
+            }
+            Message::NextMonth => {
+                self.calendar_state.next_month();
+            }
         }
+    }
+
+    /// Renders the calendar menu view.
+    pub fn menu_view(&self) -> Element<'_, Message> {
+        view::build_calendar_menu_view(&self.calendar_state)
     }
 
     /// Determine tick interval based on format string
@@ -146,6 +173,35 @@ impl Clock {
         } else {
             Duration::from_secs(5)
         }
+    }
+}
+
+impl<M> Module<M> for Clock
+where
+    M: 'static + Clone + From<Message>,
+{
+    type ViewData<'a> = &'a str;
+    type RegistrationData<'a> = &'a str;
+
+    fn register(
+        &mut self,
+        ctx: &ModuleContext,
+        format: Self::RegistrationData<'_>,
+    ) -> Result<(), ModuleError> {
+        self.register(ctx, format);
+        Ok(())
+    }
+
+    fn view(
+        &self,
+        format: Self::ViewData<'_>,
+    ) -> Option<(Element<'static, M>, Option<OnModulePress<M>>)> {
+        use iced::widget::text;
+
+        let clock_text = text(self.data.format(format)).into();
+        let on_press = Some(OnModulePress::ToggleMenu(MenuType::Calendar));
+
+        Some((clock_text, on_press))
     }
 }
 
