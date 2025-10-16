@@ -7,8 +7,10 @@ use hydebar_core::{
     event_bus::{BusEvent, ModuleEvent},
     menu::MenuType,
     modules::{
-        self, custom_module::Custom, settings::brightness::BrightnessMessage, tray::TrayMessage
+        self, OnModulePress, custom_module::Custom, settings::brightness::BrightnessMessage,
+        tray::TrayMessage
     },
+    position_button::ButtonUIRef,
     services::{ServiceEvent, brightness::BrightnessCommand, tray::TrayEvent},
     utils
 };
@@ -195,7 +197,6 @@ impl App {
                 }
 
                 if let Some(current) = self.focused_module_index {
-                    let all_modules = self.get_all_modules_count();
                     if current > 0 {
                         self.focused_module_index = Some(current - 1);
                         debug!("Navigate left: focus moved to module {}", current - 1);
@@ -218,8 +219,35 @@ impl App {
                 Task::none()
             }
             Message::ActivateFocusedModule => {
-                if !self.navigation_mode {
+                if !self.navigation_mode || self.focused_module_index.is_none() {
                     return Task::none();
+                }
+
+                let index = self.focused_module_index.unwrap();
+
+                let main_window_id = if let Some(id) = self.outputs.first_main_window_id() {
+                    id
+                } else {
+                    return Task::none();
+                };
+
+                if let Some(action) = self.get_module_at_index(index, main_window_id) {
+                    match action {
+                        OnModulePress::Action(msg) => {
+                            info!("Activating module at index {} with action", index);
+                            return self.update(*msg);
+                        }
+                        OnModulePress::ToggleMenu(menu_type) => {
+                            info!("Activating module at index {} - opening menu {:?}", index, menu_type);
+
+                            let center_button_ref = ButtonUIRef {
+                                position: iced::Point { x: 960.0, y: 20.0 },
+                                viewport: (1920.0, 1080.0),
+                            };
+
+                            return self.update(Message::ToggleMenu(menu_type, main_window_id, center_button_ref));
+                        }
+                    }
                 }
 
                 Task::none()

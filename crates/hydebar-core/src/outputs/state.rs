@@ -722,6 +722,13 @@ impl Outputs {
         }
     }
 
+    /// Returns the first main window Id if any outputs exist.
+    pub fn first_main_window_id(&self) -> Option<Id> {
+        self.0
+            .iter()
+            .find_map(|(_, shell_info, _)| shell_info.as_ref().map(|s| s.id))
+    }
+
     #[cfg(test)]
     fn iter_internal(
         &self
