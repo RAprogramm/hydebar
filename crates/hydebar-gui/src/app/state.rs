@@ -7,7 +7,7 @@ use std::{
 use flexi_logger::LoggerHandle;
 use hydebar_core::{
     ModuleContext,
-    config::{ConfigApplied, ConfigDegradation, ConfigManager},
+    config::{ConfigApplied, ConfigDegradation, ConfigManager, ModuleDef},
     event_bus::{EventReceiver, EventSender},
     menu::MenuType,
     modules::{
@@ -166,6 +166,22 @@ type AppDependencies = (
 );
 
 impl App {
+    pub fn get_all_modules_count(&self) -> usize {
+        let count_modules = |modules_def: &[ModuleDef]| -> usize {
+            modules_def
+                .iter()
+                .map(|def| match def {
+                    ModuleDef::Single(_) => 1,
+                    ModuleDef::Group(group) => group.len(),
+                })
+                .sum()
+        };
+
+        count_modules(&self.config.modules.left)
+            + count_modules(&self.config.modules.center)
+            + count_modules(&self.config.modules.right)
+    }
+
     pub fn new(
         (
             logger,

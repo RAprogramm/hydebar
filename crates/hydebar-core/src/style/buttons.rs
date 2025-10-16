@@ -11,7 +11,8 @@ use crate::config::{AppearanceColor, AppearanceStyle};
 pub fn module_button_style(
     style: AppearanceStyle,
     opacity: f32,
-    transparent: bool
+    transparent: bool,
+    focused: bool
 ) -> impl Fn(&Theme, Status) -> button::Style {
     move |theme, status| {
         let mut base = button::Style {
@@ -25,10 +26,18 @@ pub fn module_button_style(
                     }
                 }
             },
-            border: Border {
-                width:  0.0,
-                radius: 12.0.into(),
-                color:  Color::TRANSPARENT
+            border: if focused {
+                Border {
+                    width:  2.0,
+                    radius: 12.0.into(),
+                    color:  theme.palette().primary
+                }
+            } else {
+                Border {
+                    width:  0.0,
+                    radius: 12.0.into(),
+                    color:  Color::TRANSPARENT
+                }
             },
             text_color: theme.palette().text,
             ..button::Style::default()
