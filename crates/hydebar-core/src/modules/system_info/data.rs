@@ -113,9 +113,9 @@ impl NetworkSnapshot {
 #[derive(Debug)]
 pub struct SystemInfoSampler {
     system:       System,
-    components:   Components,
-    disks:        Disks,
-    networks:     Networks,
+    components:   Option<Components>,
+    disks:        Option<Disks>,
+    networks:     Option<Networks>,
     last_network: Option<NetworkSnapshot>
 }
 
@@ -129,11 +129,33 @@ impl SystemInfoSampler {
     /// Instantiate a sampler with refreshed sysinfo collections.
     pub fn new() -> Self {
         Self {
-            system:       System::new(),
-            components:   Components::new_with_refreshed_list(),
-            disks:        Disks::new_with_refreshed_list(),
-            networks:     Networks::new_with_refreshed_list(),
+            system:       System::new_with_specifics(
+                sysinfo::RefreshKind::nothing()
+                    .with_cpu(sysinfo::CpuRefreshKind::nothing().with_cpu_usage())
+                    .with_memory(sysinfo::MemoryRefreshKind::nothing().with_ram())
+            ),
+            components:   None,
+            disks:        None,
+            networks:     None,
             last_network: None
+        }
+    }
+
+    fn ensure_components(&mut self) {
+        if self.components.is_none() {
+            self.components = Some(Components::new_with_refreshed_list());
+        }
+    }
+
+    fn ensure_disks(&mut self) {
+        if self.disks.is_none() {
+            self.disks = Some(Disks::new_with_refreshed_list());
+        }
+    }
+
+    fn ensure_networks(&mut self) {
+        if self.networks.is_none() {
+            self.networks = Some(Networks::new_with_refreshed_list());
         }
     }
 
@@ -141,14 +163,63 @@ impl SystemInfoSampler {
     /// subsequent samples.
     pub fn sample(&mut self) -> SystemInfoData {
         self.system
-            .refresh_cpu_specifics(sysinfo::CpuRefreshKind::everything());
+            .refresh_cpu_specifics(sysinfo::CpuRefreshKind::nothing().with_cpu_usage());
         self.system.refresh_memory();
-        self.components.refresh(true);
-        self.disks.refresh(true);
-        self.networks.refresh(true);
+
+        let cpu_usage = self.system.global_cpu_usage().floor() as u32;
+        let memory_usage = percentage(
+            self.system
+                .total_memory()
+                .saturating_sub(self.system.available_memory()),
+            self.system.total_memory()
+        );
+        let memory_swap_usage = percentage(
+            self.system
+                .total_swap()
+                .saturating_sub(self.system.free_swap()),
+            self.system.total_swap()
+        );
+
+        let temperature = None;
+
+        let disks = Vec::new();
+
+        let network = None;
+
+        SystemInfoData {
+            cpu_usage,
+            memory_usage,
+            memory_swap_usage,
+            temperature,
+            disks,
+            network
+        }
+    }
+
+    pub fn sample_with_extras(&mut self) -> SystemInfoData {
+        self.ensure_components();
+        self.ensure_disks();
+        self.ensure_networks();
+
+        self.system
+            .refresh_cpu_specifics(sysinfo::CpuRefreshKind::nothing().with_cpu_usage());
+        self.system.refresh_memory();
+
+        if let Some(ref mut components) = self.components {
+            components.refresh(true);
+        }
+        if let Some(ref mut disks) = self.disks {
+            disks.refresh(true);
+        }
+        if let Some(ref mut networks) = self.networks {
+            networks.refresh(true);
+        }
 
         let now = Instant::now();
-        let observation = NetworkSnapshot::capture(&self.networks, now);
+        let observation = self
+            .networks
+            .as_ref()
+            .and_then(|networks| NetworkSnapshot::capture(networks, now));
         let network = observation
             .as_ref()
             .map(|snapshot| snapshot.to_data(self.last_network.as_ref()));
@@ -168,27 +239,33 @@ impl SystemInfoSampler {
             self.system.total_swap()
         );
 
-        let temperature = self
-            .components
-            .iter()
-            .find(|component| component.label() == "acpitz temp1")
-            .and_then(|component| component.temperature().map(|value| value as i32));
+        let temperature = self.components.as_ref().and_then(|components| {
+            components
+                .iter()
+                .find(|component| component.label() == "acpitz temp1")
+                .and_then(|component| component.temperature().map(|value| value as i32))
+        });
 
         let disks = self
             .disks
-            .iter()
-            .filter(|disk| !disk.is_removable() && disk.total_space() != 0)
-            .map(|disk| {
-                let mount_point = disk.mount_point().to_string_lossy().to_string();
-                let usage = percentage(
-                    disk.total_space().saturating_sub(disk.available_space()),
-                    disk.total_space()
-                );
+            .as_ref()
+            .map(|disks| {
+                disks
+                    .iter()
+                    .filter(|disk| !disk.is_removable() && disk.total_space() != 0)
+                    .map(|disk| {
+                        let mount_point = disk.mount_point().to_string_lossy().to_string();
+                        let usage = percentage(
+                            disk.total_space().saturating_sub(disk.available_space()),
+                            disk.total_space()
+                        );
 
-                (mount_point, usage)
+                        (mount_point, usage)
+                    })
+                    .sorted_by(|a, b| a.0.cmp(&b.0))
+                    .collect()
             })
-            .sorted_by(|a, b| a.0.cmp(&b.0))
-            .collect();
+            .unwrap_or_default();
 
         SystemInfoData {
             cpu_usage,
