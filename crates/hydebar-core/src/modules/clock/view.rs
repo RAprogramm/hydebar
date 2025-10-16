@@ -72,8 +72,9 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
     }
 
     let calendar_grid = Column::with_children(week_rows)
-        .spacing(4)
-        .width(Length::Shrink);
+        .spacing(4);
+
+    let calendar_width = 7. * 36. + 6. * 4.;
 
     column![
         header,
@@ -83,7 +84,7 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
     ]
     .spacing(8)
     .padding(4)
-    .width(Length::Shrink)
+    .width(Length::Fixed(calendar_width))
     .into()
 }
 
