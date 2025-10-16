@@ -252,7 +252,7 @@ impl App {
                     Some((MenuType::Calendar, button_ui_ref)) => menu_wrapper(
                         id,
                         self.clock.menu_view().map(Message::Clock),
-                        MenuSize::Small,
+                        MenuSize::Medium,
                         *button_ui_ref,
                         self.config.position,
                         self.config.appearance.style,
