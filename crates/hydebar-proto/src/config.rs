@@ -1,4 +1,5 @@
 mod appearance;
+mod keybindings;
 mod modules;
 mod serde_helpers;
 mod themes;
@@ -12,6 +13,7 @@ use std::collections::HashMap;
 pub use appearance::{
     AnimationConfig, Appearance, AppearanceColor, AppearanceStyle, MenuAppearance
 };
+pub use keybindings::{GlobalKeybindings, Keybindings, MenuKeybindings};
 pub use modules::{ModuleDef, ModuleName, Modules, Outputs, Position};
 use serde::Deserialize;
 pub use serde_helpers::RegexCfg;
@@ -405,6 +407,8 @@ pub struct Config {
     #[serde(default)]
     pub menu_keyboard_focus: bool,
     #[serde(default)]
+    pub keybindings:         Keybindings,
+    #[serde(default)]
     pub weather:             WeatherModuleConfig
 }
 
@@ -441,6 +445,7 @@ impl Default for Config {
             keyboard_layout:     KeyboardLayoutModuleConfig::default(),
             custom_modules:      vec![],
             menu_keyboard_focus: default_menu_keyboard_focus(),
+            keybindings:         Keybindings::default(),
             weather:             WeatherModuleConfig::default()
         }
     }

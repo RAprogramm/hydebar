@@ -162,6 +162,40 @@ impl App {
                     Task::none()
                 }
             }
+            Message::ActivateNavigationMode => {
+                if !self.navigation_mode && self.config.keybindings.enabled {
+                    info!("Activating navigation mode");
+                    self.navigation_mode = true;
+                    self.focused_module_index = Some(0);
+                }
+                Task::none()
+            }
+            Message::DeactivateNavigationMode => {
+                if self.navigation_mode {
+                    info!("Deactivating navigation mode");
+                    self.navigation_mode = false;
+                    self.focused_module_index = None;
+                }
+                if self.outputs.menu_is_open() {
+                    self.outputs.close_all_menus(&self.config)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::NavigateUp | Message::NavigateDown | Message::NavigateLeft | Message::NavigateRight => {
+                if !self.navigation_mode {
+                    return Task::none();
+                }
+
+                Task::none()
+            }
+            Message::ActivateFocusedModule => {
+                if !self.navigation_mode {
+                    return Task::none();
+                }
+
+                Task::none()
+            }
             Message::Updates(message) => {
                 if let Some(updates_config) = self.config.updates.as_ref() {
                     self.updates
@@ -318,7 +352,7 @@ impl App {
                     ConfigEvent::Degraded(degradation) => Message::ConfigDegraded(degradation)
                 }
             ),
-            listen_with(move |evt, _, _| match evt {
+            listen_with(|evt, _, _| match evt {
                 iced::Event::PlatformSpecific(iced::event::PlatformSpecific::Wayland(
                     WaylandEvent::Output(event, wl_output)
                 )) => {
@@ -326,15 +360,46 @@ impl App {
                     Some(Message::OutputEvent((event, wl_output)))
                 }
                 iced::Event::Keyboard(keyboard::Event::KeyPressed {
-                    key, ..
+                    key,
+                    modifiers,
+                    ..
                 }) => {
-                    debug!("Keyboard event received: {key:?}");
+                    debug!("Keyboard event received: {key:?}, modifiers: {modifiers:?}");
+
                     if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
-                        debug!("ESC key pressed, closing all menus");
-                        Some(Message::CloseAllMenus)
-                    } else {
-                        None
+                        debug!("ESC key pressed");
+                        return Some(Message::DeactivateNavigationMode);
                     }
+
+                    if matches!(key, keyboard::Key::Named(keyboard::key::Named::Enter)) {
+                        debug!("Enter pressed");
+                        return Some(Message::ActivateFocusedModule);
+                    }
+
+                    if let keyboard::Key::Character(ref ch) = key {
+                        let ch_str = ch.as_str();
+
+                        if modifiers.logo() && ch_str == "b" {
+                            debug!("Super+b detected, activating navigation mode");
+                            return Some(Message::ActivateNavigationMode);
+                        }
+
+                        if ch_str == "k" {
+                            debug!("Navigate up: k");
+                            return Some(Message::NavigateUp);
+                        } else if ch_str == "j" {
+                            debug!("Navigate down: j");
+                            return Some(Message::NavigateDown);
+                        } else if ch_str == "h" {
+                            debug!("Navigate left: h");
+                            return Some(Message::NavigateLeft);
+                        } else if ch_str == "l" {
+                            debug!("Navigate right: l");
+                            return Some(Message::NavigateRight);
+                        }
+                    }
+
+                    None
                 }
                 _ => None
             }),
