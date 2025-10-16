@@ -17,7 +17,7 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
             .on_press(Message::PreviousMonth)
             .style(nav_button_style),
         container(text(format!("{} {}", state.month_name(), state.year())).size(18))
-            .center_x(Length::Fill)
+            .width(Length::Fill)
             .align_x(Alignment::Center),
         button(icon(Icons::RightChevron))
             .on_press(Message::NextMonth)
@@ -32,7 +32,8 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
             .map(|day| {
                 container(text(*day).size(12))
                     .width(Length::Fixed(36.))
-                    .center(Length::Fill)
+                    .height(Length::Shrink)
+                    .align_x(Alignment::Center)
                     .into()
             })
             .collect::<Vec<_>>(),
@@ -48,12 +49,18 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
                     let in_month = day_info.in_month;
                     let is_today = day_info.is_today;
 
-                    let day_button = button(container(day_text).center(Length::Fill))
-                        .width(Length::Fixed(36.))
-                        .height(Length::Fixed(36.))
-                        .style(move |theme: &Theme, status: button::Status| {
-                            day_button_style(theme, status, in_month, is_today)
-                        });
+                    let day_button = button(
+                        container(day_text)
+                            .width(Length::Fill)
+                            .height(Length::Fill)
+                            .align_x(Alignment::Center)
+                            .align_y(Alignment::Center)
+                    )
+                    .width(Length::Fixed(36.))
+                    .height(Length::Fixed(36.))
+                    .style(move |theme: &Theme, status: button::Status| {
+                        day_button_style(theme, status, in_month, is_today)
+                    });
 
                     day_button.into()
                 })
@@ -64,7 +71,9 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
         week_rows.push(week_row.into());
     }
 
-    let calendar_grid = Column::with_children(week_rows).spacing(4);
+    let calendar_grid = Column::with_children(week_rows)
+        .spacing(4)
+        .width(Length::Shrink);
 
     column![
         header,
@@ -74,6 +83,7 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
     ]
     .spacing(8)
     .padding(4)
+    .width(Length::Shrink)
     .into()
 }
 
