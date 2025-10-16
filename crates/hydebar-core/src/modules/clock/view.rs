@@ -32,7 +32,7 @@ pub fn build_calendar_menu_view(state: &CalendarState) -> Element<'_, Message> {
             .map(|day| {
                 container(text(*day).size(12))
                     .width(Length::Fixed(36.))
-                    .center_x(Length::Fill)
+                    .center(Length::Fill)
                     .into()
             })
             .collect::<Vec<_>>(),
