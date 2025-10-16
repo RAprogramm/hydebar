@@ -756,10 +756,10 @@ mod tests {
             position: Point::new(0.0, 0.0),
             viewport: (0., 0.)
         };
-        outputs.toggle_menu::<()>(id, MenuType::Updates, button_ref, &config);
+        let _ = outputs.toggle_menu::<()>(id, MenuType::Updates, button_ref, &config);
         assert!(outputs.menu_is_open());
 
-        outputs.close_menu::<()>(id, &config);
+        let _ = outputs.close_menu::<()>(id, &config);
         assert!(!outputs.menu_is_open());
     }
 
@@ -783,7 +783,7 @@ mod tests {
             Position::Bottom => Position::Top
         };
 
-        outputs.sync::<()>(
+        let _ = outputs.sync::<()>(
             updated_config.appearance.style,
             &updated_config.outputs,
             updated_config.position,
