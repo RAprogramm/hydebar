@@ -247,20 +247,47 @@ impl Weather {
     ) -> AppResult<WeatherResponse> {
         let api_key = api_key
             .as_ref()
-            .ok_or_else(|| AppError::internal("OpenWeatherMap API key not configured"))?;
+            .ok_or_else(|| AppError::internal("Weather API key not configured in config.toml"))?;
 
         let url = format!(
             "https://api.openweathermap.org/data/2.5/weather?q={}&appid={}",
             location, api_key
         );
+
         let response = reqwest::get(&url)
             .await
-            .map_err(|e| AppError::internal(format!("Failed to fetch weather: {}", e)))?
+            .map_err(|e| {
+                if e.is_timeout() {
+                    AppError::internal(format!("Weather API timeout for location '{}'", location))
+                } else if e.is_connect() {
+                    AppError::internal("No internet connection - cannot fetch weather")
+                } else {
+                    AppError::internal(format!("Network error fetching weather: {}", e))
+                }
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(AppError::internal(match status.as_u16() {
+                401 => format!("Invalid weather API key ({})", status),
+                404 => format!("Location '{}' not found in weather database", location),
+                429 => "Weather API rate limit exceeded - try again later".to_string(),
+                500..=599 => format!("Weather API server error ({})", status),
+                _ => format!("Weather API returned error {} for location '{}'", status, location)
+            }));
+        }
+
+        let weather = response
             .json::<WeatherResponse>()
             .await
-            .map_err(|e| AppError::internal(format!("Failed to parse weather response: {}", e)))?;
+            .map_err(|e| {
+                AppError::internal(format!(
+                    "Invalid weather data format from API: {}",
+                    e
+                ))
+            })?;
 
-        Ok(response)
+        Ok(weather)
     }
 }
 
